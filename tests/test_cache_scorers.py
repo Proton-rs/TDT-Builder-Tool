@@ -14,6 +14,7 @@ from tdt.scoring.tfidf import ScorerTFIDF
 
 _CORPUS = [("DJ", "DISJUNTOR"), ("SECC", "SECCIONADORA"), ("IA", "CORRENTE FASE A")]
 _VOCAB = ["DISJUNTOR", "SECCIONADORA", "CORRENTE", "FASE", "A"]
+_MODELO = "modelo-a"
 
 
 def _fake_encoder(textos):
@@ -28,12 +29,22 @@ def _fake_encoder(textos):
 
 
 def test_hash_estavel_para_mesmo_corpus():
-    assert _hash_corpus(_CORPUS) == _hash_corpus(list(_CORPUS))
+    assert _hash_corpus(_CORPUS, _MODELO) == _hash_corpus(list(_CORPUS), _MODELO)
 
 
 def test_hash_muda_com_conteudo():
     outro = _CORPUS + [("87", "DIFERENCIAL")]
-    assert _hash_corpus(_CORPUS) != _hash_corpus(outro)
+    assert _hash_corpus(_CORPUS, _MODELO) != _hash_corpus(outro, _MODELO)
+
+
+def test_hash_muda_com_modelo_embedding():
+    """Mesmo corpus, modelo de embedding diferente -> hash diferente.
+
+    Essencial p/ transparência do cache: trocar de sentence-transformer não
+    pode reaproveitar silenciosamente um índice FAISS gerado pelo encoder
+    antigo (ver finding da revisão da Task 1.2).
+    """
+    assert _hash_corpus(_CORPUS, "modelo-a") != _hash_corpus(_CORPUS, "modelo-b")
 
 
 # --- serialização individual ---
@@ -76,7 +87,7 @@ def test_carregar_ou_construir_constroi_quando_cache_ausente(tmp_path):
         chamadas["n"] += 1
         return _construir()
 
-    scorers = carregar_ou_construir(tmp_path / "cache", _CORPUS, construir, _fake_encoder)
+    scorers = carregar_ou_construir(tmp_path / "cache", _CORPUS, construir, _fake_encoder, _MODELO)
     assert chamadas["n"] == 1
     assert scorers.tfidf.pontuar.__self__ is scorers.tfidf  # smoke: objeto usável
     assert (tmp_path / "cache").exists()
@@ -90,8 +101,8 @@ def test_carregar_ou_construir_usa_cache_na_segunda_chamada(tmp_path):
         return _construir()
 
     cache_dir = tmp_path / "cache"
-    carregar_ou_construir(cache_dir, _CORPUS, construir, _fake_encoder)
-    scorers2 = carregar_ou_construir(cache_dir, _CORPUS, construir, _fake_encoder)
+    carregar_ou_construir(cache_dir, _CORPUS, construir, _fake_encoder, _MODELO)
+    scorers2 = carregar_ou_construir(cache_dir, _CORPUS, construir, _fake_encoder, _MODELO)
     assert chamadas["n"] == 1  # não reconstruiu na 2a chamada
     assert scorers2.fuzzy.pontuar is not None
 
@@ -104,7 +115,7 @@ def test_carregar_ou_construir_reconstroi_quando_corpus_muda(tmp_path):
         chamadas["n"] += 1
         return _construir()
 
-    carregar_ou_construir(cache_dir, _CORPUS, construir_a, _fake_encoder)
+    carregar_ou_construir(cache_dir, _CORPUS, construir_a, _fake_encoder, _MODELO)
 
     outro_corpus = _CORPUS + [("87", "DIFERENCIAL")]
 
@@ -118,8 +129,32 @@ def test_carregar_ou_construir_reconstroi_quando_corpus_muda(tmp_path):
             fuzzy=FuzzyMatcher.construir(outro_corpus),
         )
 
-    carregar_ou_construir(cache_dir, outro_corpus, construir_b, _fake_encoder)
+    carregar_ou_construir(cache_dir, outro_corpus, construir_b, _fake_encoder, _MODELO)
     assert chamadas["n"] == 2  # corpus mudou -> reconstruiu
+
+
+def test_carregar_ou_construir_reconstroi_quando_modelo_embedding_muda(tmp_path):
+    """Mesmo corpus, modelo de embedding diferente -> cache miss (reconstrói).
+
+    Reproduz o finding da revisão: sem isso, trocar de sentence-transformer
+    reaproveitaria silenciosamente vetores FAISS do encoder antigo.
+    """
+    chamadas = {"n": 0}
+    cache_dir = tmp_path / "cache"
+
+    def construir():
+        chamadas["n"] += 1
+        return _construir()
+
+    carregar_ou_construir(cache_dir, _CORPUS, construir, _fake_encoder, "modelo-a")
+    carregar_ou_construir(cache_dir, _CORPUS, construir, _fake_encoder, "modelo-b")
+    assert chamadas["n"] == 2  # modelo mudou -> reconstruiu (diretórios diferentes)
+
+    hash_a = _hash_corpus(_CORPUS, "modelo-a")
+    hash_b = _hash_corpus(_CORPUS, "modelo-b")
+    assert hash_a != hash_b
+    assert (cache_dir / hash_a).exists()
+    assert (cache_dir / hash_b).exists()
 
 
 def test_carregar_ou_construir_e_transparente_a_cache_corrompido(tmp_path):
@@ -130,13 +165,13 @@ def test_carregar_ou_construir_e_transparente_a_cache_corrompido(tmp_path):
         chamadas["n"] += 1
         return _construir()
 
-    scorers1 = carregar_ou_construir(cache_dir, _CORPUS, construir, _fake_encoder)
-    h = _hash_corpus(_CORPUS)
+    scorers1 = carregar_ou_construir(cache_dir, _CORPUS, construir, _fake_encoder, _MODELO)
+    h = _hash_corpus(_CORPUS, _MODELO)
     # corrompe um arquivo do cache
     alvo = next((cache_dir / h).glob("*tfidf*"))
     alvo.write_bytes(b"lixo corrompido")
 
     # não deve lançar excecao; deve reconstruir do zero
-    scorers2 = carregar_ou_construir(cache_dir, _CORPUS, construir, _fake_encoder)
+    scorers2 = carregar_ou_construir(cache_dir, _CORPUS, construir, _fake_encoder, _MODELO)
     assert chamadas["n"] == 2
     assert scorers2 is not None

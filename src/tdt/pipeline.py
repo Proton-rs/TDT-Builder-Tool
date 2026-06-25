@@ -82,6 +82,7 @@ def _construir_scorers_cacheado(
         corpus,
         lambda: _construir_scorers(lp, config, encoder, categoria, cfg_efetivo),
         encoder,
+        config.modelo_embedding,
     )
     return _Scorers(
         tfidf=cacheaveis.tfidf,

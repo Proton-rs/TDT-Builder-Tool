@@ -3,9 +3,10 @@
 Construir os scorers (fit TF-IDF, indexar FAISS, montar o fuzzy) é custoso e
 hoje roda em toda execução do pipeline, mesmo quando a lista padrão ADMS não
 mudou. Aqui cacheamos o resultado em disco, indexado pelo hash do corpus
-(siglas+descrições): mesma lista padrão -> reusa o cache sem nunca chamar
-`construir`; lista mudou (ou cache ausente/corrompido) -> reconstrói do zero
-e grava o novo cache.
+(siglas+descrições) + identificador do modelo de embedding: mesma lista
+padrão e mesmo modelo -> reusa o cache sem nunca chamar `construir`; lista ou
+modelo mudou (ou cache ausente/corrompido) -> reconstrói do zero e grava o
+novo cache.
 
 Transparente por design: qualquer falha ao ler o cache (arquivo ausente,
 corrompido, versão incompatível) cai no caminho de reconstrução normal — o
@@ -26,8 +27,17 @@ _ARQ_TFIDF = "tfidf.pkl"
 _ARQ_FUZZY = "fuzzy.pkl"
 
 
-def _hash_corpus(corpus: list[tuple[str, str]]) -> str:
+def _hash_corpus(corpus: list[tuple[str, str]], modelo_embedding: str) -> str:
+    """Hash do corpus + identificador do modelo de embedding.
+
+    Incluir `modelo_embedding` é essencial: o índice FAISS cacheado contém
+    vetores gerados por um encoder específico. Se o usuário troca de modelo
+    mas o corpus (siglas+descrições) não muda, o hash precisa mudar mesmo
+    assim — senão um cache hit devolveria vetores do encoder ANTIGO para uso
+    com o encoder NOVO, produzindo scores vetoriais incoerentes sem erro.
+    """
     h = hashlib.sha256()
+    h.update(f"{modelo_embedding}\x1d".encode("utf-8"))
     for sigla, desc in corpus:
         h.update(f"{sigla}\x1f{desc}\x1e".encode("utf-8"))
     return h.hexdigest()
@@ -64,6 +74,7 @@ def carregar_ou_construir(
     corpus: list[tuple[str, str]],
     construir: Callable[[], _ScorersCacheaveis],
     encoder,
+    modelo_embedding: str,
 ) -> _ScorersCacheaveis:
     """Devolve tfidf/fuzzy/indice do cache em `diretorio` se o hash do corpus casar.
 
@@ -72,8 +83,12 @@ def carregar_ou_construir(
     (siglas+descrições da lista padrão) não mudou desde a última execução.
     Em cache miss (ou cache corrompido), chama `construir()` e grava o
     resultado em disco para a próxima execução.
+
+    `modelo_embedding` entra no hash junto com o corpus: trocar de modelo de
+    sentence-transformer invalida o cache automaticamente (cai num diretório
+    diferente), mesmo que o corpus permaneça idêntico.
     """
-    h = _hash_corpus(corpus)
+    h = _hash_corpus(corpus, modelo_embedding)
     base = Path(diretorio) / h
 
     if base.exists():
