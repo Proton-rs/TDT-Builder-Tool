@@ -10,8 +10,8 @@ from pathlib import Path
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QListWidget,
-    QListWidgetItem, QMessageBox, QProgressBar, QPushButton, QSizePolicy,
-    QTableView, QVBoxLayout, QWidget,
+    QListWidgetItem, QMenu, QMessageBox, QProgressBar, QPushButton,
+    QSizePolicy, QTableView, QVBoxLayout, QWidget,
 )
 
 from tdt import pipeline
@@ -128,11 +128,42 @@ class TelaRevisao(QWidget):
         col = self.tabela.horizontalHeader().logicalIndexAt(pos)
         if col < 0:
             return
+        if self._eh_coluna_modulo(col):
+            menu = self._construir_menu_coluna(col, pos)
+            menu.exec(self.tabela.horizontalHeader().viewport().mapToGlobal(pos))
+            return
         nome = ModeloSinais.COLUNAS[col]
         atual = self._proxy.filtroColuna(col)
         texto, ok = QInputDialog.getText(self, f"Filtrar '{nome}'", "Contém:", text=atual)
         if ok:
             self._proxy.setFiltroColuna(col, texto.strip())
+
+    def _eh_coluna_modulo(self, col: int) -> bool:
+        return col == ModeloSinais.COLUNAS.index("Módulo")
+
+    def _construir_menu_coluna(self, col: int, _pos) -> QMenu:
+        """Menu de checkboxes com os módulos distintos presentes nos registros.
+
+        ponytail: single-select (cada clique substitui o filtro anterior via
+        setFiltroColuna). Multi-select exigiria estender ProxyRevisao pra
+        aceitar uma lista de valores aceitos por coluna — não fazemos isso
+        agora porque o caso de uso atual (isolar um módulo por vez) não pede.
+        """
+        menu = QMenu(self)
+        modulos = sorted({
+            r.modulo.nome for r in self._estado.registros
+            if r.modulo and r.modulo.nome
+        })
+        filtro_atual = self._proxy.filtroColuna(col)
+        for mod in modulos:
+            acao = menu.addAction(mod)
+            acao.setCheckable(True)
+            acao.setChecked(mod.upper() == filtro_atual.upper())
+            acao.triggered.connect(lambda _checked=False, m=mod: self._proxy.setFiltroColuna(col, m))
+        menu.addSeparator()
+        acao_limpar = menu.addAction("Limpar Filtro")
+        acao_limpar.triggered.connect(lambda: self._proxy.setFiltroColuna(col, ""))
+        return menu
 
     def _registro(self):
         if 0 <= self._linha < len(self._estado.registros):
