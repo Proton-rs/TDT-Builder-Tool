@@ -152,3 +152,26 @@ def test_exportar_gera_arquivo_xlsx(qtbot, monkeypatch, tmp_path):
     tela._exportar()  # não deve lançar nem avisar — exportação real
     assert destino.exists()
     assert avisos == []
+
+
+def test_exportar_com_falha_de_io_mostra_erro_amigavel(qtbot, monkeypatch, tmp_path):
+    """Falha real na escrita do arquivo (ex.: permissão negada, disco cheio,
+    .xlsx aberto no Excel) deve ser tratada com aviso amigável, sem propagar."""
+    tela = TelaAnalise()
+    qtbot.addWidget(tela)
+    tela.carregar(_resultado_basico())
+    destino = tmp_path / "saida.xlsx"
+    monkeypatch.setattr(
+        "PySide6.QtWidgets.QFileDialog.getSaveFileName", lambda *a, **k: (str(destino), "")
+    )
+    avisos = []
+    monkeypatch.setattr(
+        "PySide6.QtWidgets.QMessageBox.warning",
+        lambda *a, **k: avisos.append(a),
+    )
+    monkeypatch.setattr(
+        "tdt.ui.exportar_analise.exportar_relatorio",
+        lambda *a, **k: (_ for _ in ()).throw(PermissionError("disco cheio")),
+    )
+    tela._exportar()  # não deve lançar — deve mostrar aviso amigável
+    assert len(avisos) == 1

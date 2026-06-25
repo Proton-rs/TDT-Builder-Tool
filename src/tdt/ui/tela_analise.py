@@ -152,4 +152,12 @@ class TelaAnalise(QWidget):
                 "A exportação de relatório ainda não está implementada nesta versão.",
             )
             return
-        exportar_relatorio(self._resultado, path)
+        try:
+            exportar_relatorio(self._resultado, path)
+        except Exception:
+            QMessageBox.warning(
+                self, "Erro ao exportar",
+                "Não foi possível salvar o relatório. Verifique se o arquivo não "
+                "está aberto em outro programa e se você tem permissão para "
+                "gravar no local escolhido.",
+            )
