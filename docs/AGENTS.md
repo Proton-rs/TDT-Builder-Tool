@@ -14,8 +14,12 @@ Materiais de origem (pipeline, inputs, templates, lista padrão) e specs do proj
   - `superpowers/specs/2026-06-24-sp7-analise-lista-homogenea-deterministica-design.md` (SP7 caminho determinístico p/ lista homogênea — implementado)
   - `superpowers/specs/2026-06-24-sp8-ui-filtros-tela-inicial-pendente-design.md` (SP8 UI: filtros por coluna, abas, status pendente — implementado)
   - `superpowers/specs/2026-06-24-sp9-tdt-completude-usabilidade-design.md` (SP9 TDT: Output Coordinates, dropdowns, Measurement Type/Display Unit — implementado)
-  - `superpowers/specs/2026-06-24-sp10-djf1-pareamento-polaridade-design.md` (SP10 DJF1 + pareamento de polaridade — implementado)
-  - Planos de implementação correspondentes em `superpowers/plans/2026-06-24-sp{7,8,9,10}-*.md`.
+   - `superpowers/specs/2026-06-24-sp10-djf1-pareamento-polaridade-design.md` (SP10 DJF1 + pareamento de polaridade — implementado)
+   - `superpowers/specs/2026-06-25-sp-revisao-ui-design.md` (Revisão UI: pareamento D+C, equipamento colunas, add/remover, filtro módulo, relatório formatado — spec, não implementado)
+   - `superpowers/specs/2026-06-25-sp-tdt-input-coordinates-format.md` (TDT: Input Coordinates numérico — implementado)
+   - `superpowers/specs/2026-06-25-sp-performance-pipeline.md` (Performance: batch encoding, scorer cache, lazy encoder, progresso UI, profiling — spec)
+   - `superpowers/specs/2026-06-25-sp-analise-qualidade-matching.md` (Análise: tabela de qualidade, estatísticas, relatório exportável — spec)
+   - Planos de implementação correspondentes em `superpowers/plans/2026-06-24-sp{7,8,9,10}-*.md`.
 - Fontes de verdade de dados: `Pontos Padrao ADMS_v2.xlsx` (lista padrão, default — descrição de DJF1 enriquecida; v1 fica como histórico, não editar nenhum dos dois), `dnp3_template.xlsx` (template TDT), `input_*.xlsx` (exemplos homogêneo/não-homogêneo), `Export_base_Full*.xlsx` (base real, 97MB — não abrir inteiro).
 - Não editar os `.xlsx` de origem; são insumos.
 

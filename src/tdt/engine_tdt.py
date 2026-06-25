@@ -145,7 +145,8 @@ def _valores(rec: SignalRecord, subestacao: str | None, padrao: ListaPadraoADMS)
     eh_prot = bool(sp and sp.signal_type == "RelayTrip")
     remote_unit = _remote_unit(subestacao)
     rp_custom = f"{nome}_{remote_unit}" if remote_unit else None
-    coords = ";".join(str(i) for i in rec.enderecamento.indices)
+    indices = rec.enderecamento.indices
+    coords = indices[0] if len(indices) == 1 else ";".join(str(i) for i in indices)
     direcao = rec.tipo_sinal.direcao
     tem_comando = direcao in ("Output", "InputOutput")
     if direcao == "Output":
@@ -206,7 +207,8 @@ def _valores_analog(rec: SignalRecord, subestacao: str | None, padrao: ListaPadr
         subestacao, rec.modulo.nome, rec.eletrico.nome_equipamento,
         rec.eletrico.barra, rec.sigla_sinal or "?",
     )
-    coords = ";".join(str(i) for i in rec.enderecamento.indices)
+    indices = rec.enderecamento.indices
+    coords = indices[0] if len(indices) == 1 else ";".join(str(i) for i in indices)
     alimentador = _eh_alimentador(rec.modulo.nome)
     eh_prot = bool(sp and sp.signal_type == "RelayTrip")
     remote_unit = _remote_unit(subestacao)
