@@ -74,8 +74,9 @@ def test_aba_revisao_comeca_desabilitada(qtbot):
     st = AppState()
     win = MainWindow(st)
     qtbot.addWidget(win)
-    assert win.abas.count() == 2
+    assert win.abas.count() == 3
     assert win.abas.isTabEnabled(1) is False
+    assert win.abas.isTabEnabled(2) is False
 
 
 def test_clicar_aba_revisao_troca_o_stack(qtbot):
@@ -97,6 +98,36 @@ def test_ir_para_revisao_habilita_e_seleciona_aba(qtbot):
     assert win.abas.isTabEnabled(1) is True
     assert win.abas.currentIndex() == 1
     assert win.stack.currentIndex() == 1
+
+
+def test_ir_para_revisao_tambem_habilita_aba_analise(qtbot):
+    st = AppState()
+    st.flags["pular_revisao"] = False
+    st.flags["aprovar_acima_threshold"] = False
+    win = MainWindow(st)
+    qtbot.addWidget(win)
+    win._ir_para_revisao()
+    assert win.abas.isTabEnabled(2) is True
+
+
+def test_clicar_aba_analise_troca_para_stack_index_3(qtbot):
+    st = AppState()
+    win = MainWindow(st)
+    qtbot.addWidget(win)
+    win.abas.setTabEnabled(2, True)
+    win.abas.setCurrentIndex(2)
+    assert win.stack.currentIndex() == 3
+
+
+def test_executou_carrega_resultado_na_tela_analise(qtbot):
+    from tdt.contracts import ListaHomogenea, ResultadoPipeline
+    st = AppState()
+    win = MainWindow(st)
+    qtbot.addWidget(win)
+    res = ResultadoPipeline(ListaHomogenea(None, "DNP3", ()), ())
+    win._estado.carregar_resultado(res)
+    win.tela_inicial.executou.emit()
+    assert win.tela_analise._resultado is res
 
 
 # --- SP4.1: regressão da revisão (B1/B2/B5) ---

@@ -1,6 +1,8 @@
-"""MainWindow: empilha as 3 telas num QStackedWidget; navegação por sinal.
+"""MainWindow: empilha as 4 telas num QStackedWidget; navegação por sinal.
 
-ponytail: QStackedWidget index 0/1/2 = Inicial/Revisão/Config; sem roteador.
+ponytail: QStackedWidget index 0/1/2/3 = Inicial/Revisão/Config/Análise; sem
+roteador. Análise fica em índice 3 (não 2, ocupado por Config) porque Config
+não tem aba própria — é acessada via link separado da tela inicial.
 """
 
 from __future__ import annotations
@@ -13,6 +15,7 @@ from PySide6.QtWidgets import (
 )
 
 from tdt.ui.estado import AppState
+from tdt.ui.tela_analise import TelaAnalise
 from tdt.ui.tela_config import TelaConfig
 from tdt.ui.tela_inicial import TelaInicial
 from tdt.ui.tela_revisao import TelaRevisao
@@ -32,18 +35,25 @@ class MainWindow(QMainWindow):
         self.tela_inicial = TelaInicial(estado)
         self.tela_revisao = TelaRevisao(estado)
         self.tela_config = TelaConfig(estado, config_path=config_path)
+        self.tela_analise = TelaAnalise()
 
         self.stack.addWidget(self.tela_inicial)   # 0
         self.stack.addWidget(self.tela_revisao)    # 1
         self.stack.addWidget(self.tela_config)     # 2
+        self.stack.addWidget(self.tela_analise)    # 3
 
         self.abas = QTabBar()
         self.abas.addTab("Inicial")
         self.abas.addTab("Revisão")
+        self.abas.addTab("Análise")
         self.abas.setTabEnabled(1, False)
-        self.abas.currentChanged.connect(self.stack.setCurrentIndex)
+        self.abas.setTabEnabled(2, False)
+        self.abas.currentChanged.connect(self._mudar_aba)
 
         self.tela_inicial.executou.connect(self._ir_para_revisao)
+        self.tela_inicial.executou.connect(
+            lambda: self.tela_analise.carregar(self._estado.resultado)
+        )
         self.tela_inicial.abrir_config.connect(lambda: self.stack.setCurrentIndex(2))
         self.tela_revisao.voltar.connect(lambda: self.abas.setCurrentIndex(0))
         self.tela_config.voltar.connect(lambda: self._voltar_config())
@@ -59,6 +69,14 @@ class MainWindow(QMainWindow):
         if tema.exists():
             with open(tema, encoding="utf-8") as f:
                 self.setStyleSheet(f.read())
+
+    # ponytail: mapa fixo aba->stack porque a TelaConfig ocupa o índice 2 do
+    # stack sem ter aba própria (acesso via link na tela inicial). Se mais
+    # telas sem aba forem adicionadas, trocar por uma lista de índices.
+    _ABA_PARA_STACK = {0: 0, 1: 1, 2: 3}
+
+    def _mudar_aba(self, indice_aba: int) -> None:
+        self.stack.setCurrentIndex(self._ABA_PARA_STACK[indice_aba])
 
     def _voltar_config(self) -> None:
         self.tela_inicial.recarregar()
@@ -83,6 +101,7 @@ class MainWindow(QMainWindow):
             QApplication.processEvents()
             self.tela_revisao.carregar()
             self.abas.setTabEnabled(1, True)
+            self.abas.setTabEnabled(2, True)
             self.abas.setCurrentIndex(1)
             self.stack.setCurrentIndex(1)
         except Exception as e:
