@@ -1,0 +1,76 @@
+"""Knobs calibráveis do SP1, com defaults sensatos.
+
+ponytail: knobs existem porque calibração é física, não over-engineering.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+
+# Expansão whole-token (só quando o token == chave), para não quebrar siglas.
+ABREVIACOES_PADRAO: dict[str, str] = {
+    "DISJ": "DISJUNTOR",
+    "DJ": "DISJUNTOR",
+    "SECC": "SECCIONADORA",
+    "SEC": "SECCIONADORA",
+    "TR": "TRANSFORMADOR",
+    "TRAFO": "TRANSFORMADOR",
+    "LT": "LINHA TRANSMISSAO",
+    "AL": "ALIMENTADOR",
+    "BC": "BANCO CAPACITORES",
+    "PROT": "PROTECAO",
+}
+
+STOPWORDS_PADRAO: frozenset[str] = frozenset(
+    {"DE", "DA", "DO", "DOS", "DAS", "E", "O", "A", "OS", "AS", "EM", "NO", "NA"}
+)
+
+
+@dataclass(frozen=True)
+class Config:
+    abreviacoes: dict[str, str] = field(
+        default_factory=lambda: dict(ABREVIACOES_PADRAO)
+    )
+    stopwords: frozenset[str] = STOPWORDS_PADRAO
+    # Mescla de scores (calibrado: tfidf+vet+fuzzy vence o benchmark)
+    peso_tfidf: float = 0.34
+    peso_vetorial: float = 0.33
+    peso_fuzzy: float = 0.33
+    # Roteador — quadrantes gap × percentual (calibrado no ground-truth)
+    threshold_pct: float = 0.45
+    threshold_gap: float = 0.08
+    top_n_pct: float = 0.80
+    # Analógicos — mesmos defaults dos discretos até calibrar separadamente
+    peso_tfidf_analog: float = 0.34
+    peso_vetorial_analog: float = 0.33
+    peso_fuzzy_analog: float = 0.33
+    threshold_pct_analog: float = 0.35
+    threshold_gap_analog: float = 0.05
+    # Embeddings
+    modelo_embedding: str = "paraphrase-multilingual-MiniLM-L12-v2"
+    k_vizinhos: int = 5
+    # Normalização (transforms novos — defaults seguros p/ não estragar siglas)
+    corrigir_typos: bool = True
+    remover_ids_equipamento: bool = True
+    # Pareamento de polaridade (SP10) — rede de segurança quando a descrição
+    # padrão da sigla de posição é genérica demais pro scorer de texto.
+    parear_polaridade_equipamento: bool = True
+    # Motor de regras — delta base por regra (calibrável; defaults conservadores)
+    pesos_regras: dict[str, float] = field(
+        default_factory=lambda: {
+            "numero_protecao": 0.10,
+            "opostos": 0.15,
+            "fase": 0.10,
+            "estagio": 0.10,
+            "comando_status": 0.08,
+            "equipamento": 0.12,
+            "lado_tensao": 0.08,
+        }
+    )
+    # Análise — e5 assimétrico + consenso + gap dinâmico + calibração
+    e5_prefixos: bool = False
+    calibracao_metodo: str = "minmax"  # "minmax" | "temperature"
+    min_consenso: int = 2  # nº mínimo de métodos que concordam no top-1
+    gaps_por_confianca: dict[str, float] = field(
+        default_factory=lambda: {"alta": 0.05, "media": 0.10, "baixa": 0.15}
+    )

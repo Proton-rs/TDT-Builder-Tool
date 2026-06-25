@@ -1,0 +1,139 @@
+"""Contrato de dados compartilhado por todos os módulos do SP1.
+
+Tipos imutáveis. Enriquecimento é funcional (dataclasses.replace), sem mutação
+in-place. Nenhum módulo conhece o interior de outro — só estes tipos.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+
+
+@dataclass(frozen=True)
+class Modulo:
+    nome: str | None
+    origem_contexto: str  # "sheet_name" | "linha" | "coluna:<x>"
+
+
+@dataclass(frozen=True)
+class TipoSinal:
+    categoria: str  # "Discrete" | "Analog" | "DiscreteAnalog"
+    is_double_bit: bool
+    direcao: str  # "Input" | "Output" | "InputOutput"
+    categoria_confiavel: bool = True
+
+
+@dataclass(frozen=True)
+class Enderecamento:
+    protocolo: str  # "DNP3"
+    indices: tuple[int, ...]  # (100, 101) double-bit | (17,) | () sem endereço
+    indices_saida: tuple[int, ...] = ()  # OUTCOORDS do comando (após pareamento D+C)
+
+
+@dataclass(frozen=True)
+class Descricoes:
+    bruta: str
+    normalizada: str
+
+
+@dataclass(frozen=True)
+class Eletrico:
+    fase: str | None = None
+    nivel_tensao: str | None = None  # "AT" | "BT"
+    equipamento_alvo: str | None = None
+    nome_equipamento: str | None = None  # "52-10"
+    barra: str | None = None  # "Principal" | "Auxiliar"
+
+
+@dataclass(frozen=True)
+class GrandezasAnalogicas:
+    unidade_medida: str | None = None
+    escala_transmissao: float | None = None
+    tipo_medicao: str | None = None
+
+
+@dataclass(frozen=True)
+class MapeamentoEstados:
+    estados_brutos: str | None = None  # "Transit;LIGADO;DESLIGADO;Error"
+    valores_scada: tuple[int, ...] = ()  # (0, 1, 2, 3)
+
+
+@dataclass(frozen=True)
+class Candidato:
+    sigla: str
+    score: float
+    fonte: str  # "tfidf" | "vetorial" | "mesclado"
+
+
+@dataclass(frozen=True)
+class Diagnostico:
+    """Scores por método por candidato, para auditoria/UI.
+
+    ``scores_por_metodo[sigla] = {"tfidf": .., "vetorial": .., "fuzzy": ..}``.
+    """
+
+    scores_por_metodo: dict[str, dict[str, float]]
+
+
+@dataclass(frozen=True)
+class AjusteRegra:
+    """Resultado de uma regra de domínio sobre um candidato.
+
+    ``delta`` soma ao score; ``motivo`` alimenta a justificativa (rastreabilidade).
+    """
+
+    delta: float
+    motivo: str
+
+
+@dataclass(frozen=True)
+class SignalRecord:
+    id: str  # estável: f"{sheet}:{linha}"
+    modulo: Modulo
+    tipo_sinal: TipoSinal
+    enderecamento: Enderecamento
+    descricoes: Descricoes
+    eletrico: Eletrico = field(default_factory=lambda: Eletrico())
+    grandezas_analogicas: GrandezasAnalogicas = field(
+        default_factory=lambda: GrandezasAnalogicas()
+    )
+    mapeamento_estados: MapeamentoEstados = field(
+        default_factory=lambda: MapeamentoEstados()
+    )
+    sigla_sinal: str | None = None  # None até o Roteador decidir
+    candidatos: tuple[Candidato, ...] = ()
+    status: str = "pendente"  # "pendente" | "decidido" | "revisao"
+    justificativa: str | None = None
+    diagnostico: "Diagnostico | None" = None
+
+
+@dataclass(frozen=True)
+class ListaHomogenea:
+    subestacao: str | None
+    protocolo: str  # "DNP3"
+    registros: tuple[SignalRecord, ...]  # todos com status="decidido"
+
+
+@dataclass(frozen=True)
+class ItemRevisao:
+    registro: SignalRecord
+    motivo: str  # "score_baixo"|"endereco_duplicado"|"sem_endereco"|"sem_fix"|"categoria_ambigua"
+    candidatos_sugeridos: tuple[Candidato, ...] = ()
+
+
+@dataclass(frozen=True)
+class ResultadoPipeline:
+    lista: ListaHomogenea
+    revisao: tuple[ItemRevisao, ...]
+
+
+@dataclass(frozen=True)
+class MapaColunas:
+    """Resultado da análise de colunas de uma sheet não-homogênea.
+
+    ``header_row`` é 1-based; ``colunas`` mapeia campo lógico -> índice 0-based.
+    Campos lógicos: descricao, modulo, indice, tipo, ied, variavel.
+    """
+
+    header_row: int
+    colunas: dict[str, int]

@@ -1,0 +1,372 @@
+"""Motor de regras de domínio — incrementa/decrementa scores de candidatos.
+
+Cada regra é uma **função pura** ``regra(rec, candidato, contexto) -> AjusteRegra``
+(delta + motivo). Um registro (tupla) de regras é aplicado; os deltas somam ao
+score e os ``motivo``s alimentam a justificativa (rastreabilidade). Regras novas
+= novas funções no registro, sem reescrever as existentes (SRP).
+
+Os deltas base vêm de ``config.pesos_regras[<chave>]`` (calibráveis), nunca
+hardcoded. Pistas vêm do texto canônico (``rec.descricoes.normalizada``) e do
+contexto elétrico (``rec.eletrico``).
+
+ponytail: regras como funções numa tupla; cresce adicionando funções, não
+reescrevendo. SP2 (LLM) pluga via Avaliador, não aqui.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, replace
+
+from tdt.config import Config
+from tdt.contracts import AjusteRegra, Candidato, SignalRecord
+
+_ZERO = AjusteRegra(0.0, "")
+
+
+@dataclass(frozen=True)
+class Contexto:
+    """Pistas pré-extraídas da linha, compartilhadas por todas as regras.
+
+    Evita recomputar split/regex por candidato. ``tokens`` é o conjunto de
+    tokens do texto canônico; ``eletrico`` é o sub-registro elétrico.
+    """
+
+    tokens: frozenset[str]
+    eletrico: object  # tdt.contracts.Eletrico (evita import circular de tipo)
+
+    @classmethod
+    def de(cls, rec: SignalRecord) -> Contexto:
+        return cls(
+            tokens=frozenset(rec.descricoes.normalizada.upper().split()),
+            eletrico=rec.eletrico,
+        )
+
+
+# --- R1: número de proteção -------------------------------------------------
+
+# Funções ANSI/IEEE comuns em proteção de subestação.
+_NUMEROS_PROTECAO: frozenset[str] = frozenset(
+    {
+        "21", "25", "27", "32", "37", "40", "46", "47", "49", "50", "51",
+        "55", "59", "67", "78", "79", "81", "85", "86", "87",
+    }
+)
+
+
+def _numero_lider(sigla: str) -> str | None:
+    """Número ANSI que lidera a sigla (ex.: '67N' -> '67', 'DJ' -> None)."""
+    digitos = ""
+    for ch in sigla:
+        if ch.isdigit():
+            digitos += ch
+        else:
+            break
+    # Aceita prefixo de 2 dígitos do catálogo (67N, 51G, 50/51 -> '50').
+    return digitos[:2] if len(digitos) >= 2 else None
+
+
+def _numeros_no_texto(tokens: frozenset[str]) -> set[str]:
+    achados: set[str] = set()
+    for tok in tokens:
+        lider = _numero_lider(tok)
+        if lider in _NUMEROS_PROTECAO:
+            achados.add(lider)
+    return achados
+
+
+def r1_numero_protecao(
+    rec: SignalRecord, cand: Candidato, ctx: Contexto, cfg: Config
+) -> AjusteRegra:
+    """Número de proteção compartilhado (boost) / divergente (penalidade)."""
+    numeros = _numeros_no_texto(ctx.tokens)
+    if not numeros:
+        return _ZERO
+    lider = _numero_lider(cand.sigla.upper())
+    if lider is None:
+        return _ZERO
+    peso = cfg.pesos_regras["numero_protecao"]
+    if lider in numeros:
+        return AjusteRegra(peso, f"numero_protecao: sigla {cand.sigla} casa {lider}")
+    return AjusteRegra(
+        -peso, f"numero_protecao: sigla {cand.sigla} diverge de {sorted(numeros)}"
+    )
+
+
+# --- R2: pares opostos (hard/soft negatives) --------------------------------
+
+
+@dataclass(frozen=True)
+class ParOposto:
+    """Par confusável + tokens discriminadores por polaridade.
+
+    Quando ``token_a`` está no texto, candidatos com marca da polaridade B são
+    penalizados (e vice-versa). ``marca_a``/``marca_b`` identificam a polaridade
+    do candidato na sigla; ``tokens_a``/``tokens_b`` são as pistas no texto.
+    """
+
+    nome: str
+    tokens_a: tuple[str, ...]
+    tokens_b: tuple[str, ...]
+    marca_a: tuple[str, ...]
+    marca_b: tuple[str, ...]
+
+
+# Catálogo modelado como dado — cresce adicionando linhas, não código.
+_PARES_OPOSTOS: tuple[ParOposto, ...] = (
+    ParOposto(
+        nome="sobrecorrente_x_subcorrente",
+        tokens_a=("SOBRECORRENTE", "SOBRE"),
+        tokens_b=("SUBCORRENTE", "SUB"),
+        marca_a=("50", "51", "67", "37SOBRE"),
+        marca_b=("37",),
+    ),
+    ParOposto(
+        nome="sobretensao_x_subtensao",
+        tokens_a=("SOBRETENSAO", "59"),
+        tokens_b=("SUBTENSAO", "27"),
+        marca_a=("59",),
+        marca_b=("27",),
+    ),
+    ParOposto(
+        nome="tap_max_x_min",
+        tokens_a=("MAX", "MAXIMO"),
+        tokens_b=("MIN", "MINIMO"),
+        marca_a=("MAX",),
+        marca_b=("MIN",),
+    ),
+    ParOposto(
+        nome="ligado_x_desligado",
+        tokens_a=("LIGADO", "LIGAR"),
+        tokens_b=("DESLIGADO", "DESLIGAR"),
+        marca_a=("LIGADO", "LIGAR", "LIG"),
+        marca_b=("DESLIGADO", "DESLIGAR", "DESLIG"),
+    ),
+    ParOposto(
+        nome="barra_x_linha",
+        tokens_a=("BARRA",),
+        tokens_b=("LINHA",),
+        marca_a=("_B", "BARRA"),
+        marca_b=("_L", "LINHA"),
+    ),
+)
+
+
+def _tem_marca(sigla: str, marcas: tuple[str, ...]) -> bool:
+    return any(m in sigla for m in marcas)
+
+
+def r2_opostos(
+    rec: SignalRecord, cand: Candidato, ctx: Contexto, cfg: Config
+) -> AjusteRegra:
+    """Desambiguação de pares opostos: penaliza candidato de polaridade contrária."""
+    sigla = cand.sigla.upper()
+    peso = cfg.pesos_regras["opostos"]
+    for par in _PARES_OPOSTOS:
+        texto_a = any(t in ctx.tokens for t in par.tokens_a)
+        texto_b = any(t in ctx.tokens for t in par.tokens_b)
+        if texto_a == texto_b:
+            continue  # nenhum discriminador, ou ambos (ambíguo) -> não decide
+        if texto_a and _tem_marca(sigla, par.marca_b):
+            return AjusteRegra(-peso, f"opostos[{par.nome}]: contraria polaridade A")
+        if texto_b and _tem_marca(sigla, par.marca_a):
+            return AjusteRegra(-peso, f"opostos[{par.nome}]: contraria polaridade B")
+    return _ZERO
+
+
+# --- R3: fase ---------------------------------------------------------------
+
+
+def fase_da_sigla(sigla: str) -> str | None:
+    # Remove dígito de estágio à direita (67N1 -> 67N) p/ ler a fase, não o estágio.
+    base = sigla[:-1] if len(sigla) > 1 and sigla[-1] in "1234" else sigla
+    if base.endswith("N"):
+        return "N"
+    for f in ("ABC", "AB", "BC", "CA"):
+        if base.endswith(f):
+            return f
+    if base.endswith("F"):
+        return "F"  # fase pura genérica
+    if base and base[-1] in ("A", "B", "C"):
+        return base[-1]
+    return None
+
+
+def r3_fase(
+    rec: SignalRecord, cand: Candidato, ctx: Contexto, cfg: Config
+) -> AjusteRegra:
+    """Fase (A/B/C/N/AB/BC/CA/ABC): favorece mesma fase, penaliza divergente.
+
+    ``ctx.eletrico.fase`` já vem preenchido pela normalização (N0,
+    ``normalizador.extrair_contexto_estrutural``) — esta regra não re-deriva
+    do texto, só lê o que já foi extraído.
+    """
+    alvo = getattr(ctx.eletrico, "fase", None) if ctx.eletrico is not None else None
+    if not alvo:
+        return _ZERO
+    fase_cand = fase_da_sigla(cand.sigla.upper())
+    if fase_cand is None:
+        return _ZERO
+    peso = cfg.pesos_regras["fase"]
+    if fase_cand == alvo:
+        return AjusteRegra(peso, f"fase: candidato e texto em {alvo}")
+    return AjusteRegra(-peso, f"fase: candidato {fase_cand} diverge de {alvo}")
+
+
+# --- R4: estágio ------------------------------------------------------------
+
+_ESTAGIOS: frozenset[str] = frozenset({"E1", "E2", "E3", "E4"})
+
+
+def r4_estagio(
+    rec: SignalRecord, cand: Candidato, ctx: Contexto, cfg: Config
+) -> AjusteRegra:
+    """Estágio (E1–E4): favorece sigla terminando no dígito do estágio."""
+    estagios = ctx.tokens & _ESTAGIOS
+    if not estagios:
+        return _ZERO
+    digito = next(iter(estagios))[1]
+    if cand.sigla.endswith(digito):
+        peso = cfg.pesos_regras["estagio"]
+        return AjusteRegra(peso, f"estagio: sigla termina em E{digito}")
+    return _ZERO
+
+
+# --- R5: comando × status ---------------------------------------------------
+
+_TOKENS_COMANDO: frozenset[str] = frozenset(
+    {"LIGAR", "DESLIGAR", "COMANDO", "CONTROLE", "ABRIR", "FECHAR", "CMD"}
+)
+_MARCAS_COMANDO: tuple[str, ...] = ("CMD", "_CMD", "COM", "_C")
+
+
+def r5_comando_status(
+    rec: SignalRecord, cand: Candidato, ctx: Contexto, cfg: Config
+) -> AjusteRegra:
+    """Comando × status: comando no texto favorece candidato com direção de comando."""
+    if not (ctx.tokens & _TOKENS_COMANDO):
+        return _ZERO
+    sigla = cand.sigla.upper()
+    peso = cfg.pesos_regras["comando_status"]
+    if _tem_marca(sigla, _MARCAS_COMANDO):
+        return AjusteRegra(peso, "comando_status: candidato de comando")
+    return AjusteRegra(-peso, "comando_status: candidato de status sob contexto comando")
+
+
+# --- R_equip: equipamento -----------------------------------------------
+
+_EQUIPAMENTO_SIGLA: tuple[tuple[str, str], ...] = (
+    ("DJ", "Disjuntor"),
+    ("SEC", "Seccionadora"),
+)
+
+
+def equipamento_da_sigla(sigla: str) -> str | None:
+    for prefixo, nome in _EQUIPAMENTO_SIGLA:
+        if sigla.startswith(prefixo):
+            return nome
+    return None
+
+
+def r_equipamento(
+    rec: SignalRecord, cand: Candidato, ctx: Contexto, cfg: Config
+) -> AjusteRegra:
+    """Penaliza candidato de família de equipamento diferente da detectada
+    na descrição (Disjuntor vs Seccionadora) — ctx.eletrico.equipamento_alvo
+    vem da extração estrutural (N0) em normalizador.py."""
+    alvo = getattr(ctx.eletrico, "equipamento_alvo", None) if ctx.eletrico is not None else None
+    if not alvo:
+        return _ZERO
+    equip_cand = equipamento_da_sigla(cand.sigla.upper())
+    if equip_cand is None or equip_cand == alvo:
+        return _ZERO
+    peso = cfg.pesos_regras["equipamento"]
+    return AjusteRegra(-peso, f"equipamento: candidato e {equip_cand}, descricao indica {alvo}")
+
+
+# --- R6: lado / nível de tensão ---------------------------------------------
+
+_LADO_TEXTO: dict[str, str] = {
+    "PRIMARIO": "AT",
+    "PRIMARIA": "AT",
+    "ALTA": "AT",
+    "AT": "AT",
+    "SECUNDARIO": "BT",
+    "SECUNDARIA": "BT",
+    "BAIXA": "BT",
+    "BT": "BT",
+}
+_MARCAS_LADO: dict[str, tuple[str, ...]] = {
+    "AT": ("AT", "_AT", "PRIM"),
+    "BT": ("BT", "_BT", "SEC"),
+}
+
+
+def r6_lado_tensao(
+    rec: SignalRecord, cand: Candidato, ctx: Contexto, cfg: Config
+) -> AjusteRegra:
+    """Lado/nível de tensão (AT/BT, primário/secundário): favorece candidato do lado."""
+    lado = None
+    for tok, lvl in _LADO_TEXTO.items():
+        if tok in ctx.tokens:
+            lado = lvl
+            break
+    if lado is None and ctx.eletrico is not None:
+        lado = getattr(ctx.eletrico, "nivel_tensao", None)
+    if not lado:
+        return _ZERO
+    sigla = cand.sigla.upper()
+    peso = cfg.pesos_regras["lado_tensao"]
+    if _tem_marca(sigla, _MARCAS_LADO.get(lado, ())):
+        return AjusteRegra(peso, f"lado_tensao: candidato em {lado}")
+    outro = "BT" if lado == "AT" else "AT"
+    if _tem_marca(sigla, _MARCAS_LADO.get(outro, ())):
+        return AjusteRegra(-peso, f"lado_tensao: candidato em {outro}, texto em {lado}")
+    return _ZERO
+
+
+# Registro de regras — adicione funções aqui para crescer (SRP, sem reescrita).
+_REGRAS = (
+    r1_numero_protecao,
+    r2_opostos,
+    r3_fase,
+    r4_estagio,
+    r5_comando_status,
+    r_equipamento,
+    r6_lado_tensao,
+)
+
+
+def aplicar_rastreado(
+    rec: SignalRecord,
+    candidatos: list[Candidato],
+    config: Config | None = None,
+) -> tuple[list[Candidato], list[AjusteRegra]]:
+    """Aplica o registro de regras, reordena e devolve os ajustes que atuaram.
+
+    Retorna ``(candidatos_reordenados, ajustes)``; ``ajustes`` traz só os
+    ``AjusteRegra`` com delta != 0 (motivos legíveis para a justificativa).
+    """
+    cfg = config or Config()
+    ctx = Contexto.de(rec)
+    ajustados: list[Candidato] = []
+    atuantes: list[AjusteRegra] = []
+    for cand in candidatos:
+        delta_total = 0.0
+        for regra in _REGRAS:
+            ajuste = regra(rec, cand, ctx, cfg)
+            if ajuste.delta:
+                delta_total += ajuste.delta
+                atuantes.append(ajuste)
+        ajustados.append(replace(cand, score=cand.score + delta_total))
+    ajustados.sort(key=lambda c: c.score, reverse=True)
+    return ajustados, atuantes
+
+
+def aplicar(
+    rec: SignalRecord,
+    candidatos: list[Candidato],
+    config: Config | None = None,
+) -> list[Candidato]:
+    """Soma deltas das regras aos scores e reordena (desc). Retrocompat: 2 args."""
+    ajustados, _ = aplicar_rastreado(rec, candidatos, config)
+    return ajustados

@@ -1,0 +1,353 @@
+"""Normalização pré-análise de descrições.
+
+A normalização define o texto que TODOS os scorers consomem: lixo entra, lixo
+sai. Por isso o pipeline é uma sequência de transforms SRP, cada um função pura
+``str -> str`` (N0 e N2 devolvem ``(str, contexto)``), fáceis de testar isolados:
+
+    bruto
+      -> N0 extrair_contexto_estrutural (equipamento ANSI/barra/fase do texto
+         BRUTO, antes do hífen e do stopword "A" serem destruídos — chamado
+         por estruturador.py, não por canonizar(); ver Eletrico.*)
+      -> N1 expandir_abreviacoes (whole-token, não quebra siglas)
+      -> N2 separar_ids_equipamento (remove ID letra-número tipo "01Q0";
+         IDs hifenados de equipamento já saíram em N0, não chegam aqui)
+      -> N3 remover_boilerplate (prefixo de equipamento dilui o match)
+      -> N4 corrigir_typos (fuzzy contra vocabulário de domínio, se dado)
+      -> N5 normalizar_unidades (kV/A/MW canônicos)
+      -> tokenizer (rejunta siglas separadas)
+      -> canônico
+
+``normalizar`` e ``canonizar`` permanecem retrocompatíveis para quem já chama
+(``canonizar`` não chama N0 — quem precisa do contexto estrutural chama
+``extrair_contexto_estrutural`` antes e passa o texto remanescente).
+
+ponytail: stemming baseado na base fica para quando medir que faz diferença.
+"""
+
+from __future__ import annotations
+
+import re
+import unicodedata
+from dataclasses import dataclass
+
+from rapidfuzz import fuzz
+
+from tdt.config import Config
+from tdt.tokenizer import tokenizar
+
+_SEPARADORES = re.compile(r"[/\-.(),;:]")
+
+# N0 — extração estrutural (texto bruto, antes do colapso de separadores).
+_EQUIPAMENTO_ANSI: dict[str, str] = {
+    "52": "Disjuntor",
+    "89": "Seccionadora",
+    "29": "Seccionadora",  # seccionadora de aterramento
+}
+_ID_EQUIPAMENTO = re.compile(r"\b(\d+)-(\d+)\b")
+_BARRA: dict[str, str] = {"P": "Principal", "A": "Auxiliar"}
+_MARCADOR_BARRA = re.compile(r"\bBARRA\s+([A-Z])\b")
+FASES: tuple[str, ...] = ("ABC", "AB", "BC", "CA", "A", "B", "C", "N")
+_FASE_TOKENS: dict[str, str] = {
+    "NEUTRO": "N",
+    "TRIFASICO": "ABC",
+    "TRIFASICA": "ABC",
+}
+
+
+def _fase_no_texto(tokens: list[str]) -> tuple[str | None, str | None]:
+    """Devolve (fase, token_a_remover) ou (None, None)."""
+    for i, tok in enumerate(tokens):
+        if tok in _FASE_TOKENS:
+            return _FASE_TOKENS[tok], tok
+    if "FASE" in tokens:
+        idx = tokens.index("FASE")
+        if idx + 1 < len(tokens) and tokens[idx + 1] in FASES:
+            return tokens[idx + 1], tokens[idx + 1]
+    return None, None
+
+
+@dataclass(frozen=True)
+class ContextoEstrutural:
+    equipamento_alvo: str | None = None
+    nome_equipamento: str | None = None  # "52-2" — ID bruto
+    barra: str | None = None
+    fase: str | None = None
+
+
+def extrair_contexto_estrutural(texto: str) -> tuple[str, ContextoEstrutural]:
+    """N0: extrai equipamento/barra/fase do texto BRUTO (antes do colapso de
+    separadores em normalizar() destruir o hífen e o stopword 'A' comer a
+    fase). Devolve (texto_remanescente, ContextoEstrutural)."""
+    if not texto:
+        return "", ContextoEstrutural()
+    base = _sem_acentos(texto).upper()
+
+    equipamento_alvo = None
+    nome_equipamento = None
+    m = _ID_EQUIPAMENTO.search(base)
+    if m:
+        equipamento_alvo = _EQUIPAMENTO_ANSI.get(m.group(1))
+        nome_equipamento = f"{m.group(1)}-{m.group(2)}"
+        base = (base[: m.start()] + " " + base[m.end() :]).strip()
+        base = " ".join(base.split())
+
+    barra = None
+    m_barra = _MARCADOR_BARRA.search(base)
+    if m_barra and m_barra.group(1) in _BARRA:
+        barra = _BARRA[m_barra.group(1)]
+        inicio, fim = m_barra.span(1)
+        base = (base[:inicio] + " " + base[fim:]).strip()
+        base = " ".join(base.split())
+
+    fase = None
+    tokens = base.split()
+    fase_val, tok_remover = _fase_no_texto(tokens)
+    if tok_remover is not None:
+        tokens.remove(tok_remover)
+        base = " ".join(tokens)
+        fase = fase_val
+
+    return base, ContextoEstrutural(
+        equipamento_alvo=equipamento_alvo, nome_equipamento=nome_equipamento, barra=barra, fase=fase,
+    )
+
+# N1 — abreviações de domínio extra (mescladas com config.abreviacoes; config
+# tem prioridade). Whole-token: só expandem quando o token inteiro casa, nunca
+# quebram siglas. Listadas no summary para o orquestrador migrar ao config.
+ABREVIACOES_EXTRA: dict[str, str] = {
+    "DISJ": "DISJUNTOR",
+    "SECC": "SECCIONADORA",
+    "SECCION": "SECCIONADORA",
+    "TRAFO": "TRANSFORMADOR",
+    "TRANSF": "TRANSFORMADOR",
+    "REL": "RELE",
+    "CDC": "COMUTADOR DERIVACAO CARGA",
+    "COMUT": "COMUTADOR",
+    "TENS": "TENSAO",
+    "CORR": "CORRENTE",
+    "POT": "POTENCIA",
+    "TEMP": "TEMPERATURA",
+    "PRESS": "PRESSAO",
+    "BLOQ": "BLOQUEIO",
+    "SINAL": "SINALIZACAO",
+    "SINALIZ": "SINALIZACAO",
+    "ALARM": "ALARME",
+    "DEFEITO": "DEFEITO",
+    "FALHA": "FALHA",
+    "OPER": "OPERACAO",
+    "MAN": "MANUAL",
+    "AUT": "AUTOMATICO",
+    "DIFER": "DIFERENCIAL",
+    "SOBREC": "SOBRECORRENTE",
+    "RELIG": "RELIGADOR",
+    "MEDIC": "MEDICAO",
+}
+
+# N2 — IDs de equipamento letra-número (contexto, não sinal). Calibrada para
+# NÃO casar números de função de proteção (67, 87, 50N, 59, 27...).
+# IDs hifenados (52-1, 89-3) NÃO entram aqui: N0 (extrair_contexto_estrutural)
+# já os extrai do texto bruto, classificados por código ANSI, antes que
+# normalizar() colapse o hífen em espaço — nesse ponto do pipeline (depois de
+# normalizar()) o hífen já não existe mais de qualquer forma.
+# ponytail: regex calibrada; ID de equipamento é contexto, não sinal.
+_ID_LETRA_NUM = re.compile(r"\b\d+[A-Z]\d+\b")  # 01Q0, 12J4
+
+# N5 — unidades equivalentes -> forma canônica (whole-token).
+_UNIDADES: dict[str, str] = {
+    "KV": "KV",
+    "KVA": "KVA",
+    "MVA": "MVA",
+    "MW": "MW",
+    "MVAR": "MVAR",
+    "A": "A",
+    "AMP": "A",
+    "AMPERE": "A",
+    "AMPERES": "A",
+    "V": "V",
+    "HZ": "HZ",
+    "C": "C",
+}
+
+# N4 — siglas curtas (alfanuméricas com dígito, ou <=3 letras) nunca são
+# corrigidas: 67N, SF6, DJF1, 50N, kV não devem virar palavra de domínio.
+_TEM_DIGITO = re.compile(r"\d")
+
+# N3 — termos de equipamento que, como prefixo, diluem o match (são contexto).
+_TERMOS_EQUIPAMENTO: frozenset[str] = frozenset(
+    {
+        "DISJUNTOR",
+        "SECCIONADORA",
+        "TRANSFORMADOR",
+        "RELIGADOR",
+        "RELE",
+        "CHAVE",
+        "BANCO",
+        "ALIMENTADOR",
+        "LINHA",
+    }
+)
+
+
+def _sem_acentos(texto: str) -> str:
+    nfkd = unicodedata.normalize("NFKD", texto)
+    return "".join(c for c in nfkd if not unicodedata.combining(c))
+
+
+def _abreviacoes(config: Config) -> dict[str, str]:
+    """Mescla ABREVIACOES_EXTRA com config.abreviacoes (config tem prioridade)."""
+    merged = dict(ABREVIACOES_EXTRA)
+    merged.update(config.abreviacoes)
+    return merged
+
+
+# --- N1 -------------------------------------------------------------------
+
+
+def expandir_abreviacoes(texto: str, config: Config) -> str:
+    """N1: expande abreviações whole-token; nunca quebra siglas internas."""
+    if not texto:
+        return ""
+    abrev = _abreviacoes(config)
+    saida: list[str] = []
+    for tok in texto.split():
+        expandido = abrev.get(tok, tok)
+        saida.extend(expandido.split())
+    return " ".join(saida)
+
+
+# --- N2 -------------------------------------------------------------------
+
+
+def separar_ids_equipamento(texto: str, config: Config) -> tuple[str, str]:
+    """N2: separa IDs de equipamento letra-número (01Q0, 12J4) do texto de
+    matching. IDs hifenados (52-1) já foram extraídos em N0 (texto bruto,
+    antes do hífen ser colapsado por ``normalizar()``) — não chegam aqui.
+
+    Devolve ``(texto_sem_ids, contexto)``. Números de função de proteção
+    (67, 87, 50N...) são preservados — só casam padrões de ID. Gateado por
+    ``config.remover_ids_equipamento``.
+
+    ponytail: regex calibrada; ID de equipamento é contexto, não sinal.
+    """
+    if not texto or not config.remover_ids_equipamento:
+        return texto, ""
+    contexto: list[str] = []
+
+    def _coleta(m: re.Match[str]) -> str:
+        contexto.append(m.group(0))
+        return " "
+
+    texto = _ID_LETRA_NUM.sub(_coleta, texto)
+    return " ".join(texto.split()), " ".join(contexto)
+
+
+# --- N3 -------------------------------------------------------------------
+
+
+def remover_boilerplate(texto: str, config: Config) -> str:
+    """N3: descarta prefixo de equipamento que dilui o match.
+
+    "DISJUNTOR - BAIXA PRESSAO SF6 BLOQUEIO" tem o sinal no rabo; quando há
+    descrição substantiva após um separador, mantém só o núcleo semântico. O
+    texto já vem com ``/-.`` colapsados por ``normalizar``, então usamos o
+    primeiro separador remanescente apenas se sobrar conteúdo substantivo.
+    """
+    if not texto:
+        return ""
+    # Aqui o texto já está sem separadores (viraram espaço em normalizar). O
+    # prefixo de equipamento é o termo de equipamento inicial; o núcleo é o
+    # resto. Como N2 já removeu o ID, basta soltar um termo de equipamento
+    # líder se houver descrição substantiva depois.
+    tokens = texto.split()
+    if len(tokens) <= 2:
+        return texto
+    if tokens[0] in _TERMOS_EQUIPAMENTO and len(tokens) > 3:
+        return " ".join(tokens[1:])
+    return texto
+
+
+# --- N4 -------------------------------------------------------------------
+
+
+def _e_sigla(token: str) -> bool:
+    """Siglas curtas / alfanuméricas não são candidatas a correção de typo."""
+    return bool(_TEM_DIGITO.search(token)) or len(token) <= 3
+
+
+def corrigir_typos(
+    texto: str,
+    config: Config,
+    vocab: set[str] | frozenset[str] | None,
+) -> str:
+    """N4: corrige tokens com ~1 edição para um termo de domínio conhecido.
+
+    ``vocab`` é injetado pelo orquestrador (termos das descrições da lista
+    padrão); sem vocab (None/vazio) a função é no-op. Gateado por
+    ``config.corrigir_typos``. Threshold alto e bypass de siglas garantem que
+    67N/SF6/DJF1 nunca são "corrigidos".
+    """
+    if not texto or not config.corrigir_typos or not vocab:
+        return texto
+    alvos = [v for v in vocab if not _e_sigla(v)]
+    if not alvos:
+        return texto
+    saida: list[str] = []
+    for tok in texto.split():
+        if tok in vocab or _e_sigla(tok):
+            saida.append(tok)
+            continue
+        melhor = max(alvos, key=lambda v: fuzz.ratio(tok, v))
+        score = fuzz.ratio(tok, melhor)
+        # ~1 edição num token de tamanho razoável -> score alto. Threshold
+        # conservador para não trocar palavras genuinamente distintas.
+        if score >= 85 and abs(len(tok) - len(melhor)) <= 1:
+            saida.append(melhor)
+        else:
+            saida.append(tok)
+    return " ".join(saida)
+
+
+# --- N5 -------------------------------------------------------------------
+
+
+def normalizar_unidades(texto: str) -> str:
+    """N5: canoniza unidades equivalentes (kV/KV/Kv->KV, A/Amp->A, Mw->MW)."""
+    if not texto:
+        return ""
+    saida: list[str] = []
+    for tok in texto.split():
+        saida.append(_UNIDADES.get(tok.upper(), tok))
+    return " ".join(saida)
+
+
+# --- orquestradores -------------------------------------------------------
+
+
+def normalizar(texto: str | None, config: Config) -> str:
+    """Forma normalizada legada: maiúsculas, sem acentos, separadores, abrev,
+    stopwords. Preservada para quem já chama (pipeline, benchmark)."""
+    if not texto:
+        return ""
+    texto = _sem_acentos(texto).upper()
+    texto = _SEPARADORES.sub(" ", texto)
+    tokens = texto.split()
+    sem_stop = [t for t in tokens if t not in config.stopwords]
+    return expandir_abreviacoes(" ".join(sem_stop), config)
+
+
+def canonizar(
+    texto: str | None,
+    config: Config,
+    vocab: set[str] | frozenset[str] | None = None,
+) -> str:
+    """Forma canônica para scoring. Orquestra N1..N5 + tokenizer de siglas.
+
+    ``vocab`` é opcional (default None) para retrocompatibilidade; sem ele a
+    correção de typos (N4) é pulada.
+    """
+    base = normalizar(texto, config)  # já aplica N1 internamente
+    texto2, _ctx = separar_ids_equipamento(base, config)  # N2
+    texto3 = remover_boilerplate(texto2, config)  # N3
+    texto4 = corrigir_typos(texto3, config, vocab)  # N4
+    texto5 = normalizar_unidades(texto4)  # N5
+    return " ".join(tokenizar(texto5))

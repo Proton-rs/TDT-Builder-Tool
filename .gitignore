@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Caches / artefatos de execução
+.cache/
+bench/resultados/
+
+# Estado local do harness
+.claude/
+
+# Binários grandes / não-essenciais (não versionar)
+docs/Export_base_Full__27_fev_2026.xlsx
+docs/Claude Setup.exe
+
+# Saídas geradas e config local
+output/
+config.toml
+
+.opencode/
+

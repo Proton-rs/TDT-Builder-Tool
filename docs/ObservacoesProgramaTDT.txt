@@ -1,0 +1,125 @@
+	FILTROS									[SPEC ESCRITO — SP8]
+filtrar mais de uma coluna							[SPEC ESCRITO — SP8]
+mudar comportamento do filtro (tirar ele no terceiro toque em cima da coluna)	[SPEC ESCRITO — SP8]
+> SP5 (ui/proxy_revisao.py) implementou: checkbox "esconder decididos" + 1 filtro de texto global
+> (busca em todas as colunas) + ordenação por clique de cabeçalho. Resto especificado em
+> docs/superpowers/specs/2026-06-24-sp8-ui-filtros-tela-inicial-pendente-design.md: filtro por
+> coluna via menu de contexto no cabeçalho (AND com o global) + setSortIndicatorClearable (API
+> nativa do Qt 6.5+, 1 linha).
+
+	CÓDIGO DE EQUIPAMENTOS							[RESOLVIDO — SP6]
+pré-processamento de código de equipamentos, 52-{n} -> código de disjuntor 89-{n} -> código de seccionadora, etc... consultar skill ADMS
+identificação do código de equipamento
+aplicar regras no motor de regras relacionadas ao equipamento
+> normalizador.py (N0/extrair_contexto_estrutural) classifica 52->Disjuntor, 89/29->Seccionadora;
+> motor_regras.r_equipamento penaliza candidato de família errada. Tabela pequena de propósito
+> (só os 2 equipamentos citados); expandir quando aparecer outro código real nos dados.
+
+	TOKEN									[RESOLVIDO — SP6]
+retirar parenteses do tokens/preprocessamento, substituir pontuação por espaço no pré-processamento do token
+tensão BARRA P fases AB \ obs: ("P" atrapalha no análise do sinal?)
+> normalizador._SEPARADORES agora inclui ()[,;:] (era só /-.). "BARRA P/A" é extraído como
+> contexto estrutural (Eletrico.barra = Principal/Auxiliar) ANTES do colapso de separadores —
+> "P" não fica mais como ruído no texto comparado, mas a informação não se perde (fica disponível
+> pra nomenclatura da TDT, como você pediu).
+
+	PENDENTE								[SPEC ESCRITO — SP8]
+espicificar o que é está pendente na revisão, talvez trocar para futuro e classificar o sinal mesmo que seja futuro.
+> Especificado em docs/superpowers/specs/2026-06-24-sp8-ui-filtros-tela-inicial-pendente-design.md
+> (seção 3): sinal sem endereço passa a rodar a classificação mesmo assim (mostra sigla sugerida),
+> só nunca é auto-aprovado; nova coluna "Motivo" na tabela expõe ItemRevisao.motivo (hoje invisível
+> na UI) com label amigável ("Futuro (sem endereço)", "Score baixo", etc).
+
+	FASES									[RESOLVIDO — SP6]
+TOKENS:" CORRENTE FASE A " ignorou o A no pré-processamento, arrumar e conferir as outras fases
+as fases dos sinais estão sendo retiradas da lista de input ou da lista padrão do adms?
+por que na coluna fases no sinais discretos tem sinais sem descrição de fase?
+> Causa raiz: STOPWORDS_PADRAO remove "A" (artigo) ANTES de qualquer regra de fase rodar.
+> Corrigido: fase é extraída do texto bruto em N0 (normalizador.extrair_contexto_estrutural),
+> antes do stopword filter. Resposta à pergunta de origem: a fase vem da DESCRIÇÃO DE ENTRADA
+> (N0, agora) e, como reforço, da SIGLA decidida pós-classificação (pipeline._com_fase, só
+> preenche se N0 não achou nada) — nunca da lista padrão ADMS diretamente. A coluna "Phases" na
+> TDT já lê eletrico.fase (engine_tdt.py:132,162) — com N0 preenchendo mais cedo, deve haver menos
+> sinais discretos com a coluna vazia. Validar com dados reais (sem dataset rotulado disponível
+> agora pra medir a taxa exata de melhora).
+
+	TELA INICIAL								[SPEC ESCRITO — SP8]
+botão pra limpar o log
+poder navegar entre a tela inicial e de revisão como se fossem abas de um navegador
+> Especificado em docs/superpowers/specs/2026-06-24-sp8-ui-filtros-tela-inicial-pendente-design.md
+> (seção 2): botão "Limpar log" (1 linha); QTabBar fino sobre o QStackedWidget existente pra
+> navegar Inicial↔Revisão livremente (Config continua só pelo botão ⚙, fora das abas).
+
+	ANALISE DE LISTA							[SPEC ESCRITO — SP7]
+mesmo marcando que é homogêneo, ainda sim ele passa pela análise, ele deveria passar por um motor de geração estritamente determinístico e rapido
+a nomenclatura da lista da TDT não homogênea está melhor que a homogênea, signal names, utr, etc \ obs: elas estão sendo geradas pelo mesmo motor?
+> CONFIRMADO com o fixture real (docs/input_homogeneo.xlsx): rota.homogeneo nunca desvia lógica
+> (só vira log) — homogênea passa pelo mesmo motor pesado (scorers+regras+roteador) que a
+> não-homogênea. E mais: a lista homogênea já traz SIGLA SINAL, MÓDULO, EQUIPAMENTO e TIPO (A/C/D)
+> em colunas FIXAS e sempre na mesma posição (confirmado em 20+ sheets do fixture) — só que o
+> pipeline nunca lê essas colunas por nome, e por isso fica dependendo da mesma extração
+> heurística de texto livre da não-homogênea, perdendo informação que já estava pronta. Isso
+> explica a nomenclatura pior. Spec escrito:
+> docs/superpowers/specs/2026-06-24-sp7-analise-lista-homogenea-deterministica-design.md —
+> caminho determinístico que lê essas colunas direto e só valida a sigla contra a Lista Padrão
+> ADMS (sem rodar scoring), com fallback pro caminho heurístico de hoje quando a sigla não bate.
+
+	TDT									[SPEC ESCRITO — SP9]
+nas TDTs, por exemplo a export full base, algumas colunas dão opções para botar nas células
+exemplo: nas fases, ao apertar em uma célula, ela te dá as opções para preencher a célula, a nossa TDT não tem essas opções em nenhum dos campos
+os sinais que tem comando o output coordinate não tem a cordenada repetida exemplo: [1500;1500], na lista de comando eles aparecem de forma simples só 1500, mas na TDT devem ficar no formato mostrado
+> Especificado em docs/superpowers/specs/2026-06-24-sp9-tdt-completude-usabilidade-design.md.
+> Dropdown: template não tem nenhuma DV tipo lista hoje; em vez de mudar o template, engine_tdt
+> passa a CRIAR a Data Validation em código (openpyxl) nas colunas onde já temos um domínio
+> fechado confiável (Phases/Direction/Remote Point Type).
+> Output Coordinate: fix de 1 função (_coords_comando) que duplica quando o comando tem 1 só
+> índice, usada nos 2 lugares onde coords_saida é montado (órfão e pareado).
+
+	COISAS FALTANDO NAS COLUNAS						[SPEC ESCRITO — SP9]
+a coluna do measurment type dos analógicos estão vazias, mas são de preenchimento obrigatório
+na coluna do display unit, está faltando as unidades
+no remote point alias a data não é separada por barras, os números são todos juntos
+> Especificado em docs/superpowers/specs/2026-06-24-sp9-tdt-completude-usabilidade-design.md.
+> Measurement Type/Display Unit: a Lista Padrão ADMS já tem as colunas TIPO DE MEDIÇÃO/UNIDADE DE
+> EXIBIÇÃO — só nunca foram lidas. Fix: 2 campos novos em SinalPadrao + tradução PT→EN pro
+> Measurement Type (Corrente→Current etc); sem inventar valor pra sigla que a lista não cobrir.
+> Remote Point Alias: JÁ RESOLVIDO (não é mais um problema) — engine_tdt._alias_hoje() já usa
+> "%m/%d/%Y" (barras), desde o SP4. A observação pode ter sido escrita antes dessa correção.
+
+	DJF1									[SPEC ESCRITO — SP10]
+os sinal djf1 é estritamente necessário para os disjuntores, cada disjuntor deve ter um djf1
+este sinal é obrigatóriamente double-bit, nas listas homogêneas na coluna do endereço ele aparece com endereço x;x+1 e aparece em uma linha só
+já na lista 1 não homogênea, o sinal djf1 está divido em duas linhas, uma informa o estado desligado e outra o estado ligado do disjuntor
+na TDT atual não foi possível identificar nenhum djf1 na lista 1 não homogênea
+> Causa raiz confirmada: descrição padrão de DJF1 é só "DISJUNTOR NF" (sem "Ligado"/"Desligado"),
+> e a regra de opostos (motor_regras.r2_opostos) não promove DJF1 (ela só desambigua candidatos
+> que JÁ têm marca de polaridade na sigla; DJF1 não tem). Especificado em
+> docs/superpowers/specs/2026-06-24-sp10-djf1-pareamento-polaridade-design.md: (1) dado —
+> Pontos Padrao ADMS_v2.xlsx com a descrição do DJF1 enriquecida, vira o novo default; (2) código —
+> nova etapa (config.parear_polaridade_equipamento, on/off) que detecta o par ligado/desligado do
+> mesmo equipamento ANTES do scoring e força a sigla de posição direto, reaproveitando o merge
+> double-bit que já existe em normalizador_estrutural.corrigir().
+
+	OUTPUT									[ABERTO]
+gerar um output(arquivo) com um prefixo do nome da SE no nome do arquivo
+se ainda sim tiver um nome com nome igual, numerar pelo sufixo
+> CONFIRMADO não implementado: tela_revisao.py._gerar() salva sempre em
+> Path(output) / "TDT.xlsx" (nome fixo, sem prefixo de subestação, sem checagem de colisão).
+
+	PESQUISAR								[RESPONDIDO]
+os embeddings são geradas a partir de quais colunas da lista padrão?
+poderíamos usar mais colunas para gerar os embeddings ou isso traria resultados piores?
+> Resposta (sessão de chat, sem necessidade de spec): só a coluna "DESCRIÇÃO NOVA" (sheets
+> DiscreteSignals/AnalogSignals da lista padrão) alimenta tfidf/vetorial/fuzzy. As outras colunas
+> (SIGNAL TYPE, DIRECTION, MM, FUNÇÃO/VALOR) só são usadas depois (motor de regras, geração da
+> TDT), nunca como entrada do embedding. Enriquecer a descrição (sugestão abaixo) ajudaria a
+> precisão — fica condicionado a essa pesquisa de conteúdo, não a uma mudança de código agora.
+
+	SUGESTÃO								[EM ESPERA — depende de pesquisa de conteúdo]
+criar uma lista padrão do adms v2 com uma descrição mais detalhada dos códigos ANSI
+> Não é tarefa de código — é pesquisa/curadoria de dados. Avaliar depois de confirmar (rodando
+> contra a lista atual) que descrição mais rica realmente melhora o embedding antes de investir
+> na pesquisa dos códigos.
+
+	NOTA
+essas observações são feitas a partir da lista 1 (GTA)

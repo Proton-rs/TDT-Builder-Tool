@@ -1,0 +1,31 @@
+[project]
+name = "tdt"
+version = "0.1.0"
+description = "Projeto TDT v2 — SP1 backbone determinístico (DNP3)"
+requires-python = ">=3.11"
+dependencies = [
+    "openpyxl>=3.1",
+    "numpy>=1.26",
+    "scikit-learn>=1.4",
+]
+
+[project.optional-dependencies]
+# Embeddings: instalados quando os scorers vetoriais entrarem.
+vetorial = ["sentence-transformers>=2.6", "faiss-cpu>=1.8"]
+ui = ["PySide6>=6.6", "tomli-w>=1.0"]
+dev = ["pytest>=8", "pytest-qt>=4.4", "tomli-w>=1.0"]
+
+[project.scripts]
+tdt = "tdt.cli:main"
+tdt-ui = "tdt.ui_main:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

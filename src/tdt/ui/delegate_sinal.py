@@ -1,0 +1,42 @@
+"""Editor inline da célula 'Sinal': combo com candidatos + busca ADMS.
+
+ponytail: combo editável; itens = candidatos da linha + siglas ADMS. setModelData
+delega ao ModeloSinais.definir_sigla (mesma rota do painel).
+"""
+
+from __future__ import annotations
+
+from PySide6.QtWidgets import QComboBox, QStyledItemDelegate
+
+from tdt.ui.busca_adms import buscar
+from tdt.ui.estado import AppState
+
+
+class DelegateSinal(QStyledItemDelegate):
+    def __init__(self, estado: AppState, modelo, proxy, parent=None):
+        super().__init__(parent)
+        self._estado = estado
+        self._modelo = modelo
+        self._proxy = proxy
+
+    def createEditor(self, parent, option, index):
+        fonte = self._proxy.mapToSource(index)
+        combo = QComboBox(parent)
+        combo.setEditable(True)
+        siglas: list[str] = []
+        rec = self._estado.registros[fonte.row()] if fonte.isValid() else None
+        if rec is not None:
+            siglas.extend(c.sigla for c in rec.candidatos)
+        lp = self._estado.lista_padrao
+        if lp is not None:
+            for sp in buscar(lp, "", limite=500):
+                if sp.sigla not in siglas:
+                    siglas.append(sp.sigla)
+        combo.addItems(siglas)
+        return combo
+
+    def setModelData(self, editor, model, index):
+        fonte = self._proxy.mapToSource(index)
+        sigla = editor.currentText().strip()
+        if sigla:
+            self._modelo.definir_sigla(fonte.row(), sigla)

@@ -1,0 +1,322 @@
+"""Gera o TDT DNP3 preenchendo o template (preserva fórmulas, estilos e tabelas).
+
+Carrega ``dnp3_template.xlsx`` e escreve os dados a partir da row 5, localizando
+colunas pelo **display name (row 4)** — os field names da row 3 se repetem
+(seção do sinal vs. seção do remote point), então não servem de chave única.
+
+Escopo atual: sinais discretos (DNP3_DiscreteSignals) e analógicos
+(DNP3_AnalogSignals, só leitura). Pareamento D+C de comando fica para o
+próximo corte.
+ponytail: analógico sem unidade/escala/Measurement Type ainda; entra quando o
+input fornecer a grandeza física.
+"""
+
+from __future__ import annotations
+
+import re
+from datetime import date
+from pathlib import Path
+
+import openpyxl
+from openpyxl.utils import get_column_letter
+from openpyxl.worksheet.datavalidation import DataValidation
+
+from tdt.contracts import ListaHomogenea, SignalRecord
+from tdt.dados.lista_padrao import ListaPadraoADMS
+from tdt.normalizador import FASES
+
+SHEET_DISCRETOS = "DNP3_DiscreteSignals"
+COLUNAS_ESPERADAS = 43
+SHEET_ANALOGICOS = "DNP3_AnalogSignals"
+COLUNAS_ESPERADAS_ANALOG = 61
+PRIMEIRA_LINHA_DADOS = 5
+
+_DIRECAO = {"Input": "Read", "Output": "Write", "InputOutput": "ReadWrite"}
+
+_DV_LISTAS: dict[str, tuple[str, ...]] = {
+    "Phases": FASES,
+    "Direction": tuple(_DIRECAO.values()),
+    "Remote Point Type": ("Status", "Analog"),
+}
+
+
+def _adicionar_dv_lista(ws, colunas: dict[str, int], ultima_linha: int) -> None:
+    for display, valores in _DV_LISTAS.items():
+        col = colunas.get(display)
+        if col is None:
+            continue
+        letra = get_column_letter(col)
+        dv = DataValidation(type="list", formula1=f'"{",".join(valores)}"', allow_blank=True)
+        dv.add(f"{letra}{PRIMEIRA_LINHA_DADOS}:{letra}{ultima_linha}")
+        ws.add_data_validation(dv)
+
+
+def _mapa_colunas(ws) -> dict[str, int]:
+    """display name (row 4) -> índice de coluna (1-based)."""
+    return {
+        ws.cell(4, c).value: c
+        for c in range(1, ws.max_column + 1)
+        if ws.cell(4, c).value
+    }
+
+
+_BARRA_SUFIXO = {"Principal": "P", "Auxiliar": "A"}
+
+
+def _nome_hierarquico(
+    subestacao: str | None,
+    modulo_nome: str | None,
+    equipamento: str | None,
+    barra: str | None,
+    sigla: str,
+) -> str:
+    partes = []
+    if subestacao:
+        partes.append(subestacao)
+    # "LT 1" → "LT1", "AL 11" → "AL11", "TR 1" → "TR1"
+    modulo_fmt = modulo_nome.replace(" ", "") if modulo_nome else None
+    if modulo_fmt:
+        partes.append(modulo_fmt)
+    if equipamento:
+        partes.append(equipamento)
+    elif modulo_fmt:
+        partes.append(modulo_fmt)  # sem equipamento: repete o módulo
+    sufixo_barra = _BARRA_SUFIXO.get(barra or "")
+    if sufixo_barra:
+        partes.append(sufixo_barra)
+    partes.append(sigla)
+    return "_".join(partes)
+
+
+def _eh_alimentador(modulo_nome: str | None) -> bool:
+    if not modulo_nome:
+        return False
+    norm = modulo_nome.replace(" ", "").upper()
+    return bool(re.match(r"^AL\d", norm))
+
+
+def _aor_group(subestacao: str | None, alimentador: bool) -> str | None:
+    if not subestacao:
+        return None
+    return f"{subestacao} {'Distr' if alimentador else 'Trans'}"
+
+
+def _remote_unit(subestacao: str | None) -> str | None:
+    return f"UTR_{subestacao}_1" if subestacao else None
+
+
+def _device_mapping(nome: str, sigla: str, eh_protecao: bool) -> str:
+    if not eh_protecao:
+        return nome
+    # insere PROT_ antes da sigla final (nome termina em "..._{sigla}" ou == sigla)
+    if nome.endswith(sigla):
+        return nome[: len(nome) - len(sigla)] + f"PROT_{sigla}"
+    return nome
+
+
+def _normal_value(sp: "SinalPadrao | None") -> int | None:
+    if sp is None or not sp.estados_brutos or not sp.valores_scada:
+        return None
+    estados = sp.estados_brutos.split(";")
+    try:
+        i = estados.index("NORMAL")
+    except ValueError:
+        return None
+    return sp.valores_scada[i] if i < len(sp.valores_scada) else None
+
+
+def _alias_hoje() -> str:
+    return date.today().strftime("%m%d%Y")
+
+
+def _coords_comando(indices: tuple[int, ...]) -> str:
+    if len(indices) == 1:
+        return f"{indices[0]};{indices[0]}"
+    return ";".join(str(i) for i in indices)
+
+
+def _valores(rec: SignalRecord, subestacao: str | None, padrao: ListaPadraoADMS) -> dict:
+    sp = padrao.por_sigla(rec.sigla_sinal) if rec.sigla_sinal else None
+    nome = _nome_hierarquico(
+        subestacao, rec.modulo.nome, rec.eletrico.nome_equipamento,
+        rec.eletrico.barra, rec.sigla_sinal or "?",
+    )
+    alimentador = _eh_alimentador(rec.modulo.nome)
+    eh_prot = bool(sp and sp.signal_type == "RelayTrip")
+    remote_unit = _remote_unit(subestacao)
+    rp_custom = f"{nome}_{remote_unit}" if remote_unit else None
+    coords = ";".join(str(i) for i in rec.enderecamento.indices)
+    direcao = rec.tipo_sinal.direcao
+    tem_comando = direcao in ("Output", "InputOutput")
+    if direcao == "Output":
+        # Comando órfão (sem par de status): o próprio endereço é o de escrita,
+        # não há leitura — não preencher Input Coordinates.
+        coords_entrada = None
+        coords_saida = _coords_comando(rec.enderecamento.indices)
+    else:
+        coords_entrada = coords
+        coords_saida = (
+            _coords_comando(rec.enderecamento.indices_saida)
+            if rec.enderecamento.indices_saida else ""
+        )
+    return {
+        "Signal Name": nome,
+        "Signal Alias": rec.descricoes.bruta,
+        "Measurement Type": "Status",  # ponytail: default; refinar por signal_type
+        "Signal Type": sp.signal_type if sp else "Custom",
+        "Side": "None",
+        "Output Register": False,
+        "Remote Point Type": "Status",
+        "Remote Point Name": nome,
+        "Phases": rec.eletrico.fase,
+        "Signal AOR Group": _aor_group(subestacao, alimentador),
+        "Device Mapping": _device_mapping(nome, rec.sigla_sinal or "?", eh_prot),
+        "Direction": _DIRECAO.get(direcao, "Read"),
+        "Message Mapping": sp.mm if sp else None,
+        "Input Data Type": "DoubleBit" if rec.tipo_sinal.is_double_bit else "SingleBit",
+        "Input Coordinates": coords_entrada,
+        "Output Data Type": "SingleBit" if tem_comando else None,
+        "Output Coordinates": coords_saida if tem_comando and coords_saida else None,
+        "Remote Unit": remote_unit,
+        "Remote Point Custom ID": rp_custom,
+        "Remote Point Alias": _alias_hoje(),
+        "Normal Value": _normal_value(sp),
+    }
+
+
+_MEASUREMENT_TYPE_PT_EN: dict[str, str] = {
+    "CORRENTE": "Current",
+    "TENSÃO": "Voltage",
+    "POTÊNCIA ATIVA": "ActivePower",
+    "POTÊNCIA REATIVA": "ReactivePower",
+    "TEMPERATURA": "Temperature",
+}
+
+
+def _measurement_type(sp) -> str | None:
+    if sp is None or not sp.tipo_medicao:
+        return None
+    return _MEASUREMENT_TYPE_PT_EN.get(sp.tipo_medicao.strip().upper())
+# ponytail: tabela cobre os 5 tipos confirmados no export real; ampliar quando aparecer outro tipo de medicao real nos dados.
+
+
+def _valores_analog(rec: SignalRecord, subestacao: str | None, padrao: ListaPadraoADMS) -> dict:
+    sp = padrao.por_sigla(rec.sigla_sinal) if rec.sigla_sinal else None
+    nome = _nome_hierarquico(
+        subestacao, rec.modulo.nome, rec.eletrico.nome_equipamento,
+        rec.eletrico.barra, rec.sigla_sinal or "?",
+    )
+    coords = ";".join(str(i) for i in rec.enderecamento.indices)
+    alimentador = _eh_alimentador(rec.modulo.nome)
+    eh_prot = bool(sp and sp.signal_type == "RelayTrip")
+    remote_unit = _remote_unit(subestacao)
+    rp_custom = f"{nome}_{remote_unit}" if remote_unit else None
+    return {
+        "Signal Name": nome,
+        "Signal Alias": rec.descricoes.bruta,
+        "Signal Type": sp.signal_type if sp else "Custom",
+        "Phases": rec.eletrico.fase,
+        "Direction": "Read",
+        "Input Coordinates": coords,
+        "Side": "None",
+        "Output Register": False,
+        "Remote Point Type": "Analog",
+        "Remote Point Name": nome,
+        "Signal AOR Group": _aor_group(subestacao, alimentador),
+        "Device Mapping": _device_mapping(nome, rec.sigla_sinal or "?", eh_prot),
+        "Remote Unit": remote_unit,
+        "Remote Point Custom ID": rp_custom,
+        "Remote Point Alias": _alias_hoje(),
+        "Measurement Type": _measurement_type(sp),
+        "Display Unit": sp.unidade_exibicao if sp and sp.unidade_exibicao not in (None, "-") else None,
+    }
+
+
+def gerar(
+    lista: ListaHomogenea, template_path: str | Path, lista_padrao: ListaPadraoADMS
+) -> openpyxl.Workbook:
+    wb = openpyxl.load_workbook(template_path)  # mantém fórmulas/estilos
+    _escrever_sheet(
+        wb[SHEET_DISCRETOS], SHEET_DISCRETOS, COLUNAS_ESPERADAS,
+        [r for r in lista.registros if r.tipo_sinal.categoria == "Discrete"],
+        _valores, lista.subestacao, lista_padrao,
+    )
+    _escrever_sheet(
+        wb[SHEET_ANALOGICOS], SHEET_ANALOGICOS, COLUNAS_ESPERADAS_ANALOG,
+        [r for r in lista.registros if r.tipo_sinal.categoria == "Analog"],
+        _valores_analog, lista.subestacao, lista_padrao,
+    )
+    return wb
+
+
+def _escrever_sheet(ws, sheet_nome, colunas_esperadas, registros, valores_fn, subestacao, padrao):
+    if ws.max_column != colunas_esperadas:
+        raise ValueError(
+            f"{sheet_nome} tem {ws.max_column} colunas, esperado "
+            f"{colunas_esperadas} — template desatualizado?"
+        )
+    colunas = _mapa_colunas(ws)
+    linha = PRIMEIRA_LINHA_DADOS
+    for rec in registros:
+        for display, valor in valores_fn(rec, subestacao, padrao).items():
+            col = colunas.get(display)
+            if col and valor is not None:
+                ws.cell(linha, col, valor)
+        linha += 1
+    ultima = linha - 1
+    _expandir_tabela(ws, sheet_nome, ultima)
+    if ultima >= PRIMEIRA_LINHA_DADOS:
+        _expandir_cf(ws, ultima_linha=ultima)
+        _expandir_dv(ws, ultima_linha=ultima)
+        _adicionar_dv_lista(ws, colunas, ultima_linha=ultima)
+
+
+def _expandir_tabela(ws, sheet_nome: str, ultima_linha: int) -> None:
+    """Ajusta o ref do ListObject para cobrir as linhas de dados escritas."""
+    if sheet_nome not in ws.tables:
+        return
+    ultima_col = get_column_letter(ws.max_column)
+    fim = max(ultima_linha, PRIMEIRA_LINHA_DADOS)
+    ws.tables[sheet_nome].ref = f"A4:{ultima_col}{fim}"
+
+
+def _expandir_range_row5(sqref: str, até_linha: int) -> str:
+    """Expande range que começa na row 5 para até a linha dada.
+
+    Ex: 'A5' -> 'A5:A{n}', 'AP5:AQ5' -> 'AP5:AQ{n}'.
+    """
+    m = re.match(r'^([A-Z]+)5(?::([A-Z]+)5)?$', sqref)
+    if not m:
+        return sqref
+    col1 = m.group(1)
+    col2 = m.group(2)
+    if col2:
+        return f"{col1}5:{col2}{até_linha}"
+    return f"{col1}5:{col1}{até_linha}"
+
+
+def _expandir_cf(ws, ultima_linha: int) -> None:
+    """Expande conditional formatting rules da row 5 para todo o range de dados."""
+    cfl = ws.conditional_formatting
+    items = []
+    for cf in cfl:
+        sqref = _expandir_range_row5(str(cf.sqref), ultima_linha)
+        for rule in cf.rules:
+            items.append((sqref, rule))
+    if not items:
+        return
+    cfl._cf_rules.clear()
+    for sqref, rule in items:
+        cfl.add(sqref, rule)
+
+
+def _expandir_dv(ws, ultima_linha: int) -> None:
+    """Expande data validations da row 5 para todo o range de dados."""
+    for dv in ws.data_validations.dataValidation:
+        novo = _expandir_range_row5(str(dv.sqref), ultima_linha)
+        if novo != str(dv.sqref):
+            dv.sqref = novo
+
+
+def salvar(wb: openpyxl.Workbook, destino: str | Path) -> None:
+    wb.save(destino)
