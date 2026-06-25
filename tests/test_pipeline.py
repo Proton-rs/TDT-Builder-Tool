@@ -2,6 +2,7 @@ from dataclasses import replace as _replace
 
 import numpy as np
 import openpyxl
+import pytest
 
 from tdt.auditoria import Auditoria
 from tdt.config import Config
@@ -10,7 +11,7 @@ from tdt.contracts import (
 )
 from tdt.dados.lista_padrao import ListaPadraoADMS
 from tdt.pipeline import executar, _com_fase, _construir_scorers, _classificar_roteado
-from tdt.pipeline import _desempatar_ambiguo, _gap
+from tdt.pipeline import _desempatar_ambiguo, _gap, _timer
 
 
 # bag-of-words sobre vocab de sinais: faz a coluna de descrição casar a lista ADMS
@@ -78,6 +79,49 @@ def test_pipeline_emite_evento_de_progresso_com_atual_e_total(
     assert eventos_progresso, "esperava ao menos um evento com dados de progresso"
     ultimo = eventos_progresso[-1]
     assert ultimo.dados["atual"] == ultimo.dados["total"]  # sempre emite no último sinal da sheet
+
+
+def test_timer_registra_evento_perf_com_nome_e_duracao():
+    """Task 1.5: _timer mede uma etapa e registra um evento "perf" com o
+    nome esperado na mensagem."""
+    aud = Auditoria()
+    with _timer("etapa teste", aud):
+        pass
+    eventos_perf = [e for e in aud.eventos if e.modulo == "perf"]
+    assert len(eventos_perf) == 1
+    assert eventos_perf[0].msg.startswith("etapa teste: ")
+    assert eventos_perf[0].msg.endswith("s")
+
+
+def test_timer_propaga_excecao_sem_mascarar_e_ainda_registra_tempo():
+    """_timer não deve suprimir exceções da etapa cronometrada — apenas
+    registra o tempo até a falha e deixa a exceção propagar."""
+    aud = Auditoria()
+    with pytest.raises(ValueError, match="boom"):
+        with _timer("etapa que falha", aud):
+            raise ValueError("boom")
+    eventos_perf = [e for e in aud.eventos if e.modulo == "perf"]
+    assert len(eventos_perf) == 1
+    assert eventos_perf[0].msg.startswith("etapa que falha: ")
+
+
+def test_pipeline_emite_eventos_perf_para_scorers_e_etapa_final(
+    tmp_path, template_dnp3_path, lista_padrao_path,
+):
+    """Task 1.5: executar() deve registrar eventos "perf" para a construção
+    dos scorers (disc/ana) e para a etapa final de pareamento+tdt."""
+    cfg = Config(peso_tfidf=1.0, peso_vetorial=0.0, threshold_pct=0.5, threshold_gap=0.05)
+    inp = _input_sintetico(tmp_path)
+    aud = Auditoria()
+    executar(
+        inp, template_dnp3_path, lista_padrao_path,
+        config=cfg, encoder=_fake_encoder, subestacao="X",
+        modo="nao-homogeneo", auditoria=aud,
+    )
+    msgs_perf = [e.msg for e in aud.eventos if e.modulo == "perf"]
+    assert any(m.startswith("construir scorers disc:") for m in msgs_perf)
+    assert any(m.startswith("construir scorers ana:") for m in msgs_perf)
+    assert any(m.startswith("dc_pairer + corrigir + montar + tdt:") for m in msgs_perf)
 
 
 def test_pipeline_com_cache_scorers_reusa_entre_execucoes(tmp_path, template_dnp3_path, lista_padrao_path):

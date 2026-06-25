@@ -11,6 +11,8 @@ dual-pass; usa-se o único que decidir, ou vão para revisão.
 
 from __future__ import annotations
 
+import time
+from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
 from typing import Callable, NamedTuple
@@ -37,6 +39,21 @@ from tdt.scoring import mescla
 from tdt.scoring.tfidf import ScorerTFIDF
 from tdt.scoring.vetorial import pontuar as pontuar_vetorial
 from tdt.scoring.vetorial import pontuar_com_embedding
+
+
+@contextmanager
+def _timer(nome: str, aud: Auditoria):
+    """Mede o tempo de uma etapa e registra um evento "perf" na auditoria.
+
+    Não suprime exceções: se a etapa falhar, o tempo até a falha ainda é
+    registrado e a exceção propaga normalmente (nenhum mascaramento de erro).
+    """
+    t0 = time.perf_counter()
+    try:
+        yield
+    finally:
+        dt = time.perf_counter() - t0
+        aud.evento("perf", f"{nome}: {dt:.2f}s")
 
 
 def _corpus(lp: ListaPadraoADMS, config: Config, categoria: str = "Discrete") -> list[tuple[str, str]]:
@@ -255,8 +272,10 @@ def executar(
         threshold_pct=config.threshold_pct_analog,
         threshold_gap=config.threshold_gap_analog,
     )
-    disc = _construir_scorers_cacheado(lp, config, encoder, "Discrete", config, cache_scorers_dir)
-    ana = _construir_scorers_cacheado(lp, config, encoder, "Analog", cfg_analog, cache_scorers_dir)
+    with _timer("construir scorers disc", aud):
+        disc = _construir_scorers_cacheado(lp, config, encoder, "Discrete", config, cache_scorers_dir)
+    with _timer("construir scorers ana", aud):
+        ana = _construir_scorers_cacheado(lp, config, encoder, "Analog", cfg_analog, cache_scorers_dir)
     corpus = _corpus(lp, config, "Discrete")  # ainda usado p/ vocab abaixo
     vocab = _vocab_dominio(corpus) if config.corrigir_typos else None
     ref_emb = disc.indice.vetores()  # já codificado em _construir_scorers; evita reencodar
@@ -331,13 +350,14 @@ def executar(
             break
     wb_in.close()
 
-    pareados, rev_pair = dc_pairer.parear(decididos)
-    corrigidos, rev_estrut = corrigir(list(pareados))
-    revisao.extend(rev_pair)
-    revisao.extend(rev_estrut)
+    with _timer("dc_pairer + corrigir + montar + tdt", aud):
+        pareados, rev_pair = dc_pairer.parear(decididos)
+        corrigidos, rev_estrut = corrigir(list(pareados))
+        revisao.extend(rev_pair)
+        revisao.extend(rev_estrut)
 
-    lista = criador_lista_homogenea.montar(list(corrigidos), subestacao=subestacao)
-    wb_out = engine_tdt.gerar(lista, template_path, lp)
+        lista = criador_lista_homogenea.montar(list(corrigidos), subestacao=subestacao)
+        wb_out = engine_tdt.gerar(lista, template_path, lp)
 
     aud.evento(
         "pipeline",
