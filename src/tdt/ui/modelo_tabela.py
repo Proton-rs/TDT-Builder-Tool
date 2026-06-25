@@ -14,6 +14,7 @@ COLUNAS = [
     "Sinal", "Confiança", "Status", "Motivo", "Descr. ADMS", "Descr. bruta",
     "Descr. normalizada", "Tokens", "Tipo", "Escala", "Fase", "Endereço",
     "Score embedding", "Score tf-idf", "Score fuzzy", "Justificativa",
+    "Módulo", "Equipamento", "Tipo Equip.", "Barra", "Nível Tensão",
 ]
 
 _MOTIVO_LABEL = {
@@ -124,6 +125,16 @@ class ModeloSinais(QAbstractTableModel):
             return _score(rec, sigla, "fuzzy")
         if nome == "Justificativa":
             return rec.justificativa or ""
+        if nome == "Módulo":
+            return (rec.modulo.nome if rec.modulo else None) or "—"
+        if nome == "Equipamento":
+            return rec.eletrico.nome_equipamento or "—"
+        if nome == "Tipo Equip.":
+            return rec.eletrico.equipamento_alvo or "—"
+        if nome == "Barra":
+            return rec.eletrico.barra or "—"
+        if nome == "Nível Tensão":
+            return rec.eletrico.nivel_tensao or "—"
         return ""
 
     def data(self, index, role=Qt.DisplayRole):

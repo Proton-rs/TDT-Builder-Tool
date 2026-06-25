@@ -1,14 +1,14 @@
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 from tdt.contracts import (
-    Candidato, Descricoes, Diagnostico, Enderecamento, Modulo, SignalRecord, TipoSinal,
+    Candidato, Descricoes, Diagnostico, Eletrico, Enderecamento, Modulo, SignalRecord, TipoSinal,
 )
 from tdt.dados.lista_padrao import ListaPadraoADMS, SinalPadrao
 from tdt.ui.estado import AppState
 from tdt.ui.modelo_tabela import ModeloSinais
 
 
-def _rec(status="decidido", sigla="DJF1"):
+def _rec(status="decidido", sigla="DJF1", eletrico=None):
     return SignalRecord(
         id="a:1", modulo=Modulo("M", "sheet_name"),
         tipo_sinal=TipoSinal("Discrete", False, "Input"),
@@ -17,6 +17,7 @@ def _rec(status="decidido", sigla="DJF1"):
         sigla_sinal=sigla, status=status,
         candidatos=(Candidato(sigla, 0.87, "mesclado"),) if sigla else (),
         diagnostico=Diagnostico({sigla: {"tfidf": 0.91, "vetorial": 0.84, "fuzzy": 0.72}}) if sigla else None,
+        eletrico=eletrico if eletrico is not None else Eletrico(),
     )
 
 
@@ -100,3 +101,39 @@ def test_definir_sigla_atualiza():
     m.definir_sigla(0, "DJF2")
     assert st.registros[0].sigla_sinal == "DJF2"
     assert m.data(m.index(0, _col("Sinal")), Qt.DisplayRole) == "DJF2"
+
+
+def test_colunas_equipamento_eletrico_existem_sem_duplicar_fase():
+    cols = ModeloSinais.COLUNAS
+    assert cols.count("Fase") == 1
+    for nome in ("Módulo", "Equipamento", "Tipo Equip.", "Barra", "Nível Tensão"):
+        assert nome in cols
+
+
+def test_colunas_equipamento_eletrico_mostram_valores_populados():
+    eletrico = Eletrico(
+        fase="A", nivel_tensao="AT", equipamento_alvo="Disjuntor",
+        nome_equipamento="52-10", barra="Principal",
+    )
+    m = ModeloSinais(_state(_rec(eletrico=eletrico)))
+    assert m.data(m.index(0, _col("Módulo")), Qt.DisplayRole) == "M"
+    assert m.data(m.index(0, _col("Equipamento")), Qt.DisplayRole) == "52-10"
+    assert m.data(m.index(0, _col("Tipo Equip.")), Qt.DisplayRole) == "Disjuntor"
+    assert m.data(m.index(0, _col("Barra")), Qt.DisplayRole) == "Principal"
+    assert m.data(m.index(0, _col("Nível Tensão")), Qt.DisplayRole) == "AT"
+
+
+def test_colunas_equipamento_eletrico_fallback_traco_quando_vazio():
+    m = ModeloSinais(_state(_rec(eletrico=Eletrico())))
+    assert m.data(m.index(0, _col("Equipamento")), Qt.DisplayRole) == "—"
+    assert m.data(m.index(0, _col("Tipo Equip.")), Qt.DisplayRole) == "—"
+    assert m.data(m.index(0, _col("Barra")), Qt.DisplayRole) == "—"
+    assert m.data(m.index(0, _col("Nível Tensão")), Qt.DisplayRole) == "—"
+
+
+def test_coluna_modulo_fallback_traco_quando_sem_nome():
+    rec = _rec()
+    rec = rec.__class__(**{**rec.__dict__, "modulo": Modulo(None, "linha")})
+    st = _state(rec)
+    m = ModeloSinais(st)
+    assert m.data(m.index(0, _col("Módulo")), Qt.DisplayRole) == "—"
