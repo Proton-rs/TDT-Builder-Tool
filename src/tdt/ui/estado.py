@@ -24,6 +24,10 @@ class AppState:
     resultado: ResultadoPipeline | None = None
     registros: list[SignalRecord] = field(default_factory=list)
     lista_padrao: ListaPadraoADMS | None = None
+    # ponytail: encoder guardado sem contagem de referências — só há um
+    # PipelineWorker ativo por vez (UI dispara um por execução, sequencial).
+    # Se isso mudar (workers concorrentes), revisitar com keep-alive/refs.
+    encoder: object | None = None
 
     def carregar_resultado(self, res: ResultadoPipeline) -> None:
         self.resultado = res

@@ -24,7 +24,8 @@ class PipelineWorker(QThread):
     erro = Signal(str)
 
     def __init__(self, paths, config: Config, modo, subestacao,
-                 encoder_factory=criar_encoder, executar_fn=pipeline.executar):
+                 encoder_factory=criar_encoder, executar_fn=pipeline.executar,
+                 app_state=None):
         super().__init__()
         self._paths = paths
         self._config = config
@@ -32,6 +33,7 @@ class PipelineWorker(QThread):
         self._subestacao = subestacao
         self._encoder_factory = encoder_factory
         self._executar_fn = executar_fn
+        self._app_state = app_state
         self._parar = threading.Event()
 
     def parar(self) -> None:
@@ -41,13 +43,25 @@ class PipelineWorker(QThread):
         return self._parar.is_set()
 
     def run(self) -> None:
+        _input = self._paths.get("input", "")
+        _template = self._paths.get("template", "")
+        _lista = self._paths.get("lista_padrao", "")
         try:
+            for nome, p in (("input", _input), ("template", _template),
+                             ("lista padrão", _lista)):
+                if not Path(p).exists():
+                    self.erro.emit(f"Arquivo {nome} não encontrado: {p}")
+                    return
             self.log.emit("[INFO] pipeline: iniciando processamento…")
             aud = Auditoria(on_evento=lambda ev: self.log.emit(self._fmt(ev)))
-            encoder = self._encoder_factory(self._config.modelo_embedding)
-            _input = self._paths.get("input", "")
-            _template = self._paths.get("template", "")
-            _lista = self._paths.get("lista_padrao", "")
+            # ponytail: reusa encoder via AppState (evita reload do modelo de
+            # embeddings, lento) — sem contagem de referências, ver estado.py.
+            if self._app_state is not None and self._app_state.encoder is not None:
+                encoder = self._app_state.encoder
+            else:
+                encoder = self._encoder_factory(self._config.modelo_embedding)
+                if self._app_state is not None:
+                    self._app_state.encoder = encoder
             resultado, _wb = self._executar_fn(
                 _input, _template, _lista,
                 config=self._config, encoder=encoder, modo=self._modo,

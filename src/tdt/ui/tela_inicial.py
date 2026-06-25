@@ -178,6 +178,7 @@ class TelaInicial(QWidget):
         self._worker = self._worker_factory(
             paths=self._estado.paths, config=self._estado.config,
             modo=self._estado.modo, subestacao=self._estado.subestacao,
+            app_state=self._estado,
         )
         self._worker.log.connect(self.log.appendPlainText)
         self._worker.erro.connect(lambda m: self.log.appendPlainText(f"[ERRO] {m}"))
