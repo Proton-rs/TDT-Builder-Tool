@@ -25,6 +25,9 @@ def pontuar_com_embedding(
     """Igual a ``pontuar``, mas usa um embedding já calculado (batch encode)
     em vez de reencodar a descrição — evita uma chamada ao encoder por sinal.
     """
+    # ponytail: assume encoder simétrico (embedding já no espaço certo); se
+    # encoder_consulta assimétrico for introduzido em IndiceVetorial, esta
+    # função precisa aceitar/usar encoder_consulta também — ver IndiceVetorial.buscar()
     q = _normalizar(np.asarray(embedding).reshape(1, -1))
     k = min(k, len(indice._siglas))
     scores, idxs = indice._index.search(q, k)
