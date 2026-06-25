@@ -35,6 +35,7 @@ from tdt.pareamento_polaridade import forcar_polaridade_equipamento
 from tdt.scoring import mescla
 from tdt.scoring.tfidf import ScorerTFIDF
 from tdt.scoring.vetorial import pontuar as pontuar_vetorial
+from tdt.scoring.vetorial import pontuar_com_embedding
 
 
 def _corpus(lp: ListaPadraoADMS, config: Config, categoria: str = "Discrete") -> list[tuple[str, str]]:
@@ -80,10 +81,15 @@ def _com_fase(rec: SignalRecord) -> SignalRecord:
     return rec
 
 
-def _classificar_sinal(rec, scorers: "_Scorers", diagnostico: bool = False) -> SignalRecord:
+def _classificar_sinal(
+    rec, scorers: "_Scorers", diagnostico: bool = False, embedding_vet=None
+) -> SignalRecord:
     config = scorers.config
     c_tfidf = scorers.tfidf.pontuar(rec, k=config.k_vizinhos)
-    c_vet = pontuar_vetorial(rec, scorers.indice, k=config.k_vizinhos)
+    if embedding_vet is not None:
+        c_vet = pontuar_com_embedding(embedding_vet, rec, scorers.indice, k=config.k_vizinhos)
+    else:
+        c_vet = pontuar_vetorial(rec, scorers.indice, k=config.k_vizinhos)
     c_fuzzy = scorers.fuzzy.pontuar(rec, k=config.k_vizinhos)
     fundidos = mescla.mesclar(
         [
@@ -139,7 +145,7 @@ def _desempatar_ambiguo(d_disc, d_ana, disc: "_Scorers", ana: "_Scorers", descri
     return d_disc if afin_disc > afin_ana else d_ana
 
 
-def _classificar_roteado(rec, disc: "_Scorers", ana: "_Scorers", diagnostico: bool):
+def _classificar_roteado(rec, disc: "_Scorers", ana: "_Scorers", diagnostico: bool, embedding_vet=None):
     """Devolve (decidido_ou_None, item_revisao_ou_None).
 
     Confiável: usa o bundle da própria categoria.
@@ -149,13 +155,13 @@ def _classificar_roteado(rec, disc: "_Scorers", ana: "_Scorers", diagnostico: bo
     """
     if rec.tipo_sinal.categoria_confiavel:
         bundle = disc if rec.tipo_sinal.categoria == "Discrete" else ana
-        d = _classificar_sinal(rec, bundle, diagnostico=diagnostico)
+        d = _classificar_sinal(rec, bundle, diagnostico=diagnostico, embedding_vet=embedding_vet)
         if d.status == "decidido":
             return d, None
         return None, ItemRevisao(d, motivo="score_baixo", candidatos_sugeridos=d.candidatos[:3])
 
-    d_disc = _classificar_sinal(rec, disc, diagnostico=diagnostico)
-    d_ana = _classificar_sinal(rec, ana, diagnostico=diagnostico)
+    d_disc = _classificar_sinal(rec, disc, diagnostico=diagnostico, embedding_vet=embedding_vet)
+    d_ana = _classificar_sinal(rec, ana, diagnostico=diagnostico, embedding_vet=embedding_vet)
     ok_disc = d_disc.status == "decidido"
     ok_ana = d_ana.status == "decidido"
 
@@ -249,16 +255,27 @@ def executar(
         sinais = forcar_polaridade_equipamento(sinais, config)
         total = len(sinais)
         aud.evento("identificador", f"Sheet {sn}: {total} sinais lidos", "INFO")
+        # Batch encode das descrições da sheet inteira — evita uma chamada ao
+        # encoder por sinal (cada chamada individual ao sentence-transformer
+        # tem overhead fixo significativo).
+        if sinais:
+            descricoes_lote = [r.descricoes.normalizada for r in sinais]
+            emb_lote = encoder(descricoes_lote)
+        else:
+            emb_lote = []
         for j, rec in enumerate(sinais, 1):
             if cancelado is not None and cancelado():
                 aud.evento("pipeline", "cancelado pelo usuário", "AVISO")
                 break
+            embedding_vet = emb_lote[j - 1] if len(emb_lote) else None
             if rec.status == "decidido":  # já resolvido pelo pareamento de polaridade
                 decididos.append(rec)
                 continue
             if not rec.enderecamento.indices:
                 aud.evento("pipeline", f"{rec.id}: sem endereço — classificando sem decidir", "AVISO")
-                decidido_tmp, item_tmp = _classificar_roteado(rec, disc, ana, diagnostico)
+                decidido_tmp, item_tmp = _classificar_roteado(
+                    rec, disc, ana, diagnostico, embedding_vet=embedding_vet
+                )
                 if decidido_tmp is not None:
                     rec_avaliado = decidido_tmp
                     candidatos_sugeridos = decidido_tmp.candidatos[:3]
@@ -269,7 +286,9 @@ def executar(
                     rec_avaliado, motivo="sem_endereco", candidatos_sugeridos=candidatos_sugeridos,
                 ))
                 continue
-            decidido, item = _classificar_roteado(rec, disc, ana, diagnostico)
+            decidido, item = _classificar_roteado(
+                rec, disc, ana, diagnostico, embedding_vet=embedding_vet
+            )
             if decidido is not None:
                 decididos.append(decidido)
             else:
