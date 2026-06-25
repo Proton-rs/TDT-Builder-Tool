@@ -12,7 +12,7 @@ from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QButtonGroup, QCheckBox, QComboBox, QFileDialog, QGroupBox, QHBoxLayout,
     QLabel, QLineEdit, QListWidget, QListWidgetItem, QMessageBox, QPlainTextEdit,
-    QPushButton, QRadioButton, QVBoxLayout, QWidget,
+    QProgressBar, QPushButton, QRadioButton, QVBoxLayout, QWidget,
 )
 from PySide6.QtCore import Qt
 
@@ -76,6 +76,9 @@ class TelaInicial(QWidget):
         self.btn_limpar_log = QPushButton("Limpar log")
         self.btn_limpar_log.clicked.connect(self.log.clear)
 
+        self.progresso_bar = QProgressBar()
+        self.progresso_bar.setVisible(False)
+
         col_esq = QVBoxLayout()
         for w in (QLabel("Input:"), self.ed_input, btn_in,
                   QLabel("Output:"), self.ed_output, btn_out,
@@ -99,6 +102,7 @@ class TelaInicial(QWidget):
         log_header.addWidget(self.btn_limpar_log)
         col_dir.addLayout(log_header)
         col_dir.addWidget(self.log)
+        col_dir.addWidget(self.progresso_bar)
 
         def _grupo(titulo, layout):
             g = QGroupBox(titulo); g.setLayout(layout); return g
@@ -184,7 +188,13 @@ class TelaInicial(QWidget):
         self._worker.erro.connect(lambda m: self.log.appendPlainText(f"[ERRO] {m}"))
         self._worker.erro.connect(self._fim)
         self._worker.terminado.connect(self._terminado)
+        self._worker.progresso.connect(self._atualizar_progresso)
         self._worker.start()
+
+    def _atualizar_progresso(self, atual: int, total: int) -> None:
+        self.progresso_bar.setVisible(True)
+        self.progresso_bar.setMaximum(total)
+        self.progresso_bar.setValue(atual)
 
     def _terminado(self, resultado):
         self._estado.carregar_resultado(resultado)
@@ -204,3 +214,4 @@ class TelaInicial(QWidget):
 
     def _fim(self, *args):
         self.btn_executar.setEnabled(True); self.btn_parar.setEnabled(False)
+        self.progresso_bar.setVisible(False)

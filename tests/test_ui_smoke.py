@@ -26,6 +26,21 @@ def test_tela_inicial_instancia(qtbot):
     assert tela.btn_executar.text().upper().startswith("EXEC")
 
 
+def test_barra_de_progresso_inicia_oculta_e_responde_ao_sinal(qtbot):
+    st = AppState()
+    tela = TelaInicial(st)
+    qtbot.addWidget(tela)
+    # isVisible() depende da janela estar mostrada na tela; em teste headless
+    # usamos explicitlyHidden (estado do próprio widget, sem precisar de .show()).
+    assert tela.progresso_bar.isHidden() is True
+    tela._atualizar_progresso(3, 10)
+    assert tela.progresso_bar.isHidden() is False
+    assert tela.progresso_bar.maximum() == 10
+    assert tela.progresso_bar.value() == 3
+    tela._fim()
+    assert tela.progresso_bar.isHidden() is True
+
+
 def test_botao_limpar_log_esvazia_o_log(qtbot):
     st = AppState()
     tela = TelaInicial(st)

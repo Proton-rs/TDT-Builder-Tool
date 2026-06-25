@@ -22,6 +22,7 @@ class PipelineWorker(QThread):
     log = Signal(str)
     terminado = Signal(object)
     erro = Signal(str)
+    progresso = Signal(int, int)  # (atual, total)
 
     def __init__(self, paths, config: Config, modo, subestacao,
                  encoder_factory=criar_encoder, executar_fn=pipeline.executar,
@@ -53,7 +54,7 @@ class PipelineWorker(QThread):
                     self.erro.emit(f"Arquivo {nome} não encontrado: {p}")
                     return
             self.log.emit("[INFO] pipeline: iniciando processamento…")
-            aud = Auditoria(on_evento=lambda ev: self.log.emit(self._fmt(ev)))
+            aud = Auditoria(on_evento=self._on_evento)
             # ponytail: reusa encoder via AppState (evita reload do modelo de
             # embeddings, lento) — sem contagem de referências, ver estado.py.
             if self._app_state is not None and self._app_state.encoder is not None:
@@ -77,6 +78,16 @@ class PipelineWorker(QThread):
                 msg += "\n[DICA] Verifique se os arquivos abaixo existem e são .xlsx válidos:\n"
                 msg += f"  input: {_input}\n  template: {_template}\n  lista_padrao: {_lista}"
             self.erro.emit(msg)
+
+    def _on_evento(self, ev) -> None:
+        # ponytail: evento de progresso é um evento normal (nivel="INFO") com
+        # dados={"atual","total"} — evita estender Auditoria.NIVEIS só para
+        # isso. Vai pra barra, não pro log de texto (1 linha/sheet já basta
+        # como rastro textual; duplicar viraria spam em listas grandes).
+        if ev.dados and "atual" in ev.dados and "total" in ev.dados:
+            self.progresso.emit(ev.dados["atual"], ev.dados["total"])
+            return
+        self.log.emit(self._fmt(ev))
 
     @staticmethod
     def _fmt(ev) -> str:

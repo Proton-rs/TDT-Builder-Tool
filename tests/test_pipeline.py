@@ -3,6 +3,7 @@ from dataclasses import replace as _replace
 import numpy as np
 import openpyxl
 
+from tdt.auditoria import Auditoria
 from tdt.config import Config
 from tdt.contracts import (
     Candidato, Descricoes, Enderecamento, Modulo, SignalRecord, TipoSinal,
@@ -58,6 +59,25 @@ def test_pipeline_ponta_a_ponta_gera_tdt(tmp_path, template_dnp3_path, lista_pad
     assert ws.max_column == 43
     nomes = [ws.cell(r, 1).value for r in range(5, 5 + len(resultado.lista.registros))]
     assert any(n and n.startswith("X_") for n in nomes)
+
+
+def test_pipeline_emite_evento_de_progresso_com_atual_e_total(
+    tmp_path, template_dnp3_path, lista_padrao_path,
+):
+    """Task 1.4: evento de progresso traz dados={'atual','total'} p/ a UI
+    desenhar a barra, sem precisar de um nível dedicado em Auditoria."""
+    cfg = Config(peso_tfidf=1.0, peso_vetorial=0.0, threshold_pct=0.5, threshold_gap=0.05)
+    inp = _input_sintetico(tmp_path)
+    aud = Auditoria()
+    executar(
+        inp, template_dnp3_path, lista_padrao_path,
+        config=cfg, encoder=_fake_encoder, subestacao="X",
+        modo="nao-homogeneo", auditoria=aud,
+    )
+    eventos_progresso = [e for e in aud.eventos if e.dados and "atual" in e.dados and "total" in e.dados]
+    assert eventos_progresso, "esperava ao menos um evento com dados de progresso"
+    ultimo = eventos_progresso[-1]
+    assert ultimo.dados["atual"] == ultimo.dados["total"]  # sempre emite no último sinal da sheet
 
 
 def test_pipeline_com_cache_scorers_reusa_entre_execucoes(tmp_path, template_dnp3_path, lista_padrao_path):

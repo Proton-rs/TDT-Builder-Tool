@@ -34,6 +34,41 @@ def test_worker_emite_terminado(tmp_path, qtbot):
     w.wait()
 
 
+def test_worker_emite_progresso_a_partir_de_evento_com_dados(tmp_path, qtbot):
+    """Task 1.4: evento de Auditoria com dados={'atual','total'} vira sinal
+    Qt `progresso`, e não duplica no log de texto (evita poluir o log com
+    uma linha por sinal em listas grandes)."""
+    def fake_exec(*a, auditoria=None, **k):
+        if auditoria is not None:
+            auditoria.evento("pipeline", "5/10", "INFO", dados={"atual": 5, "total": 10})
+            auditoria.evento("pipeline", "feito", "INFO")
+        return _resultado_vazio(), None
+
+    for nome in ("input.xlsx", "template.xlsx", "lista.xlsx"):
+        (tmp_path / nome).write_text("x")
+
+    w = PipelineWorker(
+        paths={
+            "input": str(tmp_path / "input.xlsx"), "output": "o",
+            "template": str(tmp_path / "template.xlsx"),
+            "lista_padrao": str(tmp_path / "lista.xlsx"),
+        },
+        config=Config(), modo="auto", subestacao=None,
+        encoder_factory=lambda nome: (lambda textos: None),
+        executar_fn=fake_exec,
+    )
+    logs = []
+    progressos = []
+    w.log.connect(logs.append)
+    w.progresso.connect(lambda atual, total: progressos.append((atual, total)))
+    with qtbot.waitSignal(w.terminado, timeout=3000):
+        w.start()
+    w.wait()
+    assert progressos == [(5, 10)]
+    assert not any("5/10" in linha for linha in logs)
+    assert any("feito" in linha for linha in logs)
+
+
 def test_parar_sinaliza_cancelamento():
     w = PipelineWorker(
         paths={}, config=Config(), modo="auto", subestacao=None,

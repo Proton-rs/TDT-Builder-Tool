@@ -323,7 +323,10 @@ def executar(
             else:
                 revisao.append(item)
             if j % 50 == 0 or j == total:
-                aud.evento("pipeline", f"Sheet {sn}: {j}/{total} sinais processados", "INFO")
+                aud.evento(
+                    "pipeline", f"Sheet {sn}: {j}/{total} sinais processados", "INFO",
+                    dados={"atual": j, "total": total},
+                )
         if cancelado is not None and cancelado():
             break
     wb_in.close()
