@@ -97,7 +97,7 @@ def test_escreve_registro_single_bit(template_dnp3_path, lista_padrao_path, tmp_
     # hierarchical: subestacao + modulo.nome("3") + módulo repetido (sem equip) + sigla
     assert ws.cell(5, col["Signal Name"]).value == "IMA_3_3_DJ"
     assert ws.cell(5, col["Input Data Type"]).value == "SingleBit"
-    assert ws.cell(5, col["Input Coordinates"]).value == "17"
+    assert ws.cell(5, col["Input Coordinates"]).value == 17
     assert ws.cell(5, col["Direction"]).value == "Read"
 
 
@@ -324,7 +324,7 @@ def test_escreve_sheet_analogica(template_dnp3_path, lista_padrao_path, tmp_path
     ws = wb["DNP3_AnalogSignals"]
     col = {ws.cell(4, c).value: c for c in range(1, ws.max_column + 1)}
     assert ws.cell(5, col["Signal Name"]).value == "IMA_AL11_AL11_IN61"
-    assert ws.cell(5, col["Input Coordinates"]).value == "20"
+    assert ws.cell(5, col["Input Coordinates"]).value == 20
     assert ws.cell(5, col["Direction"]).value == "Read"
     assert ws.cell(5, col["Remote Point Type"]).value == "Analog"
     assert ws.cell(5, col["Side"]).value == "None"
