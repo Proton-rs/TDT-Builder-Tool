@@ -60,6 +60,30 @@ def test_pipeline_ponta_a_ponta_gera_tdt(tmp_path, template_dnp3_path, lista_pad
     assert any(n and n.startswith("X_") for n in nomes)
 
 
+def test_pipeline_com_cache_scorers_reusa_entre_execucoes(tmp_path, template_dnp3_path, lista_padrao_path):
+    cfg = Config(peso_tfidf=1.0, peso_vetorial=0.0, threshold_pct=0.5, threshold_gap=0.05)
+    inp = _input_sintetico(tmp_path)
+    cache_dir = tmp_path / "cache_scorers"
+
+    resultado1, _ = executar(
+        inp, template_dnp3_path, lista_padrao_path,
+        config=cfg, encoder=_fake_encoder, subestacao="X", modo="nao-homogeneo",
+        cache_scorers_dir=cache_dir,
+    )
+    assert cache_dir.exists()
+    assert any(cache_dir.iterdir())  # populou ao menos um diretório de hash
+
+    # segunda execução: cache já existe, deve reusar e produzir o mesmo resultado
+    resultado2, _ = executar(
+        inp, template_dnp3_path, lista_padrao_path,
+        config=cfg, encoder=_fake_encoder, subestacao="X", modo="nao-homogeneo",
+        cache_scorers_dir=cache_dir,
+    )
+    siglas1 = [r.sigla_sinal for r in resultado1.lista.registros]
+    siglas2 = [r.sigla_sinal for r in resultado2.lista.registros]
+    assert siglas1 == siglas2
+
+
 def test_pipeline_classifica_falha_comunicacao(tmp_path, template_dnp3_path, lista_padrao_path):
     cfg = Config(peso_tfidf=1.0, peso_vetorial=0.0, threshold_pct=0.5, threshold_gap=0.05)
     inp = _input_sintetico(tmp_path)

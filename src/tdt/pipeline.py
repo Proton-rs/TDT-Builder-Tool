@@ -21,6 +21,7 @@ from tdt import criador_lista_homogenea, dc_pairer, engine_tdt, motor_regras, ro
 from tdt.motor_regras import fase_da_sigla
 from tdt.analise_colunas import analisar
 from tdt.auditoria import Auditoria
+from tdt.cache_scorers import carregar_ou_construir
 from tdt.config import Config
 from tdt.contracts import Diagnostico, ItemRevisao, ResultadoPipeline, SignalRecord
 from tdt.dados.indice_vetorial import IndiceVetorial
@@ -60,6 +61,32 @@ def _construir_scorers(lp, config, encoder, categoria, cfg_efetivo) -> _Scorers:
         tfidf=ScorerTFIDF.construir(corpus),
         indice=IndiceVetorial.construir(corpus, encoder),
         fuzzy=FuzzyMatcher.construir(corpus),
+        config=cfg_efetivo,
+    )
+
+
+def _construir_scorers_cacheado(
+    lp, config, encoder, categoria, cfg_efetivo, cache_dir: "str | Path | None"
+) -> _Scorers:
+    """Como `_construir_scorers`, mas reaproveita tfidf/fuzzy/indice de um cache
+    em disco quando o corpus (siglas+descrições da lista padrão) não mudou.
+
+    `cache_dir=None` desliga o cache (usado em testes, para não tocar disco
+    fora de `tmp_path` e manter o comportamento anterior intacto).
+    """
+    if cache_dir is None:
+        return _construir_scorers(lp, config, encoder, categoria, cfg_efetivo)
+    corpus = _corpus(lp, config, categoria)
+    cacheaveis = carregar_ou_construir(
+        cache_dir,
+        corpus,
+        lambda: _construir_scorers(lp, config, encoder, categoria, cfg_efetivo),
+        encoder,
+    )
+    return _Scorers(
+        tfidf=cacheaveis.tfidf,
+        indice=cacheaveis.indice,
+        fuzzy=cacheaveis.fuzzy,
         config=cfg_efetivo,
     )
 
@@ -215,6 +242,7 @@ def executar(
     auditoria: Auditoria | None = None,
     diagnostico: bool = False,
     cancelado: "Callable[[], bool] | None" = None,
+    cache_scorers_dir: "str | Path | None" = None,
 ) -> tuple[ResultadoPipeline, openpyxl.Workbook]:
     aud = auditoria or Auditoria()
     lp = ListaPadraoADMS.carregar(lista_padrao_path)
@@ -226,8 +254,8 @@ def executar(
         threshold_pct=config.threshold_pct_analog,
         threshold_gap=config.threshold_gap_analog,
     )
-    disc = _construir_scorers(lp, config, encoder, "Discrete", config)
-    ana = _construir_scorers(lp, config, encoder, "Analog", cfg_analog)
+    disc = _construir_scorers_cacheado(lp, config, encoder, "Discrete", config, cache_scorers_dir)
+    ana = _construir_scorers_cacheado(lp, config, encoder, "Analog", cfg_analog, cache_scorers_dir)
     corpus = _corpus(lp, config, "Discrete")  # ainda usado p/ vocab abaixo
     vocab = _vocab_dominio(corpus) if config.corrigir_typos else None
     ref_emb = disc.indice.vetores()  # já codificado em _construir_scorers; evita reencodar

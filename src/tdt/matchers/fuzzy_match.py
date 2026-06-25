@@ -7,6 +7,9 @@ Mira precisão sem modelo. fonte="fuzzy".
 
 from __future__ import annotations
 
+import pickle
+from pathlib import Path
+
 from rapidfuzz import fuzz
 
 from tdt.contracts import Candidato, SignalRecord
@@ -32,3 +35,12 @@ class FuzzyMatcher:
             cands.append(Candidato(sigla, min(1.0, base + boost), "fuzzy"))
         cands.sort(key=lambda c: c.score, reverse=True)
         return cands[:k]
+
+    def salvar(self, path: str | Path) -> None:
+        """Serializa o corpus (não há fit custoso aqui; só evita reler/reconstruir a lista)."""
+        Path(path).write_bytes(pickle.dumps(self._corpus))
+
+    @classmethod
+    def carregar(cls, path: str | Path) -> "FuzzyMatcher":
+        corpus = pickle.loads(Path(path).read_bytes())
+        return cls.construir(corpus)

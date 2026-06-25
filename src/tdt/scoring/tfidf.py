@@ -9,6 +9,9 @@ melhoram a decisão — não antes.
 
 from __future__ import annotations
 
+import pickle
+from pathlib import Path
+
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
@@ -37,3 +40,13 @@ class ScorerTFIDF:
         sims = cosine_similarity(q, self._matriz)[0]
         ordem = sims.argsort()[::-1][:k]
         return [Candidato(self._siglas[i], float(sims[i]), "tfidf") for i in ordem]
+
+    def salvar(self, path: str | Path) -> None:
+        """Serializa vetorizador + matriz fitados (cache em disco)."""
+        data = {"vectorizer": self._vectorizer, "matriz": self._matriz, "siglas": self._siglas}
+        Path(path).write_bytes(pickle.dumps(data))
+
+    @classmethod
+    def carregar(cls, path: str | Path) -> "ScorerTFIDF":
+        data = pickle.loads(Path(path).read_bytes())
+        return cls(data["vectorizer"], data["matriz"], data["siglas"])

@@ -53,6 +53,7 @@ class PipelineWorker(QThread):
                 config=self._config, encoder=encoder, modo=self._modo,
                 subestacao=self._subestacao, auditoria=aud,
                 diagnostico=True, cancelado=self._cancelado,
+                cache_scorers_dir=Path("cache") / "scorers",
             )
             self.terminado.emit(resultado)
         except Exception:
