@@ -20,4 +20,6 @@ output/
 config.toml
 
 .opencode/
+.worktrees/
+.superpowers/
 
