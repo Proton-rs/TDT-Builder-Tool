@@ -135,18 +135,20 @@ def test_exportar_sem_resultado_nao_lanca(qtbot, monkeypatch):
     tela._exportar()  # não deve lançar
 
 
-def test_exportar_com_modulo_inexistente_mostra_erro_amigavel(qtbot, monkeypatch, tmp_path):
+def test_exportar_gera_arquivo_xlsx(qtbot, monkeypatch, tmp_path):
+    """Task 2.3 implementou exportar_analise — o botão agora gera o .xlsx de fato."""
     tela = TelaAnalise()
     qtbot.addWidget(tela)
     tela.carregar(_resultado_basico())
-    destino = str(tmp_path / "saida.xlsx")
+    destino = tmp_path / "saida.xlsx"
     monkeypatch.setattr(
-        "PySide6.QtWidgets.QFileDialog.getSaveFileName", lambda *a, **k: (destino, "")
+        "PySide6.QtWidgets.QFileDialog.getSaveFileName", lambda *a, **k: (str(destino), "")
     )
     avisos = []
     monkeypatch.setattr(
         "PySide6.QtWidgets.QMessageBox.warning",
         lambda *a, **k: avisos.append(a),
     )
-    tela._exportar()  # módulo exportar_analise não existe ainda (Task 2.3) — não deve lançar
-    assert len(avisos) == 1
+    tela._exportar()  # não deve lançar nem avisar — exportação real
+    assert destino.exists()
+    assert avisos == []
