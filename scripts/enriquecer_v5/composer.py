@@ -9,6 +9,7 @@ from __future__ import annotations
 import re
 
 from ansi_ref import ANSI_C37_2, CONFLITO_V1, SINONIMOS_ANSI
+from mapa_dominio import MAPA
 
 _PREFIXO_ANSI = re.compile(r"^\s*(\d{2})")
 _AJUSTE = re.compile(r"^\s*AJUSTE\s+PARA\s+(.+)$", re.IGNORECASE)
@@ -69,8 +70,8 @@ def _enriquecer_analogico(v1: str) -> str | None:
     return v1 + extra
 
 
-def enriquecer(v1: str, sheet: str) -> tuple[str, int | None]:
-    """Dispatch com ordem: composto (2+ códigos ANSI) -> ANSI-single -> AJUSTE -> analógico -> cauda."""
+def enriquecer(v1: str, sheet: str, sigla: str = "") -> tuple[str, int | None]:
+    """Dispatch com ordem: composto (2+ códigos ANSI) -> ANSI-single -> AJUSTE -> analógico -> mapa de domínio (cauda) -> v1."""
     comp = _enriquecer_composto(v1)        # 2+ códigos ANSI distintos -> composto
     if comp is not None:
         return comp, None
@@ -84,4 +85,7 @@ def enriquecer(v1: str, sheet: str) -> tuple[str, int | None]:
         ana = _enriquecer_analogico(v1)
         if ana is not None:
             return ana, None
-    return v1, None  # cauda idiossincrática — Task 4
+    termos = MAPA.get((sigla or "").strip().upper())
+    if termos:
+        return f"{v1} — {termos}", None
+    return v1, None  # cauda idiossincrática sem entrada no mapa — preserva v1

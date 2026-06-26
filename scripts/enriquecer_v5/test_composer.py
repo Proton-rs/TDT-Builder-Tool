@@ -1,4 +1,5 @@
 from composer import base_ansi, enriquecer_ansi, enriquecer
+from mapa_dominio import MAPA
 
 
 def test_base_ansi_extrai_codigo():
@@ -63,3 +64,18 @@ def test_dispatch_preserva_nao_ansi_nesta_task():
     out, conflito = enriquecer(v1, "DiscreteSignals")
     assert out.startswith(v1)              # append-only, cai na cauda inalterado
     assert conflito is None
+
+
+def test_mapa_dominio_aplica_por_sigla():
+    # TAL existe no mapa (transferência automática de linha)
+    v1 = "TAL - FUNCAO TRANSFERENCIA AUTOMATICA DE LINHA"
+    out, c = enriquecer(v1, "DiscreteSignals", sigla="TAL")
+    assert out.startswith(v1)
+    if "TAL" in MAPA:
+        assert len(out) > len(v1)
+
+
+def test_cauda_sem_mapa_preserva_v1():
+    out, c = enriquecer("SINAL XPTO SEM REGRA", "DiscreteSignals", sigla="ZZZZ")
+    assert out == "SINAL XPTO SEM REGRA"   # preservar v1 é sempre seguro
+    assert c is None
