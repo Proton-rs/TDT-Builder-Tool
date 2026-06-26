@@ -9,7 +9,7 @@ são marcados indisponíveis sem quebrar o restante.
 Uso: PYTHONPATH=src python bench/benchmark.py
 Saída: bench/resultados/benchmark.log
 """
-import sys, warnings, logging, datetime
+import sys, warnings, logging, datetime, os
 warnings.simplefilter("ignore"); logging.disable(logging.CRITICAL)
 sys.path.insert(0, "bench")
 try:
@@ -34,7 +34,7 @@ def log(s=""):
     print(s); LOG.append(s)
 
 cfg = Config()
-lp = ListaPadraoADMS.carregar("docs/Pontos Padrao ADMS_v1.xlsx")
+lp = ListaPadraoADMS.carregar(os.environ.get("LISTA_BENCH", "docs/Pontos Padrao ADMS_v1.xlsx"))
 corpus = [(s.sigla, canonizar(s.descricao, cfg)) for s in lp.discretos if s.descricao]
 corpus += [(s.sigla, canonizar(s.descricao, cfg)) for s in lp.analogicos if s.descricao]
 siglas = [s for s, _ in corpus]
