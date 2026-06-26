@@ -30,7 +30,9 @@ def _fake_encoder(textos):
 def _input_sintetico(tmp_path):
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.title = "01F1_GTA_P"
+    # nome de sheet resolve via mapa_prefixo_modulo (GTD->AL) p/ confiança "alta"
+    # em identidade_modulo — não testamos identidade de módulo aqui.
+    ws.title = "GTD_11"
     ws.append(["", "", "SUBESTAÇÃO X", "", ""])
     ws.append(["IED", "Módulo", "Descrição do Ponto", "Tipo", "Endereço DNP3"])
     ws.append(["Digitais", "", "", "", ""])
@@ -162,7 +164,9 @@ def test_pipeline_classifica_falha_comunicacao(tmp_path, template_dnp3_path, lis
 def _input_sem_endereco(tmp_path):
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.title = "01F1_GTA_P"
+    # nome de sheet resolve via mapa_prefixo_modulo (GTD->AL) p/ confiança "alta"
+    # em identidade_modulo — não testamos identidade de módulo aqui.
+    ws.title = "GTD_11"
     ws.append(["", "", "SUBESTAÇÃO X", "", ""])
     ws.append(["IED", "Módulo", "Descrição do Ponto", "Tipo", "Endereço DNP3"])
     ws.append(["Digitais", "", "", "", ""])
@@ -231,7 +235,9 @@ def test_pipeline_sheet_homogenea_le_colunas_direto_sem_scoring(
 def _input_djf1_sintetico(tmp_path):
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.title = "06F2"
+    # nome de sheet resolve via mapa_prefixo_modulo (GTD->AL) p/ confiança "alta"
+    # em identidade_modulo — não testamos identidade de módulo aqui.
+    ws.title = "GTD_12"
     ws.append(["", "", "SUBESTAÇÃO X", "", ""])
     ws.append(["IED", "Módulo", "Descrição do Ponto", "Tipo", "Endereço DNP3"])
     ws.append(["Digitais", "", "", "", ""])
@@ -306,7 +312,9 @@ def _input_com_analogico(tmp_path):
     import openpyxl
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.title = "01F1_GTA_P"
+    # nome de sheet resolve via mapa_prefixo_modulo (GTD->AL) p/ confiança "alta"
+    # em identidade_modulo — não testamos identidade de módulo aqui.
+    ws.title = "GTD_11"
     ws.append(["", "", "SUBESTAÇÃO X", "", ""])
     ws.append(["IED", "Módulo", "Descrição do Ponto", "Tipo", "Endereço DNP3"])
     ws.append(["Digitais", "", "", "", ""])

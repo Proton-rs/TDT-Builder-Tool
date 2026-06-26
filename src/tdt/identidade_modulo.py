@@ -72,3 +72,11 @@ def aplicar_identidade(
     # confiança só importa quando o nome veio da sheet (caminho não-homogêneo).
     veio_de_sheet = any(s.modulo.origem_contexto == "sheet_name" for s in sinais)
     return com_tipo, (res.confianca if veio_de_sheet else "alta")
+
+
+def particionar_por_confianca(
+    sinais: list[SignalRecord], confianca: str
+) -> tuple[list[SignalRecord], list[ItemRevisao]]:
+    if confianca == "baixa":
+        return [], [ItemRevisao(s, motivo="modulo_indefinido") for s in sinais]
+    return sinais, []

@@ -80,3 +80,20 @@ def test_aplicar_identidade_preserva_nome_de_coluna():
     novos, _ = aplicar_identidade([base], "GTD_11", [], Config())
     assert novos[0].modulo.nome == "AL11"  # não sobrescreve módulo de coluna
     assert novos[0].modulo.tipo == "Alimentador"  # mas classifica o tipo
+
+
+from tdt.identidade_modulo import particionar_por_confianca
+
+
+def test_particionar_baixa_vai_tudo_pra_revisao():
+    sinais = [_rec("SINAL A"), _rec("SINAL B")]
+    segue, revisao = particionar_por_confianca(sinais, "baixa")
+    assert segue == []
+    assert [it.motivo for it in revisao] == ["modulo_indefinido", "modulo_indefinido"]
+
+
+def test_particionar_alta_segue_adiante():
+    sinais = [_rec("SINAL A")]
+    segue, revisao = particionar_por_confianca(sinais, "alta")
+    assert segue == sinais
+    assert revisao == []

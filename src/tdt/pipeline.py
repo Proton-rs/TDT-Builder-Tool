@@ -30,6 +30,7 @@ from tdt.dados.indice_vetorial import IndiceVetorial
 from tdt.dados.lista_padrao import ListaPadraoADMS
 from tdt.estruturador import estruturar
 from tdt.estruturador_homogeneo import detectar_header, estruturar_homogeneo
+from tdt.identidade_modulo import aplicar_identidade, particionar_por_confianca
 from tdt.identificador import classificar, ler_rows
 from tdt.matchers.fuzzy_match import FuzzyMatcher
 from tdt.normalizador import canonizar
@@ -300,6 +301,12 @@ def executar(
         else:
             mapa = analisar(rows, encoder, ref_emb)
             sinais = list(estruturar(rows, mapa, sheet_name=sn, config=config, vocab=vocab))
+        sinais, conf_mod = aplicar_identidade(sinais, sn, rows, config)
+        sinais, rev_modulo = particionar_por_confianca(sinais, conf_mod)
+        if rev_modulo:
+            aud.evento("identidade_modulo",
+                       f"Sheet {sn}: módulo indefinido — {len(rev_modulo)} sinais p/ revisão", "AVISO")
+            revisao.extend(rev_modulo)
         sinais = forcar_polaridade_equipamento(sinais, config)
         total = len(sinais)
         aud.evento("identificador", f"Sheet {sn}: {total} sinais lidos", "INFO")
