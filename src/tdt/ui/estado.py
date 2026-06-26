@@ -52,6 +52,9 @@ class AppState:
         return True
 
     def carregar_resultado(self, res: ResultadoPipeline) -> None:
+        # sem dedupe: o pipeline garante que cada registro cai em só um dos
+        # dois grupos (lista OU revisao). TelaAnalise/exportar_analise dedupam
+        # por id mesmo assim, defensivamente — não há divergência hoje.
         self.resultado = res
         self.registros = list(res.lista.registros) + [it.registro for it in res.revisao]
 
