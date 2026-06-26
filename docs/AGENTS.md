@@ -29,7 +29,7 @@ Materiais de origem (pipeline, inputs, templates, lista padrão) e specs do proj
      - `superpowers/specs/2026-06-26-spD-qualidade-saida-design.md` (D: não sobrescrever saída, gate de falsos positivos, corpus adversarial — spec; §6.1/6.2/7.1)
    - `superpowers/specs/2026-06-26-spE-treinamento-calibracao-probabilistica-design.md` (E: calibração por-método + pesos de mescla aprendidos contra correção + mescla probabilística + troca e5 + calibrador Platt/isotonic — spec; eixo de treinamento; dona das pendências de calibração que B2/C deixaram em aberto)
    - Planos de implementação correspondentes em `superpowers/plans/2026-06-24-sp{7,8,9,10}-*.md`.
-- Fontes de verdade de dados: `Pontos Padrao ADMS_v4.xlsx` (lista padrão, **default** — v3 com descrições ANSI melhoradas + DJF1 enriquecido resgatado da v2; v1/v2/v3 ficam como histórico, não editar), `dnp3_template.xlsx` (template TDT), `input_*.xlsx` (exemplos homogêneo/não-homogêneo), `Export_base_Full*.xlsx` (base real, 97MB — não abrir inteiro).
+- Fontes de verdade de dados: `Pontos Padrao ADMS_v2.xlsx` (lista padrão de **ANÁLISE/matching**, **default** — descrições da v1 + fixes de campo + DJF1 enriquecido; descrições limpas, sem diluição). `Pontos Padrao ADMS_v5.xlsx` = mesma base v2 com a coluna `DESCRIÇÃO NOVA` **enriquecida** (append-only, ANSI C37.2 + domínio) para **DESCRIÇÕES/referência humana** — NÃO usar para matching (o texto compartilhado dilui a discriminação; comprovado por regressão no benchmark: acc 82→68%, prec 95→68%). v1/v3/v4 = histórico, não editar. `dnp3_template.xlsx` (template TDT), `input_*.xlsx` (exemplos), `Export_base_Full*.xlsx` (base real, 97MB — não abrir inteiro).
 - Não editar os `.xlsx` de origem; são insumos.
 
 ## Verification

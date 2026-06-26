@@ -41,7 +41,7 @@ def main(argv: list[str] | None = None) -> int:
     g.add_argument("input")
     g.add_argument("--output", required=True)
     g.add_argument("--template", default="docs/dnp3_template.xlsx")
-    g.add_argument("--lista-padrao", default="docs/Pontos Padrao ADMS_v4.xlsx")
+    g.add_argument("--lista-padrao", default="docs/Pontos Padrao ADMS_v2.xlsx")
     g.add_argument("--modo", default="auto", choices=["auto", "homogeneo", "nao-homogeneo"])
     g.add_argument("--subestacao", default=None)
     args = p.parse_args(argv)
