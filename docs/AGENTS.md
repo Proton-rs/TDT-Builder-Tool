@@ -27,6 +27,7 @@ Materiais de origem (pipeline, inputs, templates, lista padrão) e specs do proj
      - `superpowers/specs/2026-06-26-spC3-mineracao-full-base-design.md` (C3: minerar Export Full Base → catálogo de sinais por contexto + mapa Measurement Type, offline → artefatos JSON — spec; §5.1/5.3)
      - `superpowers/specs/2026-06-26-spC4-contexto-estendido-planilha-design.md` (C4: capturar título/observações/células superiores da sheet como contexto — spec; §5.2)
      - `superpowers/specs/2026-06-26-spD-qualidade-saida-design.md` (D: não sobrescrever saída, gate de falsos positivos, corpus adversarial — spec; §6.1/6.2/7.1)
+   - `superpowers/specs/2026-06-26-spE-treinamento-calibracao-probabilistica-design.md` (E: calibração por-método + pesos de mescla aprendidos contra correção + mescla probabilística + troca e5 + calibrador Platt/isotonic — spec; eixo de treinamento; dona das pendências de calibração que B2/C deixaram em aberto)
    - Planos de implementação correspondentes em `superpowers/plans/2026-06-24-sp{7,8,9,10}-*.md`.
 - Fontes de verdade de dados: `Pontos Padrao ADMS_v2.xlsx` (lista padrão, default — descrição de DJF1 enriquecida; v1 fica como histórico, não editar nenhum dos dois), `dnp3_template.xlsx` (template TDT), `input_*.xlsx` (exemplos homogêneo/não-homogêneo), `Export_base_Full*.xlsx` (base real, 97MB — não abrir inteiro).
 - Não editar os `.xlsx` de origem; são insumos.
