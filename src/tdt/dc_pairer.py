@@ -19,7 +19,12 @@ def _chave(rec: SignalRecord) -> tuple:
     return (rec.modulo.nome, rec.sigla_sinal)
 
 
-def _fundir(status: SignalRecord, comando: SignalRecord) -> SignalRecord:
+def fundir(status: SignalRecord, comando: SignalRecord) -> SignalRecord:
+    """Funde um sinal Input (status) com um Output (comando) num InputOutput.
+
+    Pública porque a UI de revisão (tela_revisao.py) reusa esta função para o
+    pareamento manual D+C (Task 3.1) — evita duplicar a lógica de fusão.
+    """
     return replace(
         status,
         tipo_sinal=replace(status.tipo_sinal, direcao="InputOutput"),
@@ -27,6 +32,40 @@ def _fundir(status: SignalRecord, comando: SignalRecord) -> SignalRecord:
             status.enderecamento, indices_saida=comando.enderecamento.indices
         ),
     )
+
+
+# ponytail: alias mantido para não quebrar quem já importava o nome privado;
+# remover quando não houver mais referências a `_fundir`.
+_fundir = fundir
+
+
+def separar(fundido: SignalRecord, novo_id_saida: str) -> tuple[SignalRecord, SignalRecord]:
+    """Desfaz uma fusão D+C: devolve (status Input, comando Output).
+
+    ponytail: o registro Output original foi perdido na fusão (`fundir` só
+    preserva os índices de saída, não o `id`/descrição original do comando).
+    O Output recriado aqui usa `novo_id_saida` e reaproveita módulo/descrições
+    do registro fundido — rastreabilidade completa do Output pré-fusão não é
+    recuperável com o modelo de dados atual. Upgrade path: se isso importar,
+    `Enderecamento`/`SignalRecord` precisariam guardar o id do comando
+    original junto de `indices_saida`.
+    """
+    status = replace(
+        fundido,
+        tipo_sinal=replace(fundido.tipo_sinal, direcao="Input"),
+        enderecamento=replace(fundido.enderecamento, indices_saida=()),
+    )
+    comando = replace(
+        fundido,
+        id=novo_id_saida,
+        tipo_sinal=replace(fundido.tipo_sinal, direcao="Output"),
+        enderecamento=replace(
+            fundido.enderecamento,
+            indices=fundido.enderecamento.indices_saida,
+            indices_saida=(),
+        ),
+    )
+    return status, comando
 
 
 def parear(

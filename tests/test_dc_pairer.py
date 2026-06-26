@@ -5,7 +5,7 @@ from tdt.contracts import (
     SignalRecord,
     TipoSinal,
 )
-from tdt.dc_pairer import parear
+from tdt.dc_pairer import fundir, parear, separar
 
 
 def _rec(rid, sigla, direcao, indices):
@@ -63,3 +63,40 @@ def test_grupos_mesma_direcao_nao_sao_tocados():
     pareados, revisao = parear(regs)
     assert len(pareados) == 2
     assert revisao == ()
+
+
+def test_fundir_publico_e_equivalente_ao_usado_internamente():
+    status = _rec("s:1", "DJ", "Input", [5])
+    comando = _rec("s:2", "DJ", "Output", [0])
+    rw = fundir(status, comando)
+    assert rw.tipo_sinal.direcao == "InputOutput"
+    assert rw.enderecamento.indices == (5,)
+    assert rw.enderecamento.indices_saida == (0,)
+
+
+def test_separar_desfaz_fusao_em_input_e_output():
+    status = _rec("s:1", "DJ", "Input", [5])
+    comando = _rec("s:2", "DJ", "Output", [0])
+    fundido = fundir(status, comando)
+
+    novo_status, novo_comando = separar(fundido, "s:1_saida")
+
+    assert novo_status.tipo_sinal.direcao == "Input"
+    assert novo_status.enderecamento.indices == (5,)
+    assert novo_status.enderecamento.indices_saida == ()
+    assert novo_status.id == fundido.id
+
+    assert novo_comando.tipo_sinal.direcao == "Output"
+    assert novo_comando.enderecamento.indices == (0,)
+    assert novo_comando.enderecamento.indices_saida == ()
+    assert novo_comando.id == "s:1_saida"
+
+
+def test_separar_e_fundir_sao_inversos_para_enderecos():
+    status = _rec("s:1", "DJ", "Input", [5])
+    comando = _rec("s:2", "DJ", "Output", [0])
+    fundido = fundir(status, comando)
+    novo_status, novo_comando = separar(fundido, "novo_id")
+    refundido = fundir(novo_status, novo_comando)
+    assert refundido.enderecamento.indices == fundido.enderecamento.indices
+    assert refundido.enderecamento.indices_saida == fundido.enderecamento.indices_saida
