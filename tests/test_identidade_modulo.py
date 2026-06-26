@@ -21,3 +21,20 @@ def test_config_tem_tabelas_de_modulo():
     assert cfg.mapa_prefixo_modulo["FWB"] == "AL"
     assert cfg.tipo_por_prefixo["AL"] == "Alimentador"
     assert "CAPACITOR" in cfg.palavras_chave_tipo["Banco de Capacitores"]
+
+
+from tdt.identidade_modulo import resolver_modulo
+
+
+def test_resolver_modulo_prefixo_e_numero():
+    cfg = Config()
+    assert resolver_modulo("AL FWB15", [], cfg).nome == "AL15"
+    assert resolver_modulo("GTD_11", [], cfg).nome == "AL11"
+    assert resolver_modulo("AL FWB15", [], cfg).confianca == "alta"
+
+
+def test_resolver_modulo_sem_numero_cai_em_baixa_confianca():
+    cfg = Config()
+    r = resolver_modulo("SLOT GERAL", [], cfg)
+    assert r.confianca == "baixa"
+    assert r.nome == "SLOT GERAL"  # fallback ao nome cru
