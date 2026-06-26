@@ -136,3 +136,26 @@ def test_descricao_chama_encoder_uma_vez_independente_do_numero_de_colunas():
     mapa = analisar(rows, encoder=_encoder_contador, ref_emb=_REF)
     assert mapa.colunas["descricao"] == 2
     assert len(chamadas) == 1
+
+
+def test_descricao_limita_amostra_por_coluna_para_nao_codificar_tudo():
+    # perf: colunas com muitos valores (sheets de centenas/milhares de linhas)
+    # não devem mandar TODOS os valores pro encoder — uma amostra já basta
+    # pra estimar similaridade/diversidade, e reduz o volume de texto
+    # codificado (custo dominante é o modelo BERT, não Python).
+    chamadas = []
+
+    def _encoder_contador(textos):
+        chamadas.append(len(textos))
+        return _fake_encoder(textos)
+
+    rows = [("Cab", "Modulo", "Coluna A")]
+    descricoes = ["FALHA COMUNICACAO IED 001", "DISJUNTOR ABERTO 52-1", "CORRENTE FASE A"]
+    rows += [("001", "LT_GTA", descricoes[i % len(descricoes)]) for i in range(500)]
+
+    mapa = analisar(rows, encoder=_encoder_contador, ref_emb=_REF)
+    assert mapa.colunas["descricao"] == 2
+    # 2 colunas candidatas (Modulo, Coluna A — "001" não tem letra, não conta)
+    assert chamadas[0] <= 80  # amostra pequena já é suficiente (medido: sem
+    # divergência de coluna detectada com cap 200→20 em sheets reais de até
+    # 1238 linhas; cap=40 dá ~2-4x menos texto codificado sem mudar resultado)

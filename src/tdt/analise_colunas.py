@@ -91,16 +91,24 @@ def _col_descricao(rows, inicio, ncols, encoder, ref_emb) -> int | None:
     Batch: uma única chamada ao encoder para as amostras de TODAS as colunas
     candidatas, em vez de uma chamada por coluna — sheets com 200+ colunas
     (comuns em listas não-homogêneas largas) levavam minutos só nesta etapa.
+
+    ponytail: amostra por coluna limitada a _AMOSTRA_MAX (não 200) — o custo
+    dominante é a inferência do modelo BERT, proporcional ao volume de texto
+    codificado, não lógica Python. Medido em sheets reais (até 1238 linhas,
+    236 colunas): cap 200→20 não muda a coluna detectada; 40 dá ~2-4x menos
+    texto codificado com folga de segurança sobre o mínimo observado (20).
+    Se um caso real divergir, subir _AMOSTRA_MAX antes de reverter o batch.
     """
     import math
 
+    _AMOSTRA_MAX = 40
     candidatos: list[tuple[int, list[str]]] = []
     for c in range(ncols):
         vals = _valores_coluna(rows, c, inicio)
         textos = [v for v in vals if any(ch.isalpha() for ch in v)]
         if len(textos) < 2:
             continue
-        candidatos.append((c, textos[:200]))
+        candidatos.append((c, textos[:_AMOSTRA_MAX]))
 
     if not candidatos:
         return None
