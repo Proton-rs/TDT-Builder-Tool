@@ -19,6 +19,7 @@ Materiais de origem (pipeline, inputs, templates, lista padrão) e specs do proj
    - `superpowers/specs/2026-06-25-sp-tdt-input-coordinates-format.md` (TDT: Input Coordinates numérico — implementado)
    - `superpowers/specs/2026-06-25-sp-performance-pipeline.md` (Performance: batch encoding, scorer cache, lazy encoder, progresso UI, profiling — spec)
    - `superpowers/specs/2026-06-25-sp-analise-qualidade-matching.md` (Análise: tabela de qualidade, estatísticas, relatório exportável — spec)
+   - `superpowers/specs/2026-06-26-spB-correcoes-scoring-pareamento-design.md` (B: confiança ausente/calibrada, DCpairer robusto, fusão de duplicados — spec; obs. 26/06 §2.2/3.1/3.2). Specs A/C/D da mesma decomposição pendentes.
    - Planos de implementação correspondentes em `superpowers/plans/2026-06-24-sp{7,8,9,10}-*.md`.
 - Fontes de verdade de dados: `Pontos Padrao ADMS_v2.xlsx` (lista padrão, default — descrição de DJF1 enriquecida; v1 fica como histórico, não editar nenhum dos dois), `dnp3_template.xlsx` (template TDT), `input_*.xlsx` (exemplos homogêneo/não-homogêneo), `Export_base_Full*.xlsx` (base real, 97MB — não abrir inteiro).
 - Não editar os `.xlsx` de origem; são insumos.
