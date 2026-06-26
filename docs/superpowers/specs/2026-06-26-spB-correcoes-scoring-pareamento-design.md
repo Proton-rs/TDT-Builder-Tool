@@ -3,7 +3,7 @@
 **Data:** 2026-06-26
 **Status:** Aguardando revisão do usuário
 **Origem:** `docs/observacoes26062026.md` §2.2, §3.1, §3.2.
-**Escopo:** 4 correções de bug, em ordem: (B1) confiança ausente em decisões por regra; (B2) confiança calibrada em [0,1] como probabilidade; (B3) DCpairer robusto a lados não-decididos; (B4) fusão de duplicados consecutivos (double-bit). É spec de bug-fix — não toca UI de revisão (spec A) nem contexto de módulo (spec C).
+**Escopo:** 4 itens, em ordem: (B1) confiança ausente em decisões por regra; (B2) reordenar normalização↔regras — motor de regras vira filtro final sobre candidatos normalizados, confiança = probabilidade em [0,1]; (B3) DCpairer robusto a lados não-decididos; (B4) fusão de duplicados consecutivos (double-bit). B1/B3/B4 são bug-fix; **B2 é mudança de arquitetura de scoring** (reordenação + recalibração). Não toca UI de revisão (spec A) nem contexto de módulo (spec C).
 
 > Decomposição das observações 26/06: **A** Revisão UI (lote, travar visão, colunas End.Input/Output/Pareado, editar módulo) · **B** (esta) · **C** Contexto de módulo/equipamento (4.x, 5.x) · **D** Qualidade/saída (6.x testes FP, 7.1 não sobrescrever). Cada uma com seu ciclo spec→plano.
 
@@ -35,25 +35,38 @@
 
 ---
 
-## B2 — Confiança como probabilidade calibrada em [0,1]
+## B2 — Normalização primeiro, motor de regras como filtro final, confiança = probabilidade
 
-**Problema:** o score exibido é soma ponderada acumulada (pode passar de 1); não é comparável entre sinais nem é probabilidade.
+**Problema (estado atual confirmado):** a calibração (`scoring/calibracao.py`) **não está plugada** no pipeline. O fluxo é `mescla.mesclar(scores CRUS, pesos) → motor_regras (deltas aditivos) → roteador` ([pipeline.py:139-146](../../../src/tdt/pipeline.py)). As regras somam deltas sobre um acumulador sem teto, então o número exibido passa de 1 e não é probabilidade. Pior: aplicar a normalização *depois* das regras faria o softmax herdar a inflação dos deltas — a regra dominaria a probabilidade (superconfiança).
 
-**Solução (reusa `scoring/calibracao.py`):** temperature scaling sobre os scores dos candidatos finais de cada registro produz uma distribuição em [0,1] que soma 1 — uma probabilidade sobre as siglas candidatas. A confiança exibida é a probabilidade do top-1.
+**Princípio de design (a invariante desta seção):** **normalizar primeiro, regras como filtro final sobre candidatos já normalizados — e re-normalizar.** As regras nunca operam sobre, nem produzem, scores fora de [0,1]; assim não "dessignificam" a normalização. A confiança exibida é a probabilidade do top-1 da distribuição final.
 
-1. **Função de exibição** — novo `ui/modelo_tabela.py::confianca_exibida(rec) -> tuple[float, str] | None`:
-   - `candidatos` não vazio ⇒ `probs = calibrar([c.score for c in rec.candidatos], "temperature", {"T": T_FINAL})`; retorna `(probs[0], "")`.
-   - `candidatos == ()` e `status=="decidido"` ⇒ `(1.0, "regra")`.
-   - senão ⇒ `None` (sem decisão; mostra vazio).
-   - O resultado é sempre `[0,1]`.
+### B2.1 Reordenação do scoring (`pipeline._classificar_sinal`)
 
-2. **Calibração de `T_FINAL`** — `T` deixa de ser o `0.1` default e passa a ser ajustado contra o ground-truth:
-   - Novo `scripts/calibrar_confianca.py` (ou estende `scripts/calibrar.py`): roda o pipeline sobre os inputs rotulados (`bench/rotulos.py`), coleta `(prob_top1, acertou?)`, e busca o `T` que minimiza o **ECE** (Expected Calibration Error) — varredura simples num grid de `T` (ex.: `0.05..1.0`), sem dependência nova.
-   - `T_FINAL` gravado em `config.py` como knob calibrável (`Config.temperatura_confianca`), default = melhor `T` encontrado. Nunca hardcoded fora do `config.py`.
+Nova ordem para cada registro:
 
-3. **Escopo da mudança:** B2 é **só exibição/calibração da confiança**. NÃO altera a mescla nem o roteador — as decisões continuam pelos scores acumulados de hoje (mexer no roteador é regressão de matching, fora do escopo deste bug-fix). Os scores brutos por método permanecem nas colunas Score embedding/tf-idf/fuzzy.
+1. **Mescla** dos métodos como hoje (`mescla.mesclar` dos `c_tfidf/c_vet/c_fuzzy`). Calibração **por-método** continua fora de escopo (é o projeto de calibração pendente → spec C); aqui normaliza-se o resultado mesclado.
+2. **Normalizar os mesclados** → distribuição em [0,1] que soma 1, via `calibrar([c.score …], "temperature", {"T": T_FINAL})`. Esses são os "candidatos normalizados".
+3. **Motor de regras como filtro final** sobre os candidatos **já normalizados**. Para preservar a normalização, o ajuste é **bounded**:
+   - boost/penalidade limitada com **clamp em [0,1]** por candidato, e/ou
+   - eliminação *hard* de violadores de restrição (fase/equipamento divergente → candidato zerado),
+   - **seguido de re-normalização** (renormalizar para somar 1).
+   `motor_regras.aplicar_rastreado` ganha modo "filtro" (clamp+renormaliza) sem perder os `AjusteRegra`/justificativa; os deltas passam a ser interpretados na escala [0,1].
+4. **Roteador** decide sobre a distribuição final normalizada.
 
-`# ponytail: temperature scaling (1 parâmetro) cobre o caso; isotonic/Platt só se o ECE não cair o suficiente.`
+### B2.2 Confiança exibida (`ui/modelo_tabela.py`)
+
+Novo `confianca_exibida(rec) -> tuple[float, str] | None`:
+   - `candidatos` não vazio ⇒ `(rec.candidatos[0].score, "")` — já é a probabilidade pós-filtro (B2.1 garante [0,1] e soma 1). Sem re-calibrar na UI.
+   - `candidatos == ()` e `status=="decidido"` ⇒ `(1.0, "regra")` (decisão puramente determinística, B1).
+   - senão ⇒ `None`.
+
+### B2.3 Calibração e recalibração
+
+- `Config.temperatura_confianca` (knob calibrável; nunca hardcoded fora de `config.py`) substitui o `0.1` default. Ajustado por **ECE** contra o ground-truth: novo `scripts/calibrar_confianca.py` roda o pipeline sobre os rotulados (`bench/rotulos.py`), coleta `(prob_top1, acertou?)` e varre um grid de `T` (`0.05..1.0`) — sem dependência nova.
+- **Recalibração obrigatória dos thresholds:** mudar a escala dos scores que chegam ao roteador desloca `threshold_pct`/`threshold_gap`/`gaps_por_confianca`/`pesos_regras`. Recalibrar via `scripts/calibrar.py` e validar no benchmark (gate). Esta é a parte cara de B2 — não é só exibição.
+
+`# ponytail: filtro bounded = clamp+renormaliza (preserva [0,1]); softmax/T como normalizador. Isotonic/Platt e calibração por-método só se o ECE não cair o bastante → spec C.`
 
 ---
 
@@ -102,20 +115,22 @@ Onde mora: novo módulo `src/tdt/fusao_duplicados.py` (função pura `fundir_con
 | Item | Teste | Asserção mínima |
 |------|-------|-----------------|
 | B1 | `test_ui_modelo_tabela.py` (estende) | decisão por regra (`candidatos=()`, decidido) ⇒ confiança `1.0`, rótulo `regra` |
-| B2 | `test_confianca_calibrada.py` | `confianca_exibida` ∈ [0,1] para qualquer registro; soma das probs ≈ 1; lista vazia ⇒ `None` |
+| B2 | `test_motor_regras.py` (estende) | regras em modo filtro mantêm candidatos em [0,1] e a soma ≈ 1 após re-normalizar; violador hard é zerado |
+| B2 | `test_confianca_calibrada.py` | candidatos normalizados ∈ [0,1] e somam ≈ 1; `confianca_exibida` ∈ [0,1]; `candidatos=()` decidido ⇒ `(1.0,"regra")`; vazio sem decisão ⇒ `None` |
 | B2 | `scripts/calibrar_confianca.py` | self-check: ECE pós-calibração ≤ ECE com T default no conjunto rotulado |
 | B3 | `test_dc_pairer.py` (estende) | Input decidido + Output em revisão, mesma sigla/módulo ⇒ par candidato em revisão (`pareamento_pendente`), **não** fundido |
 | B4 | `test_fusao_duplicados.py` | 900/901 mesma sigla/equip/direção ⇒ 1 double-bit `(900,901)`; equipamento ausente ⇒ 2 em revisão (`duplicado_pendente`), não fundidos |
 
-**Gate de regressão:** `PYTHONPATH=src python bench/benchmark.py` não pode piorar a taxa de decisão nem aumentar FP (B3/B4 só adicionam itens a revisão, nunca decidem sozinhos; B2 não toca o roteador).
+**Gate de regressão:** `PYTHONPATH=src python bench/benchmark.py` não pode piorar a taxa de decisão nem aumentar FP. B3/B4 só adicionam itens a revisão (nunca decidem sozinhos). **B2 reordena normalização↔regras e muda a escala que chega ao roteador → exige recalibrar thresholds e revalidar no benchmark antes de mergear** (é o ponto de maior risco de regressão da spec).
 
 ---
 
 ## Critérios de Aceite
 
 1. Sinal decidido por regra (ex.: DJF1 via polaridade) exibe `100% (regra)` na coluna Confiança, não vazio.
-2. Nenhuma confiança exibida é > 1.0 nem < 0.0; o valor é a probabilidade calibrada (temperature) do top-1.
-3. `Config.temperatura_confianca` ajustado por ECE contra o ground-truth; recalibrável por script, sem hardcode fora de `config.py`.
+2. O motor de regras opera como **filtro final sobre candidatos já normalizados** (clamp + re-normalização); nenhum candidato sai de [0,1] e a distribuição soma ≈ 1 — a normalização não é "dessignificada" pelas regras.
+3. Nenhuma confiança exibida é > 1.0 nem < 0.0; o valor é a probabilidade (temperature) do top-1 pós-filtro. `Config.temperatura_confianca` ajustado por ECE, recalibrável por script, sem hardcode fora de `config.py`.
+3b. Thresholds do roteador recalibrados para a nova escala; benchmark revalidado sem regressão.
 4. Caso DJF1 24-1 reproduzido; par Input/Output aparece como par candidato na revisão (não fica órfão), sem auto-fusão de lado não-decidido.
 5. DJF1 900/901 (mesma sigla/equipamento/direção, consecutivos) consolida em double-bit `(900,901)`; equipamento ambíguo ⇒ vai pra revisão, não funde.
 6. Benchmark sem regressão de decisão/FP. Todos os testes verdes.
@@ -126,4 +141,4 @@ Onde mora: novo módulo `src/tdt/fusao_duplicados.py` (função pura `fundir_con
 
 - UI de "Parear"/confirmar par e revisão dos itens `pareamento_pendente`/`duplicado_pendente` → spec A.
 - Inferir o equipamento quando ausente (topologia do módulo) → spec C; aqui só usamos o equipamento **se já definido**.
-- Mudar mescla/roteador para usar a confiança calibrada na decisão → não é bug-fix; avaliar em spec própria.
+- Calibração **por-método** (tfidf/e5/fuzzy antes da mescla) e troca de encoder e5 → projeto de calibração pendente, spec C. B2 normaliza só o resultado mesclado.
