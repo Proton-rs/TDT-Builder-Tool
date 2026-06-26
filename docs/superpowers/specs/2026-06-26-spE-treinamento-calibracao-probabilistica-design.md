@@ -36,10 +36,10 @@ E1 destrava E2/E3 (escalas comparáveis são pré-requisito de pesar e de trocar
 
 **Objetivo:** ao fim da normalização+calibração, **ponderar** os métodos com pesos **aprendidos contra a correção** e produzir a probabilidade final, em vez dos `0.33` manuais.
 
-- Reescrever o alvo de `scripts/calibrar.py`: otimizar **acerto vs rótulo** (`bench/rotulos.py`), **não** taxa de decisão, sob a restrição de **zero FP** (amarra no gate da spec D).
-- Busca dos pesos: varredura/otimização (grid ou coordenada; `scipy` se já disponível, senão grid simples) maximizando acerto@top-1 no conjunto de validação, com FP=0 como constraint dura.
+- Reescrever o alvo de `scripts/calibrar.py`: otimizar **acerto vs rótulo** (`bench/rotulos.py` + mockup), **não** taxa de decisão, sob a restrição de **zero FP** (amarra no gate da spec D).
+- Busca dos pesos: varredura/otimização (grid ou coordenada; `scipy` se já disponível, senão grid simples) **maximizando acerto@top-1** no conjunto de validação, com **FP=0 como constraint dura** (alvo escolhido pelo usuário — não taxa de decisão, não objetivo combinado).
 - **Mescla probabilística:** após calibração por-método (E1) + pesos (E2), a combinação ponderada normalizada vira a distribuição de probabilidade sobre siglas (a mesma confiança que a B2 exibe — E refina como ela é produzida).
-- **Entregável de ablação (o "testar benefício"):** relatório comparando, no benchmark, quatro configs — (a) cru + pesos iguais (baseline atual), (b) calibrado + pesos iguais, (c) cru + pesos aprendidos, (d) calibrado + pesos aprendidos. Mede acerto, taxa de decisão e FP de cada. Decide se os pesos valem a pena com número, não opinião.
+- **Entregável de ablação (o "testar benefício"):** relatório comparando, no benchmark, quatro configs — (a) cru + pesos iguais (baseline atual), (b) calibrado + pesos iguais, (c) cru + pesos aprendidos, (d) calibrado + pesos aprendidos. Mede acerto, taxa de decisão e FP de cada, **quebrado por nível de dificuldade do mockup** (onde os pesos ajudam: fácil vs adversarial). Decide se os pesos valem a pena com número, não opinião.
 
 Pesos resultantes → `config.peso_*` (versionados). Discretos e analógicos calibrados separadamente (já há knobs `*_analog`).
 
@@ -65,10 +65,16 @@ Upgrade do temperature-T (B2) para um calibrador **treinado**:
 
 ---
 
-## Dados de treino/validação
+## Dados de treino/validação (decisão do usuário: mockup + bench/rotulos)
 
-- Fonte primária: `bench/rotulos.py` (ground-truth existente). Split treino/validação **estável** (seed fixa) para não vazar.
-- Expansão opcional: pares (descrição→sigla) extraídos da Full Base via o artefato da **C3** — mais dados para isotonic/fine-tune. Não obrigatório para E1/E2/E4 com os rótulos atuais.
+Duas fontes combinadas, com split treino/validação **estável** (seed fixa) para não vazar:
+
+1. **`bench/rotulos.py`** — ground-truth real existente. Pequeno e limpo; ancora a calibração na distribuição verdadeira.
+2. **Gerador de mockup (corruptor determinístico de 5 níveis)** — para cada sinal da Lista Padrão (v4), descrições degradadas em 5 níveis de dificuldade (trivial→adversarial), cada uma rotulada com a sigla verdadeira. Dá **cobertura de todos os sinais** e um eixo de **dificuldade controlada** — ideal para a curva confiança×acerto do calibrador (E4) e para a ablação dos pesos (E2). É **pré-requisito compartilhado** com a spec D (corpus adversarial = nível 5); a ser detalhado em spec própria (método: corruptor determinístico reusando as tabelas de domínio; o design ficou pendente após dispensa das perguntas — retomar quando priorizado).
+
+**Caveat:** o mockup é sintético — pode não refletir a distribuição real. Mitigação: sempre combinar com `bench/rotulos.py` (real) e reportar métricas separadas por fonte, para não calibrar só no sintético. A validação final de gate roda no benchmark real.
+
+- Expansão futura (opcional): pares (descrição→sigla) da Full Base via **C3** — mais dado real para isotonic, ao custo de ruído no join. Não obrigatório.
 - Nenhum acesso a disco em runtime: scorers/regras recebem parâmetros já calibrados (convenção de `scoring/AGENTS.md`).
 
 ---
