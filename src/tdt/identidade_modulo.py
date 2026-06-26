@@ -32,11 +32,11 @@ def resolver_modulo(sheet_name: str, rows: list[tuple], config: Config) -> Resol
     toks = _tokens(sheet_name)
     numeros = [t for t in toks if t.isdigit()]
     alphas = [t for t in toks if t.isalpha()]
-    prefixo = next(
-        (config.mapa_prefixo_modulo[a] for a in alphas if a in config.mapa_prefixo_modulo),
-        None,
-    )
-    if prefixo and numeros:
+    prefixos_mapeados = {config.mapa_prefixo_modulo[a] for a in alphas if a in config.mapa_prefixo_modulo}
+    # alta confiança só quando não há ambiguidade: exatamente um prefixo
+    # mapeado distinto (sinônimos contam como um só) e exatamente um número.
+    if len(prefixos_mapeados) == 1 and len(numeros) == 1:
+        (prefixo,) = prefixos_mapeados
         return ResolucaoModulo(nome=f"{prefixo}{numeros[0]}", confianca="alta")
     return ResolucaoModulo(nome=sheet_name, confianca="baixa")
 
@@ -46,10 +46,13 @@ def classificar_tipo(modulo_nome: str, registros: list[SignalRecord], config: Co
     for tok in _tokens(modulo_nome):
         if tok in config.tipo_por_prefixo:
             return config.tipo_por_prefixo[tok]
-    # 2. por conteúdo (palavras-chave nas descrições normalizadas)
-    texto = " ".join(r.descricoes.normalizada for r in registros).upper()
+    # 2. por conteúdo (palavras-chave nas descrições normalizadas) — match por
+    # token inteiro, não substring (evita "LINHA" casar em "DESALINHADA").
+    tokens_texto = set()
+    for r in registros:
+        tokens_texto.update(_tokens(r.descricoes.normalizada))
     for tipo, palavras in config.palavras_chave_tipo.items():
-        if any(p in texto for p in palavras):
+        if any(p in tokens_texto for p in palavras):
             return tipo
     # 3. fallback
     return "Outros"

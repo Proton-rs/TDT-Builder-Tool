@@ -40,6 +40,30 @@ def test_resolver_modulo_sem_numero_cai_em_baixa_confianca():
     assert r.nome == "SLOT GERAL"  # fallback ao nome cru
 
 
+def test_resolver_modulo_sinonimo_de_prefixo_nao_e_ambiguo():
+    # AL e FWB sao sinonimos (ambos mapeiam para "AL") -> conjunto de prefixos
+    # distintos tem tamanho 1, nao e ambiguo.
+    cfg = Config()
+    r = resolver_modulo("AL FWB15", [], cfg)
+    assert r.nome == "AL15"
+    assert r.confianca == "alta"
+
+
+def test_resolver_modulo_dois_numeros_e_ambiguo():
+    cfg = Config()
+    for nome in ("SPS_TR1_TR2", "TR1_TR2"):
+        r = resolver_modulo(nome, [], cfg)
+        assert r.confianca == "baixa", f"{nome} deveria ser baixa confianca (ambiguo)"
+        assert r.nome == nome  # fallback ao nome cru
+
+
+def test_resolver_modulo_dois_prefixos_distintos_e_ambiguo():
+    cfg = Config()
+    r = resolver_modulo("LT TR 3", [], cfg)
+    assert r.confianca == "baixa"
+    assert r.nome == "LT TR 3"
+
+
 def _rec(norm: str) -> SignalRecord:
     return SignalRecord(
         id="t:1",
@@ -61,6 +85,13 @@ def test_classificar_por_conteudo_quando_prefixo_desconhecido():
 
 def test_classificar_fallback_outros():
     assert classificar_tipo("ZZZ1", [_rec("SINAL GENERICO")], Config()) == "Outros"
+
+
+def test_classificar_nao_faz_match_de_substring_dentro_de_outra_palavra():
+    # "DESALINHADA" contem "LINHA" como substring, mas nao deve classificar
+    # como Linha de Transmissao: o match precisa ser por token inteiro.
+    recs = [_rec("CHAVE DESALINHADA")]
+    assert classificar_tipo("ZZZ1", recs, Config()) == "Outros"
 
 
 from tdt.identidade_modulo import aplicar_identidade
