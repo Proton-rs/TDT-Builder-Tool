@@ -115,3 +115,24 @@ def test_header_ignora_metadado_espalhado():
     mapa = analisar(rows, encoder=_fake_encoder, ref_emb=_REF)
     assert mapa.header_row == 2  # 1-based: a row "IED|Modulo|..."
     assert mapa.colunas["descricao"] == 2  # não a coluna "Logica" (Direto)
+
+
+def test_descricao_chama_encoder_uma_vez_independente_do_numero_de_colunas():
+    # perf: analisar() não deve chamar o encoder 1x por coluna candidata —
+    # isso é o que torna sheets largas (200+ colunas) lentas. O encoder deve
+    # ser chamado uma única vez (batch) com todas as amostras de texto.
+    chamadas = []
+
+    def _encoder_contador(textos):
+        chamadas.append(len(textos))
+        return _fake_encoder(textos)
+
+    rows = [
+        ("Cab", "Modulo", "Coluna A", "Coluna B", "Coluna C"),
+        ("01F1", "LT_GTA", "FALHA COMUNICACAO IED 01F1", "metadado x", "Digital"),
+        ("01F1", "LT_GTA", "DISJUNTOR ABERTO 52-1", "metadado y", "Digital"),
+        ("01F1", "LT_GTA", "CORRENTE FASE A", "metadado z", "Analogico"),
+    ]
+    mapa = analisar(rows, encoder=_encoder_contador, ref_emb=_REF)
+    assert mapa.colunas["descricao"] == 2
+    assert len(chamadas) == 1

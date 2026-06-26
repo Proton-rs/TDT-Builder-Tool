@@ -87,19 +87,34 @@ def _col_descricao(rows, inicio, ncols, encoder, ref_emb) -> int | None:
     Descrições são quase únicas por linha; colunas de metadado (Lógica/Origem)
     repetem poucos valores. A média de similaridade sozinha premia colunas de
     valores idênticos — por isso multiplicamos por sqrt(distintos/total).
+
+    Batch: uma única chamada ao encoder para as amostras de TODAS as colunas
+    candidatas, em vez de uma chamada por coluna — sheets com 200+ colunas
+    (comuns em listas não-homogêneas largas) levavam minutos só nesta etapa.
     """
     import math
 
-    melhor, melhor_score = None, -1.0
+    candidatos: list[tuple[int, list[str]]] = []
     for c in range(ncols):
         vals = _valores_coluna(rows, c, inicio)
         textos = [v for v in vals if any(ch.isalpha() for ch in v)]
         if len(textos) < 2:
             continue
-        amostra = textos[:200]
-        # canonizar (sem config aqui: normalização leve) alinha com ref ADMS
-        canon = [_norm(v) for v in amostra]
-        emb = normalizar_emb(encoder(canon))
+        candidatos.append((c, textos[:200]))
+
+    if not candidatos:
+        return None
+
+    # canonizar (sem config aqui: normalização leve) alinha com ref ADMS
+    todos_textos = [_norm(v) for _, amostra in candidatos for v in amostra]
+    todos_emb = normalizar_emb(encoder(todos_textos))
+
+    melhor, melhor_score = None, -1.0
+    offset = 0
+    for c, amostra in candidatos:
+        n = len(amostra)
+        emb = todos_emb[offset:offset + n]
+        offset += n
         sims = emb @ ref_emb.T
         sim_media = float(sims.max(axis=1).mean()) if sims.size else 0.0
         diversidade = len(set(amostra)) / len(amostra)
