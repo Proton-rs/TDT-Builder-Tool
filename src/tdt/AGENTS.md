@@ -5,7 +5,7 @@ Implementação do SP1 (pipeline) + SP4 (UI Desktop PySide6): input `.xlsx` → 
 
 ## Ownership
 Pipeline: `pipeline.py` é o único orquestrador (conhece todos os módulos); os demais só conhecem `contracts.py`.
-Módulos: `normalizador.py` (N0 extração estrutural + N1-N5 canonização), `tokenizer.py`, `vocabulario_tipo.py`, `defaults.py`; entrada via `cli.py`; relatório pós-pipeline via `relatorio_revisao.py`. `estruturador_homogeneo.py` (caminho determinístico p/ sheet homogênea com cabeçalho fixo), `identidade_modulo.py` (resolução do nome real do módulo + classificação de `Modulo.tipo`; determinístico, tabelas de `config.py`) e `pareamento_polaridade.py` (força convergência ligado/desligado pra sigla de posição, ex. DJF1) rodam antes do scoring — todos com fallback/flag pro caminho heurístico de hoje.
+Módulos: `normalizador.py` (N0 extração estrutural + N1-N5 canonização), `tokenizer.py`, `vocabulario_tipo.py`, `defaults.py`; entrada via `cli.py`; relatório pós-pipeline via `relatorio_revisao.py`. `estruturador_homogeneo.py` (caminho determinístico p/ sheet homogênea com cabeçalho fixo), `identidade_modulo.py` (resolução do nome real do módulo + classificação de `Modulo.tipo`; determinístico, tabelas de `config.py`) e `pareamento_polaridade.py` (força convergência ligado/desligado pra sigla de posição, ex. DJF1) rodam antes do scoring — `estruturador_homogeneo`/`pareamento_polaridade` com fallback/flag pro caminho heurístico; `identidade_modulo` roda sempre, mas só afeta sheets não-homogêneas (`origem_contexto="sheet_name"`).
 UI: telas em `ui/` compartilham `AppState` mutável; `PipelineWorker` isola o pipeline em QThread.
 
 ## Local Contracts
