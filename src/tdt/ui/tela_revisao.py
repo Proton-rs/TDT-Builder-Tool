@@ -5,6 +5,7 @@ ponytail: painel reflete a linha selecionada; edição vai pro AppState via mode
 
 from __future__ import annotations
 
+import uuid
 from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
@@ -15,6 +16,7 @@ from PySide6.QtWidgets import (
 )
 
 from tdt import pipeline
+from tdt.contracts import Descricoes, Enderecamento, Modulo, SignalRecord, TipoSinal
 from tdt.ui.busca_adms import buscar
 from tdt.ui.delegate_sinal import DelegateSinal
 from tdt.ui.estado import AppState
@@ -34,11 +36,18 @@ class TelaRevisao(QWidget):
         self._linha = -1
 
         btn_voltar = QPushButton("← Voltar"); btn_voltar.clicked.connect(self.voltar.emit)
+        btn_remover = QPushButton("Remover Sinal"); btn_remover.clicked.connect(self._remover_sinais)
+        btn_adicionar = QPushButton("Adicionar Sinal"); btn_adicionar.clicked.connect(self._adicionar_sinal)
         btn_gerar = QPushButton("aprovar / gerar TDT")
         btn_gerar.setProperty("acao", "principal")
         btn_gerar.clicked.connect(self._gerar)
 
-        topo = QHBoxLayout(); topo.addWidget(btn_voltar); topo.addStretch(); topo.addWidget(btn_gerar)
+        topo = QHBoxLayout()
+        topo.addWidget(btn_voltar)
+        topo.addStretch()
+        topo.addWidget(btn_remover)
+        topo.addWidget(btn_adicionar)
+        topo.addWidget(btn_gerar)
 
         # --- painel de detalhe ---
         self.lbl_campos = QLabel("Selecione um sinal"); self.lbl_campos.setWordWrap(True)
@@ -263,3 +272,22 @@ class TelaRevisao(QWidget):
             )
         except Exception as e:  # ponytail: erro vira dialogo; sem retry
             QMessageBox.critical(self, "Erro", f"Falha ao gerar TDT: {e}")
+
+    def _remover_sinais(self):
+        selecionadas = self.tabela.selectionModel().selectedRows()
+        if not selecionadas:
+            return
+        indices = [self._proxy.mapToSource(idx).row() for idx in selecionadas]
+        self._estado._snapshot()
+        self._modelo.remover_linhas(indices)
+
+    def _adicionar_sinal(self):
+        self._estado._snapshot()
+        registro = SignalRecord(
+            id=f"manual_{uuid.uuid4().hex[:8]}",
+            modulo=Modulo(None, "manual"),
+            tipo_sinal=TipoSinal("Discrete", False, "Input"),
+            enderecamento=Enderecamento("DNP3", ()),
+            descricoes=Descricoes("", ""),
+        )
+        self._modelo.adicionar_registro(registro)

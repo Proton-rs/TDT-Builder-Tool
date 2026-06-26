@@ -51,3 +51,29 @@ def test_motivo_por_id_mapeia_id_para_motivo():
 def test_motivo_por_id_vazio_sem_resultado():
     st = AppState()
     assert st.motivo_por_id() == {}
+
+
+def test_snapshot_guarda_estado_atual_no_historico():
+    st = AppState()
+    st.registros = [_rec("a:1", "DJF1", "decidido")]
+    st._snapshot()
+    assert len(st._historico) == 1
+    assert st._historico[0] == st.registros
+    # cópia, não a mesma lista
+    assert st._historico[0] is not st.registros
+
+
+def test_desfazer_restaura_snapshot_anterior():
+    st = AppState()
+    original = [_rec("a:1", "DJF1", "decidido")]
+    st.registros = original
+    st._snapshot()
+    st.registros = [_rec("a:2", None, "revisao")]
+    ok = st.desfazer()
+    assert ok is True
+    assert st.registros == original
+
+
+def test_desfazer_sem_historico_retorna_false():
+    st = AppState()
+    assert st.desfazer() is False

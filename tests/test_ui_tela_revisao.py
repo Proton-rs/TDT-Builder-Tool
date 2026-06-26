@@ -101,3 +101,42 @@ def test_coluna_modulo_nao_usa_dialogo_texto_livre(qtbot, monkeypatch):
     )
     tela._filtrar_coluna(QPoint(0, 0))
     assert chamado.get("exec_chamado") is True
+
+
+def test_adicionar_sinal_faz_snapshot_antes_e_aumenta_linhas(qtbot):
+    tela = _tela_carregada(qtbot, [_rec("1", "SE1", "A")])
+    assert len(tela._estado._historico) == 0
+    tela._adicionar_sinal()
+    assert len(tela._estado._historico) == 1
+    assert len(tela._estado.registros) == 2
+    assert tela._modelo.rowCount() == 2
+
+
+def test_adicionar_sinal_cria_registro_em_branco_com_id_unico(qtbot):
+    tela = _tela_carregada(qtbot, [_rec("1", "SE1", "A")])
+    tela._adicionar_sinal()
+    tela._adicionar_sinal()
+    novo1, novo2 = tela._estado.registros[1], tela._estado.registros[2]
+    assert novo1.id != novo2.id
+    assert novo1.descricoes.bruta == ""
+    assert novo1.modulo.nome is None
+
+
+def test_remover_sinais_sem_selecao_nao_faz_nada(qtbot):
+    tela = _tela_carregada(qtbot, [_rec("1", "SE1", "A")])
+    tela._remover_sinais()
+    assert len(tela._estado._historico) == 0
+    assert len(tela._estado.registros) == 1
+
+
+def test_remover_sinais_faz_snapshot_antes_e_remove_linha_selecionada(qtbot):
+    tela = _tela_carregada(qtbot, [
+        _rec("1", "SE1", "A"),
+        _rec("2", "SE2", "B"),
+    ])
+    tela.tabela.selectRow(0)
+    tela._remover_sinais()
+    assert len(tela._estado._historico) == 1
+    assert tela._estado._historico[0][0].id == "1"
+    assert len(tela._estado.registros) == 1
+    assert tela._estado.registros[0].id == "2"

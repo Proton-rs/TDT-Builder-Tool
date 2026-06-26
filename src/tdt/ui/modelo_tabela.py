@@ -8,6 +8,7 @@ from __future__ import annotations
 from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt
 from PySide6.QtGui import QColor
 
+from tdt.contracts import SignalRecord
 from tdt.ui.estado import AppState
 
 COLUNAS = [
@@ -158,3 +159,27 @@ class ModeloSinais(QAbstractTableModel):
         topo = self.index(linha, 0)
         fim = self.index(linha, len(COLUNAS) - 1)
         self.dataChanged.emit(topo, fim)
+
+    def adicionar_registro(self, registro: SignalRecord) -> None:
+        """Anexa um registro ao final, notificando a view via Qt (insertRows).
+
+        Quem chama é responsável por `self._estado._snapshot()` antes, se
+        quiser permitir desfazer (mesmo padrão de `remover_linhas`).
+        """
+        n = len(self._estado.registros)
+        self.beginInsertRows(QModelIndex(), n, n)
+        self._estado.registros.append(registro)
+        self.endInsertRows()
+
+    def remover_linhas(self, indices: list[int]) -> None:
+        """Remove as linhas (índices da fonte, 0-based) da lista subjacente.
+
+        Notifica a view linha a linha via begin/endRemoveRows -- exigido pelo
+        Qt antes/depois da mutação real, para não desincronizar view/modelo.
+        """
+        for linha in sorted(set(indices), reverse=True):
+            if not (0 <= linha < len(self._estado.registros)):
+                continue
+            self.beginRemoveRows(QModelIndex(), linha, linha)
+            self._estado.registros.pop(linha)
+            self.endRemoveRows()

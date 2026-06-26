@@ -28,6 +28,28 @@ class AppState:
     # PipelineWorker ativo por vez (UI dispara um por execução, sequencial).
     # Se isso mudar (workers concorrentes), revisitar com keep-alive/refs.
     encoder: object | None = None
+    # ponytail: histórico é só uma pilha de undo (lista de snapshots de
+    # `registros`, sem ponteiro/redo). A UI hoje não tem botão "Refazer" —
+    # implementar índice + redo completo agora seria especular sobre um
+    # requisito que não existe. Upgrade path: se um botão "Refazer" for
+    # pedido, trocar a pilha por (_historico, _indice_historico) e avançar/
+    # voltar o índice em vez de pop().
+    _historico: list[list[SignalRecord]] = field(default_factory=list, repr=False)
+
+    def _snapshot(self) -> None:
+        """Salva o estado atual de `registros` antes de uma mutação destrutiva.
+
+        Cópia superficial basta: SignalRecord é frozen, então os elementos
+        nunca mudam in-place — só a lista é substituída/tem itens add/removidos.
+        """
+        self._historico.append(list(self.registros))
+
+    def desfazer(self) -> bool:
+        """Volta para o snapshot anterior. Retorna False se não há histórico."""
+        if not self._historico:
+            return False
+        self.registros = self._historico.pop()
+        return True
 
     def carregar_resultado(self, res: ResultadoPipeline) -> None:
         self.resultado = res

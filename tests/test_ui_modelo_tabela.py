@@ -137,3 +137,78 @@ def test_coluna_modulo_fallback_traco_quando_sem_nome():
     st = _state(rec)
     m = ModeloSinais(st)
     assert m.data(m.index(0, _col("Módulo")), Qt.DisplayRole) == "—"
+
+
+def test_adicionar_registro_aumenta_rowcount_e_anexa_no_fim():
+    st = _state(_rec())
+    m = ModeloSinais(st)
+    novo = SignalRecord(
+        id="manual_1", modulo=Modulo(None, "manual"),
+        tipo_sinal=TipoSinal("Discrete", False, "Input"),
+        enderecamento=Enderecamento("DNP3", ()),
+        descricoes=Descricoes("", ""),
+    )
+    m.adicionar_registro(novo)
+    assert m.rowCount() == 2
+    assert st.registros[-1] is novo
+
+
+def test_adicionar_registro_emite_sinais_de_insercao(qtbot):
+    st = _state(_rec())
+    m = ModeloSinais(st)
+    novo = SignalRecord(
+        id="manual_1", modulo=Modulo(None, "manual"),
+        tipo_sinal=TipoSinal("Discrete", False, "Input"),
+        enderecamento=Enderecamento("DNP3", ()),
+        descricoes=Descricoes("", ""),
+    )
+    with qtbot.waitSignal(m.rowsInserted, timeout=1000):
+        m.adicionar_registro(novo)
+
+
+def test_remover_linhas_reduz_rowcount_e_remove_o_registro():
+    rec1 = _rec()
+    st = _state(rec1)
+    rec2 = SignalRecord(
+        id="a:2", modulo=Modulo("M", "sheet_name"),
+        tipo_sinal=TipoSinal("Discrete", False, "Input"),
+        enderecamento=Enderecamento("DNP3", (11,)),
+        descricoes=Descricoes("d2", "D2"),
+    )
+    st.registros.append(rec2)
+    m = ModeloSinais(st)
+    assert m.rowCount() == 2
+    m.remover_linhas([0])
+    assert m.rowCount() == 1
+    assert st.registros[0] is rec2
+
+
+def test_remover_linhas_multiplas_indices_fora_de_ordem():
+    st = _state(_rec())
+    for i in range(2, 5):
+        st.registros.append(SignalRecord(
+            id=f"a:{i}", modulo=Modulo("M", "sheet_name"),
+            tipo_sinal=TipoSinal("Discrete", False, "Input"),
+            enderecamento=Enderecamento("DNP3", (i,)),
+            descricoes=Descricoes(f"d{i}", f"D{i}"),
+        ))
+    m = ModeloSinais(st)
+    assert m.rowCount() == 4
+    m.remover_linhas([0, 2])  # remove índices 0 e 2 (fora de ordem)
+    assert m.rowCount() == 2
+    ids_restantes = {r.id for r in st.registros}
+    assert ids_restantes == {"a:2", "a:4"}
+
+
+def test_remover_linhas_emite_sinais_de_remocao(qtbot):
+    rec1 = _rec()
+    st = _state(rec1)
+    st.registros.append(SignalRecord(
+        id="a:2", modulo=Modulo("M", "sheet_name"),
+        tipo_sinal=TipoSinal("Discrete", False, "Input"),
+        enderecamento=Enderecamento("DNP3", (11,)),
+        descricoes=Descricoes("d2", "D2"),
+    ))
+    m = ModeloSinais(st)
+    with qtbot.waitSignal(m.rowsRemoved, timeout=1000):
+        m.remover_linhas([0])
