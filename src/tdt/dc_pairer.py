@@ -34,10 +34,6 @@ def fundir(status: SignalRecord, comando: SignalRecord) -> SignalRecord:
     )
 
 
-# ponytail: alias mantido para não quebrar quem já importava o nome privado;
-# remover quando não houver mais referências a `_fundir`.
-_fundir = fundir
-
 
 def separar(fundido: SignalRecord, novo_id_saida: str) -> tuple[SignalRecord, SignalRecord]:
     """Desfaz uma fusão D+C: devolve (status Input, comando Output).
@@ -87,7 +83,7 @@ def parear(
         elif not inputs:  # comando(s) órfão(s): Write-only
             saida.extend(grupo)
         elif len(inputs) == 1 and len(outputs) == 1:
-            saida.append(_fundir(inputs[0], outputs[0]))
+            saida.append(fundir(inputs[0], outputs[0]))
         else:  # ambíguo: não dá para confirmar o equipamento
             revisao.extend(ItemRevisao(r, motivo="pareamento_ambiguo") for r in grupo)
 

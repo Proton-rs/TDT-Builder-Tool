@@ -369,7 +369,10 @@ class TelaRevisao(QWidget):
             self._modelo.remover_linhas(indices)
             self._modelo.adicionar_registro(fundido_rec)
         else:  # desvincular
-            novo_id_saida = f"{dados.id}_saida"
+            # ponytail: id sintético com sufixo aleatório — evita colisão se o
+            # mesmo registro for desvinculado mais de uma vez (ex.: desfazer +
+            # refazer manual) sem remover o comando recriado anteriormente.
+            novo_id_saida = f"{dados.id}_saida_{uuid.uuid4().hex[:6]}"
             status_rec, comando_rec = separar(dados, novo_id_saida)
             self._modelo.remover_linhas(indices)
             self._modelo.adicionar_registro(status_rec)

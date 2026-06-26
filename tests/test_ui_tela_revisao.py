@@ -263,4 +263,5 @@ def test_parear_sinais_desvincular_confirmado_separa_em_dois(qtbot, monkeypatch)
     comando_rec = next(r for r in tela._estado.registros if r.tipo_sinal.direcao == "Output")
     assert status_rec.enderecamento.indices == (5,)
     assert comando_rec.enderecamento.indices == (0,)
-    assert comando_rec.id == "1_saida"
+    assert comando_rec.id.startswith("1_saida_")
+    assert comando_rec.id != status_rec.id
