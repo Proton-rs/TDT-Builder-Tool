@@ -50,7 +50,8 @@ MAPA: dict[str, str] = {
     "DTTT": "DIRECT TRANSFER TRIP TRIFÁSICO, TRANSFERÊNCIA DIRETA DE DISPARO POR TELEPROTEÇÃO",
     "POTT": "PERMISSIVE OVERREACH TRANSFER TRIP, ESQUEMA DE TELEPROTEÇÃO POR SOBREALCANCE PERMISSIVO",
     "SOTF": "SWITCH ONTO FAULT, FECHAMENTO SOB FALTA",
-    "SOTX": "SWITCH ONTO FAULT, FUNÇÃO DE FECHAMENTO SOB FALTA",
+    # SOTX removido: significado não confirmado (nomenclatura não-padrão, sem nota
+    # interna). Preservar v1 é seguro — cai no `return v1` da cauda.
 
     # --- estado de contato de disjuntor — confirmado por nota interna (retificador) ---
     "DJA1": "DISJUNTOR NORMALMENTE ABERTO (CONTATO NA)",
