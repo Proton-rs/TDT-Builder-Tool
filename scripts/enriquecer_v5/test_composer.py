@@ -46,7 +46,16 @@ def test_composto_expande_codigos_embutidos():
 def test_analogico_grandeza_unidade():
     out, c = enriquecer("CORRENTE NEUTRO", "AnalogSignals")
     assert out.startswith("CORRENTE NEUTRO")
-    assert "AMP" in out.upper() or "(A)" in out.upper() or "IN" in out.upper()
+    assert ", A" in out.upper()  # unidade real (Amperagem), não só sinônimo
+
+
+def test_composto_nao_escaneia_corpo_apos_separador():
+    # "90" aparece no corpo (BARRA 90), não no cabeçalho de códigos -> não é composto
+    v1 = "27 - SUBTENSAO BARRA 90"
+    out, c = enriquecer(v1, "DiscreteSignals")
+    assert out.startswith(v1)
+    assert "ANSI 27" in out
+    assert "ANSI 90" not in out
 
 
 def test_dispatch_preserva_nao_ansi_nesta_task():

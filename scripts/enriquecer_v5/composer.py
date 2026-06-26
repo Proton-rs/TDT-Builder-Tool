@@ -13,13 +13,16 @@ from ansi_ref import ANSI_C37_2, CONFLITO_V1, SINONIMOS_ANSI
 _PREFIXO_ANSI = re.compile(r"^\s*(\d{2})")
 _AJUSTE = re.compile(r"^\s*AJUSTE\s+PARA\s+(.+)$", re.IGNORECASE)
 _CODIGOS_EMBUTIDOS = re.compile(r"\b(\d{2})[A-Z]?\b")
+_SEP = re.compile(r"\s[—-]\s")
 
-# grandeza (token inicial da descrição analógica) -> (sinônimos, unidade)
-_GRANDEZA_ANALOG: dict[str, tuple[str, ...]] = {
-    "CORRENTE": ("AMPERAGEM",), "TENSAO": ("VOLTAGEM",), "TENSÃO": ("VOLTAGEM",),
-    "POTENCIA": ("POTÊNCIA",), "POTÊNCIA": ("POTÊNCIA",),
-    "TEMPERATURA": ("TÉRMICO",), "FREQUENCIA": ("HZ",), "FREQUÊNCIA": ("HZ",),
-    "ANGULO": ("FASE",), "ÂNGULO": ("FASE",),
+# grandeza (token inicial da descrição analógica) -> (sinônimos, unidade real|None)
+# POTENCIA fica sem unidade: ativa=W, reativa=VAr, aparente=VA — ambíguo pelo
+# heurístico de 1º token, então não força unidade errada.
+_GRANDEZA_ANALOG: dict[str, tuple[tuple[str, ...], str | None]] = {
+    "CORRENTE": (("AMPERAGEM",), "A"), "TENSAO": (("VOLTAGEM",), "V"), "TENSÃO": (("VOLTAGEM",), "V"),
+    "POTENCIA": (("POTÊNCIA",), None), "POTÊNCIA": (("POTÊNCIA",), None),
+    "TEMPERATURA": (("TÉRMICO",), "°C"), "FREQUENCIA": (("FREQUÊNCIA",), "HZ"), "FREQUÊNCIA": (("FREQUÊNCIA",), "HZ"),
+    "ANGULO": (("FASE",), "GRAUS"), "ÂNGULO": (("FASE",), "GRAUS"),
 }
 
 
@@ -44,8 +47,9 @@ def _enriquecer_ajuste(v1: str, alvo: str) -> str:
 
 
 def _enriquecer_composto(v1: str) -> str | None:
-    cods = [int(c) for c in _CODIGOS_EMBUTIDOS.findall(v1) if int(c) in ANSI_C37_2]
-    if len(set(cods)) < 2:   # composto = 2+ códigos ANSI distintos no texto
+    header = _SEP.split(v1, maxsplit=1)[0]  # códigos compostos só no cabeçalho
+    cods = [int(c) for c in _CODIGOS_EMBUTIDOS.findall(header) if int(c) in ANSI_C37_2]
+    if len(set(cods)) < 2:   # composto = 2+ códigos ANSI distintos no cabeçalho
         return None
     vistos: list[str] = []
     for c in dict.fromkeys(cods):  # únicos, ordem
@@ -55,10 +59,14 @@ def _enriquecer_composto(v1: str) -> str | None:
 
 def _enriquecer_analogico(v1: str) -> str | None:
     tok = v1.strip().split()[0].upper() if v1.strip() else ""
-    syn = _GRANDEZA_ANALOG.get(tok)
-    if not syn:
+    grandeza = _GRANDEZA_ANALOG.get(tok)
+    if not grandeza:
         return None
-    return f"{v1} — MEDIÇÃO {', '.join(syn)}"
+    syn, unidade = grandeza
+    extra = f" — MEDIÇÃO {', '.join(syn)}"
+    if unidade:
+        extra += f", {unidade}"
+    return v1 + extra
 
 
 def enriquecer(v1: str, sheet: str) -> tuple[str, int | None]:
