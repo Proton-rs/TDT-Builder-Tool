@@ -30,14 +30,28 @@ class ResolucaoModulo:
 
 def resolver_modulo(sheet_name: str, rows: list[tuple], config: Config) -> ResolucaoModulo:
     toks = _tokens(sheet_name)
-    numeros = [t for t in toks if t.isdigit()]
-    alphas = [t for t in toks if t.isalpha()]
-    prefixos_mapeados = {config.mapa_prefixo_modulo[a] for a in alphas if a in config.mapa_prefixo_modulo}
-    # alta confiança só quando não há ambiguidade: exatamente um prefixo
-    # mapeado distinto (sinônimos contam como um só) e exatamente um número.
-    if len(prefixos_mapeados) == 1 and len(numeros) == 1:
-        (prefixo,) = prefixos_mapeados
-        return ResolucaoModulo(nome=f"{prefixo}{numeros[0]}", confianca="alta")
+    # Ocorrências (posicionais) de prefixos mapeados. Sufixos de barra/proteção
+    # (_P1, _P2) adicionam números que NÃO são o nº do módulo — por isso usamos
+    # o número imediatamente após o prefixo, não "exatamente um número global".
+    ocorr = [
+        (i, config.mapa_prefixo_modulo[t])
+        for i, t in enumerate(toks)
+        if t.isalpha() and t in config.mapa_prefixo_modulo
+    ]
+    canonicos = {c for _, c in ocorr}
+    # alta confiança só sem ambiguidade: uma única família canônica (sinônimos
+    # contam como uma) e um único nº DEPOIS de um prefixo mapeado. Assim "AL
+    # FWB15"->AL15 (sinônimo), "BC1_P1"->BC1 (sufixo de barra ignorado, só o nº
+    # após BC conta) e "SPS_TR1_TR2"->baixa (TR seguido de 1 e de 2, ambíguo).
+    if len(canonicos) == 1:
+        nums = {
+            toks[i + 1] for i, _ in ocorr
+            if i + 1 < len(toks) and toks[i + 1].isdigit()
+        }
+        if len(nums) == 1:
+            (prefixo,) = canonicos
+            (num,) = nums
+            return ResolucaoModulo(nome=f"{prefixo}{num}", confianca="alta")
     return ResolucaoModulo(nome=sheet_name, confianca="baixa")
 
 
@@ -81,5 +95,9 @@ def particionar_por_confianca(
     sinais: list[SignalRecord], confianca: str
 ) -> tuple[list[SignalRecord], list[ItemRevisao]]:
     if confianca == "baixa":
-        return [], [ItemRevisao(s, motivo="modulo_indefinido") for s in sinais]
+        novos = [
+            replace(s, tipo_sinal=replace(s.tipo_sinal, categoria_confiavel=False))
+            for s in sinais
+        ]
+        return novos, [ItemRevisao(s, motivo="modulo_indefinido") for s in novos]
     return sinais, []

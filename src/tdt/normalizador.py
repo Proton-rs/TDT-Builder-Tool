@@ -36,6 +36,21 @@ from tdt.config import Config
 from tdt.tokenizer import tokenizar
 
 _SEPARADORES = re.compile(r"[/\-.(),;:]")
+_SIGLA_ENTRE_PAREN = re.compile(r"\(([^)]+)\)")  # N0.5 — conteúdo relevante entre parênteses
+
+# ponytail: só extrai conteúdo textual entre parênteses. Se houver casos com
+# parênteses aninhados ou marcação semântica (ex: (NAO UTILIZAR)), expandir
+# com filtro de exclusão por heurística.
+
+
+def preservar_siglas_especiais(texto: str) -> str:
+    """N0.5: extrai conteúdo de (sigla/número), remove parênteses, reinsere.
+
+    Roda ANTES do colapso de separadores em ``normalizar()`` para que
+    "(N0.5)" vire "N0.5" (com o ponto preservado), não "N0 5".
+    """
+    return _SIGLA_ENTRE_PAREN.sub(r" \1 ", texto)
+
 
 # N0 — extração estrutural (texto bruto, antes do colapso de separadores).
 _EQUIPAMENTO_ANSI: dict[str, str] = {
@@ -44,6 +59,14 @@ _EQUIPAMENTO_ANSI: dict[str, str] = {
     "29": "Seccionadora",  # seccionadora de aterramento
 }
 _ID_EQUIPAMENTO = re.compile(r"\b(\d+)-(\d+)\b")
+# Equipamento pela PALAVRA (whole-token), quando o código ANSI (52/89/29) não
+# aparece. Listas reais usam IDs fora do padrão ANSI (ex: "24-1 DISJUNTOR"),
+# então só o código não basta pra setar equipamento_alvo. "SEC" sozinho é
+# ambíguo (SECUNDARIO) e fica de fora de propósito.
+_EQUIPAMENTO_PALAVRA: dict[str, str] = {
+    "DISJUNTOR": "Disjuntor", "DISJ": "Disjuntor", "DJ": "Disjuntor",
+    "SECCIONADORA": "Seccionadora", "SECCION": "Seccionadora", "SECC": "Seccionadora",
+}
 _BARRA: dict[str, str] = {"P": "Principal", "A": "Auxiliar"}
 _MARCADOR_BARRA = re.compile(r"\bBARRA\s+([A-Z])\b")
 FASES: tuple[str, ...] = ("ABC", "AB", "BC", "CA", "A", "B", "C", "N")
@@ -90,6 +113,12 @@ def extrair_contexto_estrutural(texto: str) -> tuple[str, ContextoEstrutural]:
         nome_equipamento = f"{m.group(1)}-{m.group(2)}"
         base = (base[: m.start()] + " " + base[m.end() :]).strip()
         base = " ".join(base.split())
+
+    if equipamento_alvo is None:
+        for tok in base.split():
+            if tok in _EQUIPAMENTO_PALAVRA:
+                equipamento_alvo = _EQUIPAMENTO_PALAVRA[tok]
+                break
 
     barra = None
     m_barra = _MARCADOR_BARRA.search(base)
@@ -320,6 +349,48 @@ def normalizar_unidades(texto: str) -> str:
     return " ".join(saida)
 
 
+# N5.5 — "ESTAGIO 1" / "ESTAGIO1" -> "E1" (a lista padrão usa a forma compacta
+# E1..E5 nos sufixos; o input costuma escrever "Estágio N"). Sem isso o token
+# de estágio não casa com a descrição padrão nem com a regra de especificidade.
+_ESTAGIO_RX = re.compile(r"\bESTAGIO\s*([1-5])\b")
+
+
+def normalizar_estagio(texto: str) -> str:
+    return _ESTAGIO_RX.sub(r"E\1", texto) if texto else ""
+
+
+# --- N6 --- stemmer superficial de português -------------------------------
+
+
+def _stemmar(texto: str) -> str:
+    """N6: stemming superficial para sufixos comuns no domínio de subestação.
+
+    Roda sobre texto já maiúsculo e sem acentos. Regras manuais (~30loc)
+    que cobrem ~90% dos sufixos da lista padrão.
+    """
+    if not texto:
+        return ""
+    saida: list[str] = []
+    for tok in texto.split():
+        t = tok
+        if t.endswith("COES") or t.endswith("CAO"):
+            t = t[:-3] + "C"  # COMUNICACAO → COMUNICAC
+        elif t.endswith("MENTOS") or t.endswith("MENTO"):
+            t = t[:-5]  # RELIGAMENTO → RELIGA
+        elif t.endswith("DORES"):
+            t = t[:-4]  # TRANSFORMADORES → TRANSFORMA
+        elif t.endswith("DOR"):
+            t = t[:-3]  # TRANSFORMADOR → TRANSFORMA
+        elif t.endswith("NCIAS") or t.endswith("NCIA"):
+            t = t[:-4] + "NT"  # FREQUENCIA → FREQUENT
+        elif t.endswith("DADES") or t.endswith("DADE"):
+            t = t[:-4]  # PROPRIEDADE → PROPRIE
+        elif len(t) > 5 and t[-1] == "S" and t[-2] in "AEIOU":
+            t = t[:-1]  # ALARMES → ALARME, POTENCIAS → POTENCIA
+        saida.append(t)
+    return " ".join(saida)
+
+
 # --- orquestradores -------------------------------------------------------
 
 
@@ -329,6 +400,7 @@ def normalizar(texto: str | None, config: Config) -> str:
     if not texto:
         return ""
     texto = _sem_acentos(texto).upper()
+    texto = preservar_siglas_especiais(texto)  # N0.5: extrai (sigla) antes do colapso de separadores
     texto = _SEPARADORES.sub(" ", texto)
     tokens = texto.split()
     sem_stop = [t for t in tokens if t not in config.stopwords]
@@ -350,4 +422,6 @@ def canonizar(
     texto3 = remover_boilerplate(texto2, config)  # N3
     texto4 = corrigir_typos(texto3, config, vocab)  # N4
     texto5 = normalizar_unidades(texto4)  # N5
-    return " ".join(tokenizar(texto5))
+    texto5b = normalizar_estagio(texto5)  # N5.5 — "ESTAGIO 1" -> "E1"
+    texto6 = _stemmar(texto5b) if config.stemming else texto5b  # N6 — gated (spF §3)
+    return " ".join(tokenizar(texto6))

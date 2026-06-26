@@ -150,9 +150,11 @@ class TelaRevisao(QWidget):
         self.ed_filtro = QLineEdit()
         self.ed_filtro.setPlaceholderText("Filtrar (todas as colunas)…")
         self.ed_filtro.textChanged.connect(self._filtrar_texto)
+        self.lbl_selecao = QLabel("0 selecionados")
         barra_filtro = QHBoxLayout()
         barra_filtro.addWidget(self.chk_so_revisao)
         barra_filtro.addWidget(self.ed_filtro, 1)
+        barra_filtro.addWidget(self.lbl_selecao)
 
         corpo = QHBoxLayout(); corpo.addWidget(cofre); corpo.addWidget(self.tabela, 1)
         raiz = QVBoxLayout(self)
@@ -171,10 +173,16 @@ class TelaRevisao(QWidget):
         self.tabela.horizontalHeader().setContextMenuPolicy(Qt.CustomContextMenu)
         self.tabela.horizontalHeader().customContextMenuRequested.connect(self._filtrar_coluna)
         self.tabela.setEditTriggers(QTableView.DoubleClicked)
+        self.tabela.horizontalHeader().setSectionsMovable(True)  # arrastar colunas
         col_sinal = ModeloSinais.COLUNAS.index("Sinal")
         self.tabela.setItemDelegateForColumn(
             col_sinal, DelegateSinal(self._estado, self._modelo, self._proxy, self.tabela))
         self.tabela.selectionModel().currentRowChanged.connect(self._linha_mudou)
+        self.tabela.selectionModel().selectionChanged.connect(self._atualizar_selecao)
+
+    def _atualizar_selecao(self, *_args) -> None:
+        n = len(self.tabela.selectionModel().selectedRows())
+        self.lbl_selecao.setText(f"{n} selecionado" + ("" if n == 1 else "s"))
 
     def _linha_mudou(self, atual, _anterior):
         fonte = self._proxy.mapToSource(atual)
@@ -238,13 +246,16 @@ class TelaRevisao(QWidget):
         if r is None:
             return
         conf = f"{r.candidatos[0].score:.2f}" if r.candidatos else "—"
+        end_in = ";".join(str(i) for i in r.enderecamento.indices) or "—"
+        end_out = ";".join(str(i) for i in r.enderecamento.indices_saida) or "—"
         self.lbl_campos.setText(
             f"Sinal: {r.sigla_sinal or '—'}\n"
             f"Status: {r.status}\n"
             f"Confiança: {conf}\n"
             f"Tipo: {r.tipo_sinal.categoria}/{r.tipo_sinal.direcao}\n"
             f"Fase: {r.eletrico.fase or '—'}\n"
-            f"Endereço: {';'.join(str(i) for i in r.enderecamento.indices)}\n"
+            f"Endereço Input: {end_in}\n"
+            f"Endereço Output: {end_out}\n"
             f"Descrição: {r.descricoes.bruta}"
         )
         self._atualizar_barras(r)
@@ -387,10 +398,12 @@ class TelaRevisao(QWidget):
                 f"{comando.sigla_sinal or comando.id} (Output, end. "
                 f"{comando.enderecamento.indices})?"
             )
+        end_in = ";".join(str(i) for i in dados.enderecamento.indices)
+        end_out = ";".join(str(i) for i in dados.enderecamento.indices_saida)
         return (
             f"Desvincular {dados.sigla_sinal or dados.id} (InputOutput, "
-            f"status {dados.enderecamento.indices} / saída "
-            f"{dados.enderecamento.indices_saida}) em Input + Output separados?"
+            f"end. Input: {end_in} / end. Output: {end_out}) "
+            f"em Input + Output separados?"
         )
 
     def _confirmar_dialogo(self, acao: str, descricao: str) -> bool:

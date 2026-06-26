@@ -19,7 +19,10 @@ from typing import Callable, NamedTuple
 
 import openpyxl
 
-from tdt import criador_lista_homogenea, dc_pairer, engine_tdt, motor_regras, roteador
+from tdt import (
+    criador_lista_homogenea, dc_pairer, engine_tdt, expansao_candidatos, filtro_preciso,
+    motor_regras, roteador,
+)
 from tdt.motor_regras import fase_da_sigla
 from tdt.analise_colunas import analisar
 from tdt.auditoria import Auditoria
@@ -37,6 +40,7 @@ from tdt.normalizador import canonizar
 from tdt.normalizador_estrutural import corrigir
 from tdt.pareamento_polaridade import forcar_polaridade_equipamento
 from tdt.scoring import mescla
+from tdt.scoring.calibracao import aplicar_calibrador_confianca, calibrar_candidatos
 from tdt.scoring.tfidf import ScorerTFIDF
 from tdt.scoring.vetorial import pontuar as pontuar_vetorial
 from tdt.scoring.vetorial import pontuar_com_embedding
@@ -58,12 +62,35 @@ def _timer(nome: str, aud: Auditoria):
 
 
 def _corpus(lp: ListaPadraoADMS, config: Config, categoria: str = "Discrete") -> list[tuple[str, str]]:
+    """Corpus base: descrição canônica (para TF-IDF e fuzzy)."""
     fonte = lp.discretos if categoria == "Discrete" else lp.analogicos
     return [
         (s.sigla, canonizar(s.descricao, config))
         for s in fonte
         if s.descricao
     ]
+
+
+def _corpus_enriquecido(lp: ListaPadraoADMS, config: Config, categoria: str = "Discrete") -> list[tuple[str, str]]:
+    """Corpus com descrição enriquecida: sigla + descrição + metadados (para embeddings).
+    
+    A adição da sigla e metadados fornece mais contexto semântico para o
+    embedding, melhorando matches onde a descrição isolada é ambígua.
+    """
+    fonte = lp.discretos if categoria == "Discrete" else lp.analogicos
+    saida: list[tuple[str, str]] = []
+    for s in fonte:
+        if not s.descricao:
+            continue
+        partes = [s.sigla, s.descricao]
+        if s.tipo_medicao:
+            partes.append(s.tipo_medicao)
+        if s.unidade_exibicao and s.unidade_exibicao not in ("-", ""):
+            partes.append(s.unidade_exibicao)
+        if s.direction:
+            partes.append(s.direction)
+        saida.append((s.sigla, canonizar(" ".join(partes), config)))
+    return saida
 
 
 class _Scorers(NamedTuple):
@@ -74,11 +101,12 @@ class _Scorers(NamedTuple):
 
 
 def _construir_scorers(lp, config, encoder, categoria, cfg_efetivo) -> _Scorers:
-    corpus = _corpus(lp, config, categoria)
+    corpus_raw = _corpus(lp, config, categoria)
+    corpus_vec = _corpus_enriquecido(lp, config, categoria)
     return _Scorers(
-        tfidf=ScorerTFIDF.construir(corpus),
-        indice=IndiceVetorial.construir(corpus, encoder),
-        fuzzy=FuzzyMatcher.construir(corpus),
+        tfidf=ScorerTFIDF.construir(corpus_raw),
+        indice=IndiceVetorial.construir(corpus_vec, encoder),
+        fuzzy=FuzzyMatcher.construir(corpus_raw),
         config=cfg_efetivo,
     )
 
@@ -94,10 +122,10 @@ def _construir_scorers_cacheado(
     """
     if cache_dir is None:
         return _construir_scorers(lp, config, encoder, categoria, cfg_efetivo)
-    corpus = _corpus(lp, config, categoria)
+    corpus_vec = _corpus_enriquecido(lp, config, categoria)
     cacheaveis = carregar_ou_construir(
         cache_dir,
-        corpus,
+        corpus_vec,  # chave de cache usa corpus enriquecido (superset)
         lambda: _construir_scorers(lp, config, encoder, categoria, cfg_efetivo),
         encoder,
         config.modelo_embedding,
@@ -128,7 +156,8 @@ def _com_fase(rec: SignalRecord) -> SignalRecord:
 
 
 def _classificar_sinal(
-    rec, scorers: "_Scorers", diagnostico: bool = False, embedding_vet=None
+    rec, scorers: "_Scorers", diagnostico: bool = False, embedding_vet=None,
+    lista_padrao: "ListaPadraoADMS | None" = None,
 ) -> SignalRecord:
     config = scorers.config
     c_tfidf = scorers.tfidf.pontuar(rec, k=config.k_vizinhos)
@@ -137,6 +166,14 @@ def _classificar_sinal(
     else:
         c_vet = pontuar_vetorial(rec, scorers.indice, k=config.k_vizinhos)
     c_fuzzy = scorers.fuzzy.pontuar(rec, k=config.k_vizinhos)
+    cal_metodo = config.calibracao_por_metodo
+    def _cal(metodo_cfg):
+        if not metodo_cfg:
+            return "none", None
+        return metodo_cfg.get("metodo", "none"), metodo_cfg.get("params")
+    c_tfidf = calibrar_candidatos(c_tfidf, *_cal(cal_metodo.get("tfidf")))
+    c_vet = calibrar_candidatos(c_vet, *_cal(cal_metodo.get("vetorial")))
+    c_fuzzy = calibrar_candidatos(c_fuzzy, *_cal(cal_metodo.get("fuzzy")))
     fundidos = mescla.mesclar(
         [
             (c_tfidf, config.peso_tfidf),
@@ -144,6 +181,17 @@ def _classificar_sinal(
             (c_fuzzy, config.peso_fuzzy),
         ]
     )
+    if config.confianca_calibrador.get("metodo") not in (None, "none"):
+        ca = config.confianca_calibrador
+        fundidos = [
+            replace(c, score=aplicar_calibrador_confianca(c.score, ca))
+            for c in fundidos
+        ]
+    # F1 + Filtro Preciso: expande candidatos e remove contraditórios
+    if lista_padrao is not None:
+        fundidos = expansao_candidatos.expandir(fundidos, lista_padrao)
+        fundidos = filtro_preciso.filtrar(rec, fundidos, config)
+        fundidos = filtro_preciso.filtrar_especificidade(rec, fundidos, lista_padrao, config)
     com_regras, ajustes = motor_regras.aplicar_rastreado(rec, fundidos, config)
     diag = None
     if diagnostico:
@@ -191,7 +239,8 @@ def _desempatar_ambiguo(d_disc, d_ana, disc: "_Scorers", ana: "_Scorers", descri
     return d_disc if afin_disc > afin_ana else d_ana
 
 
-def _classificar_roteado(rec, disc: "_Scorers", ana: "_Scorers", diagnostico: bool, embedding_vet=None):
+def _classificar_roteado(rec, disc: "_Scorers", ana: "_Scorers", diagnostico: bool,
+                         embedding_vet=None, lista_padrao: "ListaPadraoADMS | None" = None):
     """Devolve (decidido_ou_None, item_revisao_ou_None).
 
     Confiável: usa o bundle da própria categoria.
@@ -201,13 +250,16 @@ def _classificar_roteado(rec, disc: "_Scorers", ana: "_Scorers", diagnostico: bo
     """
     if rec.tipo_sinal.categoria_confiavel:
         bundle = disc if rec.tipo_sinal.categoria == "Discrete" else ana
-        d = _classificar_sinal(rec, bundle, diagnostico=diagnostico, embedding_vet=embedding_vet)
+        d = _classificar_sinal(rec, bundle, diagnostico=diagnostico, embedding_vet=embedding_vet,
+                               lista_padrao=lista_padrao)
         if d.status == "decidido":
             return d, None
         return None, ItemRevisao(d, motivo="score_baixo", candidatos_sugeridos=d.candidatos[:3])
 
-    d_disc = _classificar_sinal(rec, disc, diagnostico=diagnostico, embedding_vet=embedding_vet)
-    d_ana = _classificar_sinal(rec, ana, diagnostico=diagnostico, embedding_vet=embedding_vet)
+    d_disc = _classificar_sinal(rec, disc, diagnostico=diagnostico, embedding_vet=embedding_vet,
+                                lista_padrao=lista_padrao)
+    d_ana = _classificar_sinal(rec, ana, diagnostico=diagnostico, embedding_vet=embedding_vet,
+                               lista_padrao=lista_padrao)
     ok_disc = d_disc.status == "decidido"
     ok_ana = d_ana.status == "decidido"
 
@@ -303,10 +355,12 @@ def executar(
             sinais = list(estruturar(rows, mapa, sheet_name=sn, config=config, vocab=vocab))
         sinais, conf_mod = aplicar_identidade(sinais, sn, rows, config)
         sinais, rev_modulo = particionar_por_confianca(sinais, conf_mod)
+        ids_indefinidos: set[str] = set()
         if rev_modulo:
             aud.evento("identidade_modulo",
-                       f"Sheet {sn}: módulo indefinido — {len(rev_modulo)} sinais p/ revisão", "AVISO")
-            revisao.extend(rev_modulo)
+                       f"Sheet {sn}: módulo indefinido — {len(rev_modulo)} sinais p/ revisão",
+                       "AVISO")
+            ids_indefinidos = {ir.registro.id for ir in rev_modulo}
         sinais = forcar_polaridade_equipamento(sinais, config)
         total = len(sinais)
         aud.evento("identificador", f"Sheet {sn}: {total} sinais lidos", "INFO")
@@ -329,7 +383,8 @@ def executar(
             if not rec.enderecamento.indices:
                 aud.evento("pipeline", f"{rec.id}: sem endereço — classificando sem decidir", "AVISO")
                 decidido_tmp, item_tmp = _classificar_roteado(
-                    rec, disc, ana, diagnostico, embedding_vet=embedding_vet
+                    rec, disc, ana, diagnostico, embedding_vet=embedding_vet,
+                    lista_padrao=lp,
                 )
                 if decidido_tmp is not None:
                     rec_avaliado = decidido_tmp
@@ -342,10 +397,15 @@ def executar(
                 ))
                 continue
             decidido, item = _classificar_roteado(
-                rec, disc, ana, diagnostico, embedding_vet=embedding_vet
+                rec, disc, ana, diagnostico, embedding_vet=embedding_vet,
+                lista_padrao=lp,
             )
             if decidido is not None:
-                decididos.append(decidido)
+                if rec.id in ids_indefinidos:
+                    revisao.append(ItemRevisao(decidido, motivo="modulo_indefinido",
+                                               candidatos_sugeridos=decidido.candidatos[:3]))
+                else:
+                    decididos.append(decidido)
             else:
                 revisao.append(item)
             if j % 50 == 0 or j == total:

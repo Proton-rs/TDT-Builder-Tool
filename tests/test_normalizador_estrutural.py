@@ -43,6 +43,26 @@ def test_endereco_duplicado_vai_para_revisao():
     assert all(e.motivo == "endereco_duplicado" for e in erros)
 
 
+def test_salva_par_consecutivo_e_manda_sobra_pra_revisao():
+    # 3 sinais na mesma chave: 100/101 são o double-bit; 105 é distinto (colapsou
+    # na mesma sigla) -> par funde, sobra vai pra revisão (não some, não corrompe).
+    regs = [_rec("LT3:1", "SECC", [100]), _rec("LT3:2", "SECC", [101]),
+            _rec("LT3:3", "SECC", [105])]
+    corrigidos, erros = corrigir(regs)
+    assert len(corrigidos) == 1
+    assert corrigidos[0].enderecamento.indices == (100, 101)
+    assert corrigidos[0].tipo_sinal.is_double_bit is True
+    assert [e.registro.id for e in erros] == ["LT3:3"]
+
+
+def test_nao_funde_nao_consecutivos():
+    # Dois sinais não-consecutivos NÃO são double-bit (a TDT real não tem lacuna).
+    regs = [_rec("LT3:1", "DJA1", [100]), _rec("LT3:2", "DJA1", [108])]
+    corrigidos, erros = corrigir(regs)
+    assert corrigidos == ()
+    assert all(e.motivo == "endereco_duplicado" for e in erros)
+
+
 def test_sinal_simples_passa_limpo():
     corrigidos, erros = corrigir([_rec("LT3:1", "DJ", [17])])
     assert len(corrigidos) == 1

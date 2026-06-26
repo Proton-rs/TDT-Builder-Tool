@@ -14,6 +14,7 @@ from tdt.ui.estado import AppState
 COLUNAS = [
     "Sinal", "Confiança", "Status", "Motivo", "Descr. ADMS", "Descr. bruta",
     "Descr. normalizada", "Tokens", "Tipo", "Escala", "Fase", "Endereço",
+    "Endereço Output",
     "Score embedding", "Score tf-idf", "Score fuzzy", "Justificativa",
     "Módulo", "Equipamento", "Tipo Equip.", "Barra", "Nível Tensão",
 ]
@@ -118,6 +119,8 @@ class ModeloSinais(QAbstractTableModel):
             return rec.eletrico.fase or "—"
         if nome == "Endereço":
             return ";".join(str(i) for i in rec.enderecamento.indices)
+        if nome == "Endereço Output":
+            return ";".join(str(i) for i in rec.enderecamento.indices_saida) or "—"
         if nome == "Score embedding":
             return _score(rec, sigla, "vetorial")
         if nome == "Score tf-idf":

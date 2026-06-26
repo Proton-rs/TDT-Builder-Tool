@@ -119,7 +119,9 @@ from tdt.identidade_modulo import particionar_por_confianca
 def test_particionar_baixa_vai_tudo_pra_revisao():
     sinais = [_rec("SINAL A"), _rec("SINAL B")]
     segue, revisao = particionar_por_confianca(sinais, "baixa")
-    assert segue == []
+    assert len(segue) == 2
+    assert not segue[0].tipo_sinal.categoria_confiavel
+    assert not segue[1].tipo_sinal.categoria_confiavel
     assert [it.motivo for it in revisao] == ["modulo_indefinido", "modulo_indefinido"]
 
 

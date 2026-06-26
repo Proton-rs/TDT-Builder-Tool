@@ -16,7 +16,10 @@ from tdt.contracts import ItemRevisao, SignalRecord
 
 
 def _chave(rec: SignalRecord) -> tuple:
-    return (rec.modulo.nome, rec.sigla_sinal)
+    # Inclui o equipamento (ver normalizador_estrutural._chave): dois disjuntores
+    # no mesmo módulo (52-2, 52-10), cada um com 1 status + 1 comando, pareiam
+    # por equipamento em vez de virar "2 inputs + 2 outputs" (ambíguo).
+    return (rec.modulo.nome, rec.eletrico.nome_equipamento, rec.sigla_sinal)
 
 
 def fundir(status: SignalRecord, comando: SignalRecord) -> SignalRecord:

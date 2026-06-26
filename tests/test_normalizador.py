@@ -232,6 +232,21 @@ def test_nome_equipamento_none_sem_id():
     assert ctx.nome_equipamento is None
 
 
+def test_equipamento_pela_palavra_quando_id_nao_e_ansi():
+    # "24-1" não é código ANSI (só 52/89/29), mas a palavra DISJUNTOR resolve.
+    # Sem isso, o forçamento DJF1 (pareamento_polaridade) não dispara.
+    _, ctx = extrair_contexto_estrutural("24-1 DISJUNTOR FECHADO")
+    assert ctx.equipamento_alvo == "Disjuntor"
+    assert ctx.nome_equipamento == "24-1"
+    _, ctx2 = extrair_contexto_estrutural("DJ 24-1 ABERTO")
+    assert ctx2.equipamento_alvo == "Disjuntor"
+
+
+def test_sec_sozinho_nao_confunde_secundario():
+    _, ctx = extrair_contexto_estrutural("TENSAO SECUNDARIO BARRA")
+    assert ctx.equipamento_alvo is None
+
+
 def test_sem_id_de_equipamento_nao_extrai_nada():
     texto, ctx = extrair_contexto_estrutural("FALHA COMUNICACAO")
     assert ctx == ContextoEstrutural()
