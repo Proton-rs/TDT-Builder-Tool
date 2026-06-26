@@ -7,8 +7,19 @@ from __future__ import annotations
 from pathlib import Path
 
 import openpyxl
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
 from tdt.contracts import ItemRevisao, SignalRecord
+
+_LARGURA_MAX_COLUNA = 40
+
+_HEADER_FILL = PatternFill("solid", fgColor="4472C4")
+_HEADER_FONT = Font(color="FFFFFF", bold=True)
+_HEADER_BORDER = Border(
+    left=Side(style="thin"), right=Side(style="thin"),
+    top=Side(style="thin"), bottom=Side(style="thin"),
+)
+_HEADER_ALIGN = Alignment(horizontal="center")
 
 CABECALHO = [
     "ID Sinal", "Descrição Bruta", "Tipo", "Endereço", "Status",
@@ -54,6 +65,22 @@ def gerar_relatorio_revisao(
             linha.extend(_scores_metodo(rec, c.sigla))
         linha += [""] * (len(CABECALHO) - len(linha))
         ws.append(linha)
+    _formatar_cabecalho(ws)
+    _ajustar_largura_colunas(ws)
     saida = Path(destino) / "Auditoria_Revisao.xlsx"
     wb.save(str(saida))
     return saida
+
+
+def _formatar_cabecalho(ws) -> None:
+    for cell in ws[1]:
+        cell.fill = _HEADER_FILL
+        cell.font = _HEADER_FONT
+        cell.border = _HEADER_BORDER
+        cell.alignment = _HEADER_ALIGN
+
+
+def _ajustar_largura_colunas(ws) -> None:
+    for col in ws.columns:
+        maior = max((len(str(c.value or "")) for c in col), default=8)
+        ws.column_dimensions[col[0].column_letter].width = min(maior + 2, _LARGURA_MAX_COLUNA)
