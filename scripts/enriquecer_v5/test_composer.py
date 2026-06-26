@@ -27,8 +27,30 @@ def test_enriquecer_ansi_conflito_nao_acrescenta_funcao():
     assert "DENSIDADE" not in out.upper()
 
 
+def test_ajuste_family_append():
+    v1 = "AJUSTE PARA AL15"
+    out, c = enriquecer(v1, "DiscreteSignals")
+    assert out.startswith(v1)
+    assert "PARAMETR" in out.upper() or "SETTING" in out.upper()
+    assert "AL15" in out
+
+
+def test_composto_expande_codigos_embutidos():
+    v1 = "20C 20T 63T - ALARME VALVULA OU BUCHHOLZ"
+    out, c = enriquecer(v1, "DiscreteSignals")
+    assert out.startswith(v1)
+    # acrescenta a expansão de pelo menos um código embutido
+    assert "VÁLVULA" in out.upper() or "VALVULA" in out.upper() or "PRESS" in out.upper()
+
+
+def test_analogico_grandeza_unidade():
+    out, c = enriquecer("CORRENTE NEUTRO", "AnalogSignals")
+    assert out.startswith("CORRENTE NEUTRO")
+    assert "AMP" in out.upper() or "(A)" in out.upper() or "IN" in out.upper()
+
+
 def test_dispatch_preserva_nao_ansi_nesta_task():
-    v1 = "CORRENTE NEUTRO"
-    out, conflito = enriquecer(v1, "AnalogSignals")
-    assert out == v1                      # ainda não tratado (Task 3)
+    v1 = "PROPRIEDADE DO COMANDO"
+    out, conflito = enriquecer(v1, "DiscreteSignals")
+    assert out.startswith(v1)              # append-only, cai na cauda inalterado
     assert conflito is None
