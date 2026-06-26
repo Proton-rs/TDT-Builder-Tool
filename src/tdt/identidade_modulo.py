@@ -53,3 +53,22 @@ def classificar_tipo(modulo_nome: str, registros: list[SignalRecord], config: Co
             return tipo
     # 3. fallback
     return "Outros"
+
+
+def aplicar_identidade(
+    sinais: list[SignalRecord], sheet_name: str, rows: list[tuple], config: Config
+) -> tuple[list[SignalRecord], str]:
+    res = resolver_modulo(sheet_name, rows, config)
+    # nome: resolve só onde veio do nome da sheet; preserva módulo de coluna.
+    com_nome = [
+        replace(s, modulo=replace(s.modulo, nome=res.nome))
+        if s.modulo.origem_contexto == "sheet_name"
+        else s
+        for s in sinais
+    ]
+    nome_ref = com_nome[0].modulo.nome if com_nome else res.nome
+    tipo = classificar_tipo(nome_ref or "", com_nome, config)
+    com_tipo = [replace(s, modulo=replace(s.modulo, tipo=tipo)) for s in com_nome]
+    # confiança só importa quando o nome veio da sheet (caminho não-homogêneo).
+    veio_de_sheet = any(s.modulo.origem_contexto == "sheet_name" for s in sinais)
+    return com_tipo, (res.confianca if veio_de_sheet else "alta")

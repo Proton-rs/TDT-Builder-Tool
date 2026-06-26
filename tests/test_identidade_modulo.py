@@ -61,3 +61,22 @@ def test_classificar_por_conteudo_quando_prefixo_desconhecido():
 
 def test_classificar_fallback_outros():
     assert classificar_tipo("ZZZ1", [_rec("SINAL GENERICO")], Config()) == "Outros"
+
+
+from tdt.identidade_modulo import aplicar_identidade
+
+
+def test_aplicar_identidade_sobrescreve_nome_de_sheet_e_classifica():
+    sinais = [_rec("DISJUNTOR LIGADO")]  # _rec usa Modulo("X","sheet_name")
+    novos, conf = aplicar_identidade(sinais, "AL FWB15", [], Config())
+    assert novos[0].modulo.nome == "AL15"
+    assert novos[0].modulo.tipo == "Alimentador"
+    assert conf == "alta"
+
+
+def test_aplicar_identidade_preserva_nome_de_coluna():
+    base = _rec("DISJUNTOR")
+    base = base.__class__(**{**base.__dict__, "modulo": Modulo("AL11", "coluna:MODULO")})
+    novos, _ = aplicar_identidade([base], "GTD_11", [], Config())
+    assert novos[0].modulo.nome == "AL11"  # não sobrescreve módulo de coluna
+    assert novos[0].modulo.tipo == "Alimentador"  # mas classifica o tipo
