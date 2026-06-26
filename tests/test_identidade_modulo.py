@@ -1,4 +1,5 @@
 from tdt.contracts import Modulo, TIPOS_MODULO
+from tdt.config import Config
 
 
 def test_modulo_tem_campo_tipo_default_none():
@@ -12,3 +13,11 @@ def test_tipos_modulo_tem_nove_categorias():
     assert "Alimentador" in TIPOS_MODULO
     assert "Outros" in TIPOS_MODULO
     assert len(TIPOS_MODULO) == 9
+
+
+def test_config_tem_tabelas_de_modulo():
+    cfg = Config()
+    assert cfg.mapa_prefixo_modulo["GTD"] == "AL"
+    assert cfg.mapa_prefixo_modulo["FWB"] == "AL"
+    assert cfg.tipo_por_prefixo["AL"] == "Alimentador"
+    assert "CAPACITOR" in cfg.palavras_chave_tipo["Banco de Capacitores"]

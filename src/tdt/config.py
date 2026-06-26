@@ -74,3 +74,27 @@ class Config:
     gaps_por_confianca: dict[str, float] = field(
         default_factory=lambda: {"alta": 0.05, "media": 0.10, "baixa": 0.15}
     )
+    # Identidade do módulo (C1) — sementes calibráveis; confirmar nos inputs.
+    mapa_prefixo_modulo: dict[str, str] = field(
+        default_factory=lambda: {
+            "AL": "AL", "GTD": "AL", "FWB": "AL",
+            "LT": "LT", "BC": "BC", "TR": "TR",
+        }
+    )
+    tipo_por_prefixo: dict[str, str] = field(
+        default_factory=lambda: {
+            "AL": "Alimentador",
+            "LT": "Linha de Transmissão",
+            "BC": "Banco de Capacitores",
+            "TR": "Transformador",
+        }
+    )
+    palavras_chave_tipo: dict[str, tuple[str, ...]] = field(
+        default_factory=lambda: {
+            "Banco de Capacitores": ("CAPACITOR", "BANCO"),
+            "Linha de Transmissão": ("LINHA",),
+            "Transformador": ("TRANSFORMADOR", "TRAFO"),
+            "Barra": ("BARRA",),
+            "Transferência": ("TRANSFERENCIA",),
+        }
+    )
