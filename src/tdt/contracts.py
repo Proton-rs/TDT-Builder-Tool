@@ -13,6 +13,20 @@ from dataclasses import dataclass, field
 class Modulo:
     nome: str | None
     origem_contexto: str  # "sheet_name" | "linha" | "coluna:<x>"
+    tipo: str | None = None  # um de TIPOS_MODULO, ou None até classificar
+
+
+TIPOS_MODULO: tuple[str, ...] = (
+    "Alimentador",
+    "Linha de Transmissão",
+    "Banco de Capacitores",
+    "Alta do Transformador",
+    "Baixa do Transformador",
+    "Transformador",
+    "Barra",
+    "Transferência",
+    "Outros",
+)
 
 
 @dataclass(frozen=True)
