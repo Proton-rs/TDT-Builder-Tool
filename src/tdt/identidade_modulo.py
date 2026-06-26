@@ -39,3 +39,17 @@ def resolver_modulo(sheet_name: str, rows: list[tuple], config: Config) -> Resol
     if prefixo and numeros:
         return ResolucaoModulo(nome=f"{prefixo}{numeros[0]}", confianca="alta")
     return ResolucaoModulo(nome=sheet_name, confianca="baixa")
+
+
+def classificar_tipo(modulo_nome: str, registros: list[SignalRecord], config: Config) -> str:
+    # 1. por prefixo do nome do módulo
+    for tok in _tokens(modulo_nome):
+        if tok in config.tipo_por_prefixo:
+            return config.tipo_por_prefixo[tok]
+    # 2. por conteúdo (palavras-chave nas descrições normalizadas)
+    texto = " ".join(r.descricoes.normalizada for r in registros).upper()
+    for tipo, palavras in config.palavras_chave_tipo.items():
+        if any(p in texto for p in palavras):
+            return tipo
+    # 3. fallback
+    return "Outros"
