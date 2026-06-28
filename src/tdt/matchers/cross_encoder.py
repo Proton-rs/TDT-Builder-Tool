@@ -1,4 +1,10 @@
-"""Reranker cross-encoder: reordena os top-k candidatos pontuando o par
+"""DEPRECATED — não usar em produção.
+
+Benchmark mostrou que o reranker mmarco piora o matching (acc@1: 82% → 36%).
+Mantido apenas para referência histórica; o pipeline de produção não chama
+este módulo.
+
+Reranker cross-encoder: reordena os top-k candidatos pontuando o par
 (descrição do sinal, descrição ADMS do candidato) conjuntamente.
 
 Padrão retrieve-then-rerank: o bi-encoder/tfidf/fuzzy recupera candidatos, o
