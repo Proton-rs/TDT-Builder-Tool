@@ -45,11 +45,16 @@ def test_ignora_linhas_invalidas(lista_padrao_path):
 
 def test_sinal_discreto_tem_estados_e_valores(lista_padrao_path):
     lp = ListaPadraoADMS.carregar(lista_padrao_path)
-    # "20T" é RelayTrip com FUNÇÃO "Transit;NORMAL;ATUADO;Error" e VALOR "0;1;2;3"
+    # Na v2, a sheet DiscreteSignals não tem nenhuma linha com FUNÇÃO/VALOR
+    # preenchidos (colunas existem no header, mas vazias em produção) — ao
+    # contrário da v1, onde "20T" trazia
+    # "Transit;NORMAL;ATUADO;Error" / "0;1;2;3". Mantém a leitura validada
+    # (campo None / tupla vazia quando a fonte não traz dado), sem inventar
+    # valor que a v2 não tem.
     sp = lp.por_sigla("20T")
     assert sp is not None
-    assert sp.estados_brutos == "Transit;NORMAL;ATUADO;Error"
-    assert sp.valores_scada == (0, 1, 2, 3)
+    assert sp.estados_brutos is None
+    assert sp.valores_scada == ()
 
 
 def test_analogico_sem_estados(lista_padrao_path):

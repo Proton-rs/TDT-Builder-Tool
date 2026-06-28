@@ -15,7 +15,7 @@ def docs():
 
 @pytest.fixture
 def lista_padrao_path():
-    return DOCS / "Pontos Padrao ADMS_v1.xlsx"
+    return DOCS / "Pontos Padrao ADMS_v2.xlsx"
 
 
 @pytest.fixture
