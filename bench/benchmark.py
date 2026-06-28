@@ -20,10 +20,10 @@ except Exception:
 import faiss, numpy as np
 from rotulos import ROTULOS
 from tdt.config import Config
-from tdt.normalizador import canonizar
+from tdt.normalizacao.normalizador import canonizar
 from tdt.dados.lista_padrao import ListaPadraoADMS
 from tdt.dados.encoder import criar_encoder, criar_scorer_cross_encoder
-from tdt.analise_colunas import normalizar_emb
+from tdt.analise.analise_colunas import normalizar_emb
 from tdt.scoring.tfidf import ScorerTFIDF
 from tdt.matchers.fuzzy_match import FuzzyMatcher
 from tdt.matchers.cross_encoder import rerank
@@ -135,8 +135,11 @@ for nome, fn in METODOS.items():
     log(f"{nome:<20} {acc1/n:>6.0%} {rec3/n:>6.0%} {decid/n:>6.0%} {prec:>9.0%}")
 
 # --- roteação por consenso/gap dinâmico (cascata do roteador) sobre o combo ---
+# usar_consenso=True força a cascata a exercitar o passo 3 (default é False
+# em produção desde SP-Cleanup item 2 — precisão baixa, ver linha abaixo).
 from dataclasses import replace as _replace
 from tdt import roteador
+cfg_consenso = _replace(cfg, usar_consenso=True)
 acc1 = decid = corr_dec = 0
 for desc, esp in ROTULOS:
     r = rec(desc)
@@ -145,7 +148,7 @@ for desc, esp in ROTULOS:
     if not combo: continue
     if combo[0].sigla == esp: acc1 += 1
     votos = {"tfidf": ct, "vetorial": cv, "fuzzy": cf}
-    out = roteador.rotear(_replace(r, candidatos=tuple(combo)), cfg, votos=votos)
+    out = roteador.rotear(_replace(r, candidatos=tuple(combo)), cfg_consenso, votos=votos)
     if out.status == "decidido":
         decid += 1
         if out.sigla_sinal == esp: corr_dec += 1
