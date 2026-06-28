@@ -89,6 +89,10 @@ class Config:
         default_factory=lambda: {"metodo": "platt", "params": {"coef_": 2.0403, "intercept_": -0.9391}}
     )
     min_consenso: int = 2  # nº mínimo de métodos que concordam no top-1
+    # Rota de consenso (passo 3 da cascata do roteador) — benchmark mostrou
+    # precisão de 42% (contra 95% dos outros métodos da cascata). Default OFF;
+    # liga só para quem quiser testar/calibrar (spec SP-Cleanup item 2).
+    usar_consenso: bool = False
     gaps_por_confianca: dict[str, float] = field(
         default_factory=lambda: {"alta": 0.05, "media": 0.10, "baixa": 0.15}
     )

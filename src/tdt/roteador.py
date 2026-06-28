@@ -19,6 +19,10 @@ confiável e grava qual método decidiu na justificativa (rastreabilidade):
   4. quadrante mesclado (fallback final, comportamento legado)
 
 Sem ``votos``, mantém só o passo 4 (retrocompat: pipeline/testes legados).
+
+O passo 3 (consenso) tem precisão de 42% no benchmark (contra ~95% dos outros
+passos da cascata) — fica desligado por padrão via ``Config.usar_consenso``
+(default ``False``). Quando ``False``, a cascata pula direto do passo 2 pro 4.
 """
 
 from __future__ import annotations
@@ -109,6 +113,10 @@ def _decidir_por_votos(
     #    sua sigla. O nº de métodos confiantes define a confiança -> e o gap
     #    exigido. Com >=1 método confiante o gap dinâmico GOVERNA a decisão
     #    (não cai pro quadrante legado, mais frouxo, que reabriria o FP).
+    #    Desligado por padrão (config.usar_consenso=False) — precisão baixa (42%).
+    if not config.usar_consenso:
+        return None  # passo 3 desligado: deixa o quadrante mesclado decidir
+
     confiantes = [t for t in tops.values() if t is not None and t.score >= config.threshold_pct]
     if not confiantes:
         return None  # nenhum método confiante: deixa o quadrante mesclado decidir

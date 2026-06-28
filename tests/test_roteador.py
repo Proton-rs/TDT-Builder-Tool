@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 from tdt.config import Config
 from tdt.contracts import (
     Candidato,
@@ -10,6 +12,9 @@ from tdt.contracts import (
 from tdt.roteador import rotear
 
 CFG = Config()  # threshold_pct=0.70, threshold_gap=0.15
+# Passo de consenso é desligado por padrão (usar_consenso=False) — os testes
+# que exercitam especificamente a cascata de consenso ligam a flag.
+CFG_CONSENSO = replace(CFG, usar_consenso=True)
 
 
 def _rec(candidatos):
@@ -64,10 +69,24 @@ def test_consenso_dois_metodos_decide():
         "tfidf": [Candidato("DJ", 0.80, "tfidf"), Candidato("SEC", 0.30, "tfidf")],
         "e5": [Candidato("DJ", 0.75, "e5"), Candidato("SEC", 0.40, "e5")],
     }
-    r = rotear(_rec([Candidato("DJ", 0.90, "mesclado")]), CFG, votos=votos)
+    r = rotear(_rec([Candidato("DJ", 0.90, "mesclado")]), CFG_CONSENSO, votos=votos)
     assert r.status == "decidido"
     assert r.sigla_sinal == "DJ"
     assert "consenso" in r.justificativa.lower()
+
+
+def test_consenso_desligado_por_padrao_pula_para_quadrante():
+    # Mesmo cenário de test_consenso_dois_metodos_decide, mas com a config
+    # default (usar_consenso=False): decide pelo quadrante mesclado (gap=0.90
+    # do único candidato), não pela justificativa de consenso.
+    votos = {
+        "tfidf": [Candidato("DJ", 0.80, "tfidf"), Candidato("SEC", 0.30, "tfidf")],
+        "e5": [Candidato("DJ", 0.75, "e5"), Candidato("SEC", 0.40, "e5")],
+    }
+    r = rotear(_rec([Candidato("DJ", 0.90, "mesclado")]), CFG, votos=votos)
+    assert r.status == "decidido"
+    assert r.sigla_sinal == "DJ"
+    assert "consenso" not in r.justificativa.lower()
 
 
 def test_sem_consenso_vai_revisao():
@@ -88,7 +107,7 @@ def test_gap_dinamico_um_metodo_exige_gap_maior():
         "e5": [Candidato("DJ", 0.30, "e5"), Candidato("SEC", 0.25, "e5")],
     }
     rec = _rec([Candidato("DJ", 0.60, "mesclado"), Candidato("SEC", 0.50, "mesclado")])
-    r = rotear(rec, CFG, votos=votos)
+    r = rotear(rec, CFG_CONSENSO, votos=votos)
     assert r.status == "revisao"
 
 
