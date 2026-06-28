@@ -22,7 +22,7 @@ import faiss
 import numpy as np
 
 from tdt.contracts import MapaColunas
-from tdt.vocabulario_tipo import CODIGOS_TIPO, VOCAB as _TIPO_VOCAB
+from tdt.normalizacao.vocabulario_tipo import CODIGOS_TIPO, VOCAB as _TIPO_VOCAB
 
 _INT = re.compile(r"^-?\d+$")
 

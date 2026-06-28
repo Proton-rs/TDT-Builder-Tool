@@ -1,6 +1,6 @@
 from tdt.config import Config
 from tdt.dados.lista_padrao import SinalPadrao
-from tdt.estruturador_homogeneo import detectar_header, estruturar_homogeneo
+from tdt.normalizacao.estruturador_homogeneo import detectar_header, estruturar_homogeneo
 
 
 def test_detectar_header_acha_linha_no_formato_fixo():

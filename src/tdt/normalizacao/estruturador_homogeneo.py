@@ -6,12 +6,12 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from tdt.config import Config
-from tdt.contracts import Descricoes, Eletrico, Enderecamento, Modulo, SignalRecord, TipoSinal
-from tdt.dados.lista_padrao import ListaPadraoADMS
-from tdt.estruturador import _parse_indices
-from tdt.normalizador import canonizar, extrair_contexto_estrutural
-from tdt.vocabulario_tipo import CODIGOS_TIPO
+from ..config import Config
+from ..contracts import Descricoes, Eletrico, Enderecamento, Modulo, SignalRecord, TipoSinal
+from ..dados.lista_padrao import ListaPadraoADMS
+from .estruturador import _parse_indices
+from .normalizador import canonizar, extrair_contexto_estrutural
+from .vocabulario_tipo import CODIGOS_TIPO
 
 _MAX_SCAN = 30
 

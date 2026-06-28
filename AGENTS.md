@@ -30,7 +30,7 @@ Transformar planilha Excel de pontos de subestação em arquivo **TDT** (EcoStru
 
 ## Ownership
 - Decomposição: **SP1** backbone determinístico+embeddings (DNP3) — implementado; **SP2** agentes LLM (em espera); **SP4** UI desktop — implementado. SP3 absorvido no SP1.
-- Código vive em `src/tdt/` (pipeline) e `src/tdt/ui/` (UI PySide6). Specs em `docs/superpowers/specs/`.
+- Código vive em `src/tdt/` (pipeline: módulos raiz + sub-dirs `normalizacao/`, `analise/`, `scoring/`, `matchers/`, `dados/`) e `src/tdt/ui/` (UI PySide6). Specs em `docs/superpowers/specs/`.
 
 ## Local Contracts (regras globais do projeto)
 - **SRP**: 1 módulo = 1 responsabilidade; função pura quando possível; tipos trocados via `src/tdt/contracts.py`. Só `pipeline.py` conhece todos os módulos.
@@ -51,6 +51,7 @@ Transformar planilha Excel de pontos de subestação em arquivo **TDT** (EcoStru
 
 ## Child DOX Index
 - `src/tdt/AGENTS.md` — código do SP1 (módulos, contrato, orquestração) + SP4 (UI PySide6 em `src/tdt/ui/`).
+- `scripts/AGENTS.md` — scripts utilitários de calibração, treino e enriquecimento.
 - `tests/AGENTS.md` — convenções de teste/fixtures.
 - `bench/AGENTS.md` — harness de benchmark e ground-truth.
 - `docs/AGENTS.md` — specs, inputs e templates.

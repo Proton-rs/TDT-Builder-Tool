@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from tdt.analise_colunas import _header_por_densidade, _ncols, _valores_coluna
+from .analise_colunas import _header_por_densidade, _ncols, _valores_coluna
 
 _INT = re.compile(r"^-?\d+$")
 _MAX_SCAN = 60  # linhas para amostrar a estrutura da sheet

@@ -1,6 +1,6 @@
 import numpy as np
 
-from tdt.analise_colunas import analisar, normalizar_emb
+from tdt.analise.analise_colunas import analisar, normalizar_emb
 
 # vocab compartilhado entre valores das colunas e a referência ADMS
 _VOCAB = ["FALHA", "COMUNICACAO", "DISJUNTOR", "ABERTO", "CORRENTE", "FASE",

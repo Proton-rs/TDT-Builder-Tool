@@ -23,7 +23,7 @@ from openpyxl.worksheet.datavalidation import DataValidation
 
 from tdt.contracts import ListaHomogenea, SignalRecord
 from tdt.dados.lista_padrao import ListaPadraoADMS
-from tdt.normalizador import FASES
+from tdt.normalizacao.normalizador import FASES
 
 SHEET_DISCRETOS = "DNP3_DiscreteSignals"
 COLUNAS_ESPERADAS = 43

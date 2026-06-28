@@ -223,7 +223,7 @@ _DISC_CACHE: dict[int, dict[str, tuple[str, frozenset[str]]]] = {}
 def _indice_discriminadores(
     lista_padrao, config: Config
 ) -> dict[str, tuple[str, frozenset[str]]]:
-    from tdt.normalizador import canonizar  # import tardio: evita ciclo
+    from tdt.normalizacao.normalizador import canonizar  # import tardio: evita ciclo
     idx: dict[str, tuple[str, frozenset[str]]] = {}
     for s in (*lista_padrao.discretos, *lista_padrao.analogicos):
         sig = s.sigla.upper()

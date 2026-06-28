@@ -95,3 +95,48 @@ Por módulo (agrupado por `modulo.nome`), para cada registro com `eletrico.equip
 - Classificar o tipo de módulo / identificar o módulo real → C1 (pré-requisito).
 - Minerar a Full Base para popular a tabela de topologia → C3 (C2 consome a tabela; pode ser semente manual até C3 existir).
 - Refinamento por LLM de casos ambíguos (SP2) → fora; ambíguo vai pra revisão.
+
+---
+
+## Atualização 2026-06-28 — C2.4: subdivisão de módulo por lado AT/BT
+
+### Problema (evidência da medição real)
+
+No transformador, o mesmo módulo `TR1` recebe **duas** vezes a corrente de cada
+fase (ex.: `IA` no endereço 600 **e** 608) — um conjunto no lado de alta (AT) e
+outro na baixa (BT). Com a chave `(módulo, equip, sigla)` e sem equipamento nos
+sinais de medição, os dois `IA` colidem → `endereco_duplicado`. Isso responde
+por boa parte dos ~350 `endereco_duplicado` restantes (correntes/tensões do
+trafo).
+
+### Ground-truth (TDT real)
+
+`docs/TDT/exportTDT_UTR_GTD_*.xlsx` mostra que o ADMS **subdivide o trafo por
+lado no nome do módulo**: `GTD_TR1AT_…`, `GTD_TR1BT_…` (e a coluna
+`MEASUREMENT_SIDE` carrega o lado). Ou seja, `TR1AT` e `TR1BT` são módulos
+distintos — é assim que os dois `IA` deixam de colidir.
+
+### Proposta (C2.4)
+
+Quando o tipo de módulo é Transformador, **derivar o lado (AT/BT)** de cada
+sinal e anexá-lo ao nome do módulo (`TR1`→`TR1AT`/`TR1BT`), tornando a chave de
+deduplicação naturalmente única. Pistas de lado, em ordem:
+
+1. Seção/sheet (sheets `TR1_A`/`TR1_P` ou marcadores internos de seção AT/BT).
+2. `eletrico.nivel_tensao` / tokens de lado já extraídos (`r6_lado_tensao`:
+   PRIMÁRIO/ALTA→AT, SECUNDÁRIO/BAIXA→BT).
+3. Faixa de endereço contígua (o bloco AT e o bloco BT costumam ser contíguos).
+
+Sem pista de lado confiável ⇒ **não** subdivide; o caso continua em revisão
+(`endereco_duplicado`) — mantém o invariante "sem falso positivo".
+
+`# ponytail: só subdivide trafo quando o lado é determinável; senão revisão.`
+
+### Integração / dependências
+
+- Roda em C2.3 (após C1, antes do scoring/dedup), junto com a inferência de
+  equipamento — o lado precisa estar no `modulo.nome` antes de
+  `normalizador_estrutural.corrigir` agrupar.
+- Validar com a TDT real: `GTD_TR1AT_*`/`GTD_TR1BT_*` como gabarito.
+- Gate: `endereco_duplicado` cai (correntes/tensões do trafo deixam de colidir)
+  sem aumentar FP.

@@ -1,5 +1,5 @@
 from tdt.config import Config
-from tdt.normalizador import (
+from tdt.normalizacao.normalizador import (
     ContextoEstrutural,
     canonizar,
     corrigir_typos,

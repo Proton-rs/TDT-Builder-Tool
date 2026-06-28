@@ -13,7 +13,7 @@ for _p in (str(_root / "src"), _script_dir / "treino", _script_dir / "enriquecer
 
 import faiss, numpy as np
 from tdt.config import Config
-from tdt.normalizador import canonizar
+from tdt.normalizacao.normalizador import canonizar
 from tdt.dados.lista_padrao import ListaPadraoADMS
 from tdt.dados.encoder import criar_encoder
 from tdt.scoring.tfidf import ScorerTFIDF

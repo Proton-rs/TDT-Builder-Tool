@@ -1,6 +1,6 @@
 import openpyxl
 
-from tdt.identificador import classificar, ler_rows
+from tdt.analise.identificador import classificar, ler_rows
 
 
 def test_detecta_sheets_de_dados_no_nao_homogeneo(docs):

@@ -10,7 +10,7 @@ from tdt.contracts import (
     Candidato, Descricoes, Enderecamento, Modulo, SignalRecord, TipoSinal,
 )
 from tdt.filtro_preciso import _DISC_CACHE, filtrar_especificidade
-from tdt.normalizador import canonizar, normalizar_estagio
+from tdt.normalizacao.normalizador import canonizar, normalizar_estagio
 
 
 @dataclass(frozen=True)

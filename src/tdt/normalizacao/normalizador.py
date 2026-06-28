@@ -32,8 +32,8 @@ from dataclasses import dataclass
 
 from rapidfuzz import fuzz
 
-from tdt.config import Config
-from tdt.tokenizer import tokenizar
+from ..config import Config
+from .tokenizer import tokenizar
 
 _SEPARADORES = re.compile(r"[/\-.(),;:]")
 _SIGLA_ENTRE_PAREN = re.compile(r"\(([^)]+)\)")  # N0.5 — conteúdo relevante entre parênteses

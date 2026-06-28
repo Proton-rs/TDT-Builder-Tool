@@ -1,6 +1,6 @@
 from tdt.config import Config
 from tdt.contracts import MapaColunas
-from tdt.estruturador import estruturar
+from tdt.normalizacao.estruturador import estruturar
 
 CFG = Config()
 

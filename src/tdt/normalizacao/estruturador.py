@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import re
 
-from tdt.config import Config
-from tdt.contracts import (
+from ..config import Config
+from ..contracts import (
     Descricoes,
     Eletrico,
     Enderecamento,
@@ -20,8 +20,8 @@ from tdt.contracts import (
     SignalRecord,
     TipoSinal,
 )
-from tdt.normalizador import canonizar, extrair_contexto_estrutural
-from tdt.vocabulario_tipo import classificar as _classificar, norm as _norm
+from .normalizador import canonizar, extrair_contexto_estrutural
+from .vocabulario_tipo import classificar as _classificar, norm as _norm
 
 
 def _eh_marcador(row: tuple, col0: int) -> bool:

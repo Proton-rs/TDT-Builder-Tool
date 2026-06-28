@@ -1,4 +1,4 @@
-from tdt.vocabulario_tipo import classificar
+from tdt.normalizacao.vocabulario_tipo import classificar
 
 
 def test_classifica_palavra_completa_analogica():

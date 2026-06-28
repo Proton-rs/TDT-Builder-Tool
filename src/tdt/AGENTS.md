@@ -25,7 +25,9 @@ UI: telas em `ui/` compartilham `AppState` mutável; `PipelineWorker` isola o pi
 `python -m pytest -q tests/` (raiz); `PYTHONPATH=src python -c "import tdt.pipeline"`; UI: `PYTHONPATH=src python -m tdt.ui_main`.
 
 ## Child DOX Index
+- `normalizacao/AGENTS.md` — normalização N0..N5, tokenizer, vocabulário, estruturadores.
+- `analise/AGENTS.md` — análise de colunas por conteúdo, identificação de rota.
 - `scoring/AGENTS.md` — scorers (tfidf, vetorial, mescla).
 - `matchers/AGENTS.md` — métodos alternativos benchmarkáveis (fuzzy, cross_encoder).
 - `dados/AGENTS.md` — serviços de dados (lista padrão, índice vetorial, encoder).
-- `ui/` — telas PySide6 (TelaInicial, TelaConfig, TelaRevisao), AppState, PipelineWorker, ModeloSinais, config_io, tema.qss, app.py e ui_main.py.
+- `ui/AGENTS.md` — telas PySide6 (TelaInicial, TelaConfig, TelaRevisao, TelaAnalise), AppState, PipelineWorker, modelos, proxy, delegate.

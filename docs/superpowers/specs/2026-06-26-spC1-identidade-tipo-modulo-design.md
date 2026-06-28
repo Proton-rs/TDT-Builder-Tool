@@ -119,3 +119,47 @@ Estratégia em cascata (para no primeiro acerto):
 - Minerar a Full Base para saber quais sinais existem por tipo (5.1) ou o Measurement Type (5.3) → C3.
 - Extrair cabeçalhos/títulos/observações da sheet como contexto (5.2) → C4.
 - Refinamento por LLM de casos ambíguos (SP2) → fora; C1 manda ambíguo pra revisão.
+
+---
+
+## Atualização 2026-06-28 (evidência da medição real + parcial implementado)
+
+### Já implementado (parcial de C1.1)
+
+`resolver_modulo` agora é **posicional**: pega o número logo após um prefixo
+mapeado que aparece **uma única vez** (canônico distinto único). Isso recupera
+`BC1_P1`→`BC1`, `BC3_P2`→`BC3` (o sufixo de barra `_P1`/`_P2` deixou de
+quebrar), preserva `AL FWB15`→`AL15` (sinônimo) e mantém `SPS_TR1_TR2` em
+`baixa` (TR aparece 2×, ambíguo). Falta: slot/por-linha (C1.1 passos 4-5) e os
+prefixos abaixo.
+
+### Medição real (`input_nao_homogeneo_1`, GTA) — 756 sinais `modulo_indefinido`
+
+Quebra por sheet/prefixo não-mapeado (maior gargalo de revisão restante):
+
+| Prefixo/sheet | Sinais | Natureza |
+|---|--:|---|
+| `01F1_GTA_P`, `01F1_KGC_P` | 206 | bay/vão (`01F1`) — prefixo não-mapeado |
+| `TRF3_P`, `TRF-1`, `TRF-2` | 300 | **`TRF` (trafo)** — ambíguo: mapear `TRF`→`TR` mesclaria com `TR1`/`TR2` (sheets distintas). **Confirmar com o usuário** se são o mesmo trafo |
+| `87B_AT/MT1/MT2` | 115 | proteção de **barra** (`87B`) |
+| `IB_23kV` | 60 | interbarras/acoplamento (`IB`) |
+| `PSACA_CC` | 68 | serviço auxiliar / CC |
+| `SPS_TR1_TR2` | 27 | esquema especial (2 trafos) — ambíguo por construção |
+
+**Decisão do usuário (26-jun):** sinal com sigla decidida mas módulo
+`baixa`-confiança **continua indo pra revisão** (`modulo_indefinido`) — não
+manter em decididos. C1 não muda essa política; só busca **resolver mais
+módulos** (menos `baixa`).
+
+### Ground-truth de nomeação (TDT real)
+
+`docs/TDT/exportTDT_UTR_{GTD,FWB}_*.xlsx` confirmam o módulo no nome
+`{SE}_{MÓDULO}_{EQUIP}_{SIGLA}`: `GTD_AL21_…`, `GTD_TR1AT_…`, `GTD_LTGTA_…`.
+Útil como **gabarito** para validar `resolver_modulo` (extrair o 2º segmento
+do `Signal Name` e comparar). Sobrepõe-se à `SP-GT`.
+
+### Sheets que não são de dados
+
+`Capa`, `Consistidos`, `CTR`, `UCCD1` entram como sheets de dados e geram
+sinais-lixo (todos pra revisão). **Adicionar à C1 (ou ao identificador):**
+lista/heurística de exclusão de sheets não-DNP3 (capa, índice, consistência).

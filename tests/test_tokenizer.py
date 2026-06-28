@@ -1,4 +1,4 @@
-from tdt.tokenizer import tokenizar
+from tdt.normalizacao.tokenizer import tokenizar
 
 
 def test_junta_sigla_separada():

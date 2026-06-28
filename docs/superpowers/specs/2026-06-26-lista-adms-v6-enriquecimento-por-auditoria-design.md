@@ -282,3 +282,44 @@ Trocar para v6 em:
 3. **Curadoria** — revisar `v6_variantes_propostas.csv`, ajustar se necessário.
 4. **Pipeline completo** — rodar com v6, medir queda em revisão.
 5. **Switch de default** (se validado).
+
+---
+
+## Atualização 2026-06-28 (após melhorias do motor de regras)
+
+Fecha a spec com o aprendizado de rodar o pipeline corrigido na
+`input_nao_homogeneo_1` (GTA, 2.372 sinais) + decisão do brainstorm.
+
+### Decisão travada — fonte (revisa "Decisões travadas")
+
+- **Fonte = auditoria existente, SÓ sinais `decidido`.** Descartar os pares
+  hipotéticos (status `revisao`, Candidato 1 ≥ 0.30) nesta primeira iteração —
+  o ruído de herdar sigla errada supera o ganho. Reavaliar depois.
+- Os `output/*/Auditoria_Revisao*.xlsx` vieram do pipeline **antigo** (decidia
+  genérico `79` onde hoje é `79LO`, `DJA1` falso). Como usamos só `decidido` e
+  só **adicionamos termos à descrição da sigla já escolhida**, herdar a sigla é
+  aceitável — mas curadoria deve excluir siglas espúrias (ex.: `DJA1`, que não
+  existe na TDT real da GTD).
+
+### Foco redefinido — v6 ataca o "catch-all"
+
+O motor de regras já resolve a especificidade de **famílias ANSI numeradas**
+(`filtro_preciso.filtrar_especificidade`: `79 Bloqueado`→`79LO`, `81 Estágio 1`
+→`81E1`). A v6 **não** precisa mirar esses casos.
+
+O alvo da v6 são as **siglas catch-all NÃO-numeradas** (`PRTF`, `FCMR`, `MTRF`,
+`SECC`, `CMD`) que absorvem muitos sinais distintos no mesmo módulo — causa
+dominante de `endereco_duplicado` e `pareamento_ambiguo` na medição real. A
+descrição v2 dessas siglas é genérica demais; a v6 dá os termos discriminadores
+reais (por-sigla, sem canibalizar) para o scorer **surfar a sigla específica
+certa**, complementando o motor de regras (que só reordena o que foi surfado).
+
+### Validação — usar o GT da SP-GT
+
+A `SP-GT` (~756 + variações reais) é a régua correta para o gate da v6.
+**Dependência nova:** validar contra o GT expandido, não os 28 pares. Gate
+inalterado: acc@1 ≥ 82%, prec@dec ≥ 95%.
+
+### Ordem recomendada
+
+SP-GT (régua) → v6 (enriquecimento) → SP-Decision (re-tunar thresholds).

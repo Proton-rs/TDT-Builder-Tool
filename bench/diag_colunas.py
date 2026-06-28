@@ -8,11 +8,11 @@ warnings.simplefilter("ignore"); logging.disable(logging.CRITICAL)
 
 import openpyxl
 from tdt.config import Config
-from tdt.analise_colunas import analisar, normalizar_emb, _norm
-from tdt.normalizador import canonizar
+from tdt.analise.analise_colunas import analisar, normalizar_emb, _norm
+from tdt.normalizacao.normalizador import canonizar
 from tdt.dados.lista_padrao import ListaPadraoADMS
 from tdt.dados.encoder import criar_encoder
-from tdt.identificador import classificar, ler_rows
+from tdt.analise.identificador import classificar, ler_rows
 
 inp = sys.argv[1] if len(sys.argv) > 1 else "docs/input_nao_homogeneo_1.xlsx"
 HEADERISH = ("DESCRICAO", "DESCRICAO DO PONTO", "DESCRICAO PONTO")

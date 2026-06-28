@@ -24,19 +24,19 @@ from tdt import (
     motor_regras, roteador,
 )
 from tdt.motor_regras import fase_da_sigla
-from tdt.analise_colunas import analisar
+from tdt.analise.analise_colunas import analisar
 from tdt.auditoria import Auditoria
 from tdt.cache_scorers import carregar_ou_construir
 from tdt.config import Config
 from tdt.contracts import Diagnostico, ItemRevisao, ResultadoPipeline, SignalRecord
 from tdt.dados.indice_vetorial import IndiceVetorial
 from tdt.dados.lista_padrao import ListaPadraoADMS
-from tdt.estruturador import estruturar
-from tdt.estruturador_homogeneo import detectar_header, estruturar_homogeneo
+from tdt.normalizacao.estruturador import estruturar
+from tdt.normalizacao.estruturador_homogeneo import detectar_header, estruturar_homogeneo
 from tdt.identidade_modulo import aplicar_identidade, particionar_por_confianca
-from tdt.identificador import classificar, ler_rows
+from tdt.analise.identificador import classificar, ler_rows
 from tdt.matchers.fuzzy_match import FuzzyMatcher
-from tdt.normalizador import canonizar
+from tdt.normalizacao.normalizador import canonizar
 from tdt.normalizador_estrutural import corrigir
 from tdt.pareamento_polaridade import forcar_polaridade_equipamento
 from tdt.scoring import mescla
