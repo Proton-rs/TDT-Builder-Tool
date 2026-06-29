@@ -7,6 +7,14 @@ from __future__ import annotations
 
 import unicodedata
 
+# SP-Direção / D1: diagnóstico nas planilhas reais `docs/GTD - Lista de Pontos
+# V11.xlsx` (coluna "Tipo": "Comando D"/"Comando S"/"Digital Simples"/
+# "Analógico"; marcadores de seção: "Comandos", "Comandos Módulos AT/MT/TR",
+# "Digitais (Controle)") e `docs/Lista de Pontos FredW V13 - DNP3.xlsx`
+# (coluna "Tipo": códigos de 1 letra A/C/D) mostrou que TODOS os termos de
+# comando reais já casam com `COMANDO`/`CODIGOS_TIPO` abaixo — "COMANDO" é
+# substring de "Comando D"/"Comandos", e "C" já mapeia para Output. Nenhum
+# termo de comando ficou sem reconhecer; vocabulário não foi estendido.
 ANALOG = ("ANALOGIC", "MEDIDA", "MEDICAO", "GRANDEZA")
 COMANDO = ("COMANDO", "CONTROLE", "TELECOMANDO")
 DISCRETO = ("DIGITAL", "DIGITAIS", "DISCRET", "SINALIZ", "STATUS", "ESTADO", "INDICAC")
