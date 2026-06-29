@@ -10,7 +10,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from .analise_colunas import _header_por_densidade, _ncols, _valores_coluna
+from .analise_colunas import _header_por_densidade, _ncols, _norm, _valores_coluna
+from ..config import Config
 
 _INT = re.compile(r"^-?\d+$")
 _MAX_SCAN = 60  # linhas para amostrar a estrutura da sheet
@@ -59,8 +60,12 @@ def _eh_sheet_dados(ws) -> bool:
     return _tem_coluna_inteiros(rows, inicio, ncols) and _tem_coluna_texto(rows, inicio, ncols)
 
 
-def classificar(workbook, override: str = "auto") -> Rota:
-    sheets = [sn for sn in workbook.sheetnames if _eh_sheet_dados(workbook[sn])]
+def classificar(workbook, override: str = "auto", config: Config | None = None) -> Rota:
+    excluidas = config.sheets_excluidas if config is not None else frozenset()
+    sheets = [
+        sn for sn in workbook.sheetnames
+        if _norm(sn) not in excluidas and _eh_sheet_dados(workbook[sn])
+    ]
 
     if override == "homogeneo":
         homogeneo = True

@@ -30,9 +30,21 @@ class ResolucaoModulo:
 
 def resolver_modulo(sheet_name: str, rows: list[tuple], config: Config) -> ResolucaoModulo:
     toks = _tokens(sheet_name)
-    # Ocorrências (posicionais) de prefixos mapeados. Sufixos de barra/proteção
-    # (_P1, _P2) adicionam números que NÃO são o nº do módulo — por isso usamos
-    # o número imediatamente após o prefixo, não "exatamente um número global".
+    # Estratégia 1: alias direto por sheet_name inteiro normalizado (mais
+    # específica — checa primeiro). Cobre sheet_names que não decompõem em
+    # prefixo+número de forma confiável: bay/vão sem número de módulo
+    # ("01F1_GTA_P" -> "LTGTA"), número embutido que NÃO é o nº do módulo
+    # ("IB_23kV": 23 é a tensão, não o módulo -> "IB"), siglas próprias
+    # ("87B_AT" -> "87BAT"). Exato/literal por sheet_name — sem ambiguidade,
+    # confirmado contra os dados reais (coluna de módulo + ground-truth TDT
+    # exportado). Tabela em config.mapa_sheet_modulo.
+    chave = "".join(toks)
+    if chave in config.mapa_sheet_modulo:
+        return ResolucaoModulo(nome=config.mapa_sheet_modulo[chave], confianca="alta")
+    # Estratégia 2: posicional — prefixo mapeado seguido do número do módulo.
+    # Sufixos de barra/proteção (_P1, _P2) adicionam números que NÃO são o nº
+    # do módulo — por isso usamos o número imediatamente após o prefixo, não
+    # "exatamente um número global".
     ocorr = [
         (i, config.mapa_prefixo_modulo[t])
         for i, t in enumerate(toks)
@@ -56,7 +68,13 @@ def resolver_modulo(sheet_name: str, rows: list[tuple], config: Config) -> Resol
 
 
 def classificar_tipo(modulo_nome: str, registros: list[SignalRecord], config: Config) -> str:
-    # 1. por prefixo do nome do módulo
+    # 1. por nome completo (ex.: "87BAT") ou por prefixo/token do nome do
+    # módulo. Nome completo primeiro: alguns módulos (87B_AT -> "87BAT") não
+    # tokenizam num prefixo alfabético isolado (87 e BAT ficam juntos), então
+    # tipo_por_prefixo também aceita o nome inteiro como chave.
+    nome_norm = "".join(_tokens(modulo_nome))
+    if nome_norm in config.tipo_por_prefixo:
+        return config.tipo_por_prefixo[nome_norm]
     for tok in _tokens(modulo_nome):
         if tok in config.tipo_por_prefixo:
             return config.tipo_por_prefixo[tok]

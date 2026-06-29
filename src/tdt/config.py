@@ -97,10 +97,14 @@ class Config:
         default_factory=lambda: {"alta": 0.05, "media": 0.10, "baixa": 0.15}
     )
     # Identidade do módulo (C1) — sementes calibráveis; confirmar nos inputs.
+    # TRF é módulo de Transferência, distinto de TR (Transformador) — confirmado
+    # no ground-truth real (exportTDT_UTR_{GTD,FWB}): TRF1/TRF2/TRF03 coexistem
+    # com TR1/TR2/TR1AT/TR2BT no mesmo TDT. NÃO fundir TRF com TR (spC1 28/jun).
     mapa_prefixo_modulo: dict[str, str] = field(
         default_factory=lambda: {
             "AL": "AL", "GTD": "AL", "FWB": "AL",
             "LT": "LT", "BC": "BC", "TR": "TR",
+            "TRF": "TRF", "IB": "IB",
         }
     )
     tipo_por_prefixo: dict[str, str] = field(
@@ -109,6 +113,15 @@ class Config:
             "LT": "Linha de Transmissão",
             "BC": "Banco de Capacitores",
             "TR": "Transformador",
+            "TRF": "Transferência",
+            "IB": "Barra",
+            # "87B*" não tokeniza num prefixo alfabético isolado (87 fica
+            # junto de "B"+sufixo) -- classificar_tipo também aceita o nome
+            # completo do módulo como chave; daí os 3 nomes literais abaixo.
+            "87BAT": "Barra",
+            "87BMT1": "Barra",
+            "87BMT2": "Barra",
+            "PSACA": "Outros",
         }
     )
     palavras_chave_tipo: dict[str, tuple[str, ...]] = field(
@@ -119,4 +132,31 @@ class Config:
             "Barra": ("BARRA",),
             "Transferência": ("TRANSFERENCIA",),
         }
+    )
+    # Alias direto sheet_name (tokens concatenados, sem separadores/espaços,
+    # upper-case — mesma normalização de identidade_modulo._tokens) -> nome do
+    # módulo real, p/ casos onde o sheet_name não decompõe em prefixo+número
+    # (medição real em input_nao_homogeneo_1/GTA, 28-jun): bay/vão com sufixo
+    # textual (LT_GTA/LT_KGC), proteção de barra (87B_*) e siglas próprias (IB,
+    # PSACA) cujo número embutido não é o número do módulo — ex.: "23" em
+    # IB_23kV é a tensão (23kV), não o módulo; confirmado no TDT real
+    # (exportTDT_UTR_GTD/FWB): o módulo de interbarras lá é "IB", sem número.
+    mapa_sheet_modulo: dict[str, str] = field(
+        default_factory=lambda: {
+            "01F1GTAP": "LTGTA", "01F1GTAA": "LTGTA",
+            "01F1KGCP": "LTKGC", "01F1KGCA": "LTKGC",
+            "87BAT": "87BAT",
+            "87BMT1": "87BMT1",
+            "87BMT2": "87BMT2",
+            "IB23KV": "IB",
+            "PSACACC": "PSACA",
+        }
+    )
+    # Sheets que não são de dados DNP3 (capa, índice, consolidação cross-
+    # módulo) — entram hoje como sheets_dados e geram só sinais-lixo de
+    # revisão (medição real 28-jun: Consistidos mistura LT_GTA/87B-AT/TR1_MT
+    # na mesma sheet por ser um índice, não dados de um módulo). Nome exato,
+    # comparação normalizada (upper, sem acentos) em identificador.classificar.
+    sheets_excluidas: frozenset[str] = frozenset(
+        {"CAPA", "CONSISTIDOS", "CTR", "UCCD1"}
     )

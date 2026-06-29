@@ -64,6 +64,75 @@ def test_resolver_modulo_dois_prefixos_distintos_e_ambiguo():
     assert r.nome == "LT TR 3"
 
 
+# --- Item 1 (28-jun): prefixos expandidos a partir da medição real em
+# input_nao_homogeneo_1 (GTA). TRF é módulo de Transferência, distinto de TR
+# (Transformador) -- confirmado no ground-truth real (TDT exportado tem
+# TRF1/TRF2/TRF03 E TR1/TR2/TR1AT/TR2BT no mesmo arquivo).
+
+
+def test_resolver_modulo_trf_nao_funde_com_tr():
+    cfg = Config()
+    assert resolver_modulo("TRF3_P", [], cfg).nome == "TRF3"
+    assert resolver_modulo("TRF3_P", [], cfg).confianca == "alta"
+    assert resolver_modulo("TRF-1", [], cfg).nome == "TRF1"
+    assert resolver_modulo("TRF-2", [], cfg).nome == "TRF2"
+    # TR e TRF continuam famílias distintas -- nunca um TR* sai como TRF* nem vice-versa.
+    assert resolver_modulo("TR1_P", [], cfg).nome == "TR1"
+
+
+def test_resolver_modulo_alias_direto_por_sheet_bay_sem_numero():
+    # 01F1_GTA_P / 01F1_KGC_P: módulo real (confirmado na coluna B do input
+    # real e no ground-truth do TDT) é LT_GTA/LT_KGC -- sheet_name não tem
+    # prefixo numérico decomponível (01F1 é o IED, não o módulo).
+    cfg = Config()
+    r = resolver_modulo("01F1_GTA_P", [], cfg)
+    assert r.nome == "LTGTA"
+    assert r.confianca == "alta"
+    assert resolver_modulo("01F1_KGC_P", [], cfg).nome == "LTKGC"
+
+
+def test_resolver_modulo_alias_direto_barra_87b():
+    cfg = Config()
+    assert resolver_modulo("87B_AT", [], cfg).nome == "87BAT"
+    assert resolver_modulo("87B_AT", [], cfg).confianca == "alta"
+    assert resolver_modulo("87B_MT1", [], cfg).nome == "87BMT1"
+    assert resolver_modulo("87B_MT2", [], cfg).nome == "87BMT2"
+
+
+def test_resolver_modulo_alias_direto_ib_ignora_numero_de_tensao():
+    # IB_23kV: "23" é a tensão (23kV), não o número do módulo -- confirmado no
+    # TDT real (módulo de interbarras lá é "IB", sem número).
+    cfg = Config()
+    r = resolver_modulo("IB_23kV", [], cfg)
+    assert r.nome == "IB"
+    assert r.confianca == "alta"
+
+
+def test_resolver_modulo_alias_direto_psaca():
+    cfg = Config()
+    r = resolver_modulo("PSACA_CC", [], cfg)
+    assert r.nome == "PSACA"
+    assert r.confianca == "alta"
+
+
+def test_resolver_modulo_sps_tr1_tr2_continua_baixa_confianca():
+    # Esquema especial com 2 trafos -- ambíguo por construção, comportamento
+    # já correto antes desta mudança; só confirma que não regrediu.
+    cfg = Config()
+    r = resolver_modulo("SPS_TR1_TR2", [], cfg)
+    assert r.confianca == "baixa"
+    assert r.nome == "SPS_TR1_TR2"
+
+
+def test_classificar_tipo_trf_e_transferencia():
+    assert classificar_tipo("TRF3", [], Config()) == "Transferência"
+
+
+def test_classificar_tipo_87b_e_ib_sao_barra():
+    assert classificar_tipo("87BAT", [], Config()) == "Barra"
+    assert classificar_tipo("IB", [], Config()) == "Barra"
+
+
 def _rec(norm: str) -> SignalRecord:
     return SignalRecord(
         id="t:1",

@@ -335,7 +335,7 @@ def executar(
     aud.evento("pipeline", f"lista padrão: {len(corpus)} sinais discretos", "INFO")
 
     wb_in = openpyxl.load_workbook(input_path, read_only=True, data_only=True)
-    rota = classificar(wb_in, override=modo)
+    rota = classificar(wb_in, override=modo, config=config)
     aud.evento("identificador", f"homogêneo={rota.homogeneo}, {len(rota.sheets_dados)} sheets", "INFO")
 
     decididos: list[SignalRecord] = []
