@@ -25,6 +25,8 @@ _MOTIVO_LABEL = {
     "categoria_ambigua": "Categoria ambígua",
     "endereco_duplicado": "Endereço duplicado",
     "sem_fix": "Sem correção automática",
+    "modulo_indefinido": "Módulo indefinido",
+    "equipamento_ambiguo": "Equipamento ambíguo",
 }
 
 # Cores por faixa de confiança (texto). ponytail: faixas fixas; threshold de

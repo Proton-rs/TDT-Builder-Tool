@@ -57,6 +57,9 @@ class Eletrico:
     equipamento_alvo: str | None = None
     nome_equipamento: str | None = None  # "52-10"
     barra: str | None = None  # "Principal" | "Auxiliar"
+    equipamento_inferido: bool = False  # True quando equipamento_alvo veio de
+    # inferência por topologia (C2.2), não extração explícita do texto —
+    # distingue "inferido" de "extraído" para a auditoria.
 
 
 @dataclass(frozen=True)
@@ -139,6 +142,22 @@ class ItemRevisao:
 class ResultadoPipeline:
     lista: ListaHomogenea
     revisao: tuple[ItemRevisao, ...]
+
+
+@dataclass(frozen=True)
+class Topologia:
+    """Composição típica de equipamentos de um tipo de módulo (C2.1).
+
+    ``default`` é o equipamento ao qual um sinal sem equipamento explícito é
+    atribuído quando a topologia tem um principal não-ambíguo (ex.:
+    alimentador -> 1 disjuntor). ``None`` quando o tipo não tem principal
+    claro (ex.: barra com vários elementos) — nesse caso a inferência não
+    chuta: o sinal vai para revisão (C2.2).
+    """
+
+    equipamentos: tuple[str, ...]
+    default: str | None = None
+    cardinalidade: dict[str, object] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

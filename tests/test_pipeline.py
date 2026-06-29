@@ -469,3 +469,25 @@ def test_permanece_ambiguo_quando_gap_e_centroide_empatam():
 def test_gap_de_candidato_unico_e_o_proprio_score():
     rec = _rec_com_candidatos(0.90)
     assert _gap(rec) == 0.90
+
+
+# --- SP C2: inferência de equipamento por topologia visível ao scoring ------
+
+
+def test_equipamento_inferido_fica_visivel_no_registro_decidido(
+    tmp_path, template_dnp3_path, lista_padrao_path,
+):
+    """C2.3: equipamento_alvo inferido pela topologia (C1 resolve o módulo
+    como Alimentador via GTD->AL) chega ao registro final decidido -- ou
+    seja, o motor de regras (r_equipamento/r3_fase) já viu o equipamento
+    inferido durante o scoring, não só depois."""
+    cfg = Config(peso_tfidf=1.0, peso_vetorial=0.0, threshold_pct=0.5, threshold_gap=0.05)
+    inp = _input_sintetico(tmp_path)  # "FALHA COMUNICACAO" sem equipamento explícito
+    resultado, _ = executar(
+        inp, template_dnp3_path, lista_padrao_path,
+        config=cfg, encoder=_fake_encoder, subestacao="X", modo="nao-homogeneo",
+    )
+    fcom = next(r for r in resultado.lista.registros if r.sigla_sinal == "FCOM")
+    assert fcom.modulo.tipo == "Alimentador"
+    assert fcom.eletrico.equipamento_alvo == "Disjuntor"  # default da topologia
+    assert fcom.eletrico.equipamento_inferido is True

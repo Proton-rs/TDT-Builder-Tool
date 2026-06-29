@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from tdt.contracts import Topologia
+
 # Expansão whole-token (só quando o token == chave), para não quebrar siglas.
 ABREVIACOES_PADRAO: dict[str, str] = {
     "DISJ": "DISJUNTOR",
@@ -159,4 +161,47 @@ class Config:
     # comparação normalizada (upper, sem acentos) em identificador.classificar.
     sheets_excluidas: frozenset[str] = frozenset(
         {"CAPA", "CONSISTIDOS", "CTR", "UCCD1"}
+    )
+    # Topologia por tipo de módulo (C2.1) — composição esperada e equipamento
+    # "default" pra inferência (C2.2). Sementes mínimas: Alimentador tem
+    # principal não-ambíguo (1 disjuntor); Barra/Transferência/Outros não têm
+    # default claro (vários elementos possíveis) -- ficam None de propósito,
+    # sinal sem equipamento explícito nesses tipos vai pra revisão
+    # (equipamento_ambiguo) mantendo a sigla decidida como sugestão, não
+    # chuta o equipamento. Minerar a Full Base pra refinar fica pra C3 (fora
+    # de escopo aqui).
+    topologia_por_tipo: dict[str, Topologia] = field(
+        default_factory=lambda: {
+            "Alimentador": Topologia(
+                equipamentos=("Disjuntor", "Seccionadora"),
+                default="Disjuntor",
+                cardinalidade={"Disjuntor": 1, "Seccionadora": (2, 3)},
+            ),
+            "Linha de Transmissão": Topologia(
+                equipamentos=("Disjuntor", "Seccionadora"),
+                default="Disjuntor",
+                cardinalidade={"Disjuntor": 1, "Seccionadora": (2, 3)},
+            ),
+            "Banco de Capacitores": Topologia(
+                equipamentos=("Disjuntor", "Seccionadora"),
+                default="Disjuntor",
+                cardinalidade={"Disjuntor": 1, "Seccionadora": (1, 2)},
+            ),
+            "Transformador": Topologia(
+                equipamentos=("Disjuntor", "Seccionadora"),
+                default=None,  # AT e BT cada um tem seu disjuntor -- ambíguo
+                # sem o lado (ver C2.4); inferência de equipamento roda só
+                # depois da subdivisão AT/BT decidir o módulo.
+                cardinalidade={"Disjuntor": (1, 2), "Seccionadora": (1, 4)},
+            ),
+            "Barra": Topologia(
+                equipamentos=("Seccionadora",),
+                default=None,  # vários elementos possíveis, sem principal único
+            ),
+            "Transferência": Topologia(
+                equipamentos=("Disjuntor", "Seccionadora"),
+                default=None,
+            ),
+            "Outros": Topologia(equipamentos=(), default=None),
+        }
     )

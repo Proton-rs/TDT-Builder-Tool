@@ -35,6 +35,9 @@ from tdt.normalizacao.estruturador import estruturar
 from tdt.normalizacao.estruturador_homogeneo import detectar_header, estruturar_homogeneo
 from tdt.identidade_modulo import aplicar_identidade, particionar_por_confianca
 from tdt.analise.identificador import classificar, ler_rows
+from tdt.inferencia_topologia import (
+    derivar_secao_por_linha, inferir_equipamento, subdividir_transformador_at_bt,
+)
 from tdt.matchers.fuzzy_match import FuzzyMatcher
 from tdt.normalizacao.normalizador import canonizar
 from tdt.normalizador_estrutural import corrigir
@@ -362,6 +365,27 @@ def executar(
                        "AVISO")
             ids_indefinidos = {ir.registro.id for ir in rev_modulo}
         sinais = forcar_polaridade_equipamento(sinais, config)
+        # C2.4 (antes de C2.2): subdivide módulo Transformador por lado AT/BT
+        # quando há pista — precisa decidir o nome do módulo ANTES da
+        # inferência de equipamento (Transformador não tem default
+        # não-ambíguo sem o lado) e antes do scoring/dc_pairer agrupar por
+        # módulo (correntes/tensões do AT e do BT colidiriam na chave de
+        # dedup sem isso).
+        secao_por_linha = derivar_secao_por_linha(rows, sn)
+        sinais = subdividir_transformador_at_bt(sinais, config, secao_por_linha)
+        # C2.2/C2.3: infere equipamento_alvo pela topologia do tipo de módulo
+        # (C1) pra sinais sem equipamento explícito -- alimenta r_equipamento/
+        # r3_fase no scoring abaixo. Sinais que ficam ambíguos (sem default
+        # claro pro tipo) seguem pro scoring e, se a sigla decide com
+        # confiança, vão pra revisão (motivo="equipamento_ambiguo") MANTENDO a
+        # sigla decidida como sugestão — o revisor confirma/ajusta o
+        # equipamento (decisão do usuário 29-jun: revisão preserva a sigla).
+        ids_antes_sem_equip = {rec.id for rec in sinais if rec.eletrico.equipamento_alvo is None}
+        sinais = inferir_equipamento(sinais, config)
+        ids_equipamento_ambiguo = {
+            rec.id for rec in sinais
+            if rec.id in ids_antes_sem_equip and rec.eletrico.equipamento_alvo is None
+        }
         total = len(sinais)
         aud.evento("identificador", f"Sheet {sn}: {total} sinais lidos", "INFO")
         # Batch encode das descrições da sheet inteira — evita uma chamada ao
@@ -403,6 +427,9 @@ def executar(
             if decidido is not None:
                 if rec.id in ids_indefinidos:
                     revisao.append(ItemRevisao(decidido, motivo="modulo_indefinido",
+                                               candidatos_sugeridos=decidido.candidatos[:3]))
+                elif rec.id in ids_equipamento_ambiguo:
+                    revisao.append(ItemRevisao(decidido, motivo="equipamento_ambiguo",
                                                candidatos_sugeridos=decidido.candidatos[:3]))
                 else:
                     decididos.append(decidido)
