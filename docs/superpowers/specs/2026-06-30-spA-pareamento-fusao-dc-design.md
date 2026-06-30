@@ -1,9 +1,36 @@
 # SP-A — Pareamento & fusão D+C (status+comando → ReadWrite)
 
 **Data:** 2026-06-30
-**Status:** Aguardando revisão do usuário
+**Status:** ⛔ DROPADA — incorporada na Spec D (decisão do usuário, 30jun). Mantida
+como registro do diagnóstico A1, que é a entrada para a D.
 **Origem:** Comparação `OUTPUT_TDT.xlsx` (gerado da `GTD - Lista de Pontos V11.xlsx`)
 × TDT real `exportTDT_UTR_GTD_1_20260626.xlsx`, sheets de sinais.
+
+## ⛔ Decisão (30jun): Spec A incorporada na Spec D
+
+O diagnóstico A1 (rodado no código atual, pós-commit `3b30fba` "ancoragem por
+sigla explícita") **derrubou a premissa desta spec**:
+
+- **Verbos já resolvidos** — `3b30fba` corrigiu `LIGAR`/`DESLIGAR` virarem sigla
+  (`verbo: 0` no diagnóstico). O `OUTPUT_TDT.xlsx` com 73 Write / 32 siglas-verbo
+  era **pré-`3b30fba`**, stale.
+- **Não-fusão restante (111 de 126 comandos) é matching, não pareamento:**
+  - **68** comandos casaram uma sigla que **nenhum status do módulo tem** →
+    comando e status do mesmo sinal físico casaram **siglas diferentes**
+    (inconsistência de matching).
+  - **42** casaram sigla **catch-all** que múltiplos status têm → ambíguo qual
+    parear (precisaria do ID de equipamento, ausente no comando).
+  - **1** funde limpo relaxando o equipamento.
+- A chave do `dc_pairer` `(módulo, equip, sigla)` está **correta**; o gargalo é a
+  **resolução de sigla do comando** (que comando e status convirjam para a mesma
+  sigla padrão) — eixo de **qualidade de matching**, não de pareamento.
+
+**Decisão:** abandonar A como spec separada; a **consistência comando↔status**
+(comando deve resolver para a mesma sigla padrão do status do mesmo sinal) entra
+como um eixo da **Spec D (qualidade de matching)**. Nova ordem: B → C → D.
+Os invariantes de domínio abaixo seguem válidos e devem guiar esse eixo da D.
+
+---
 
 > Spec **A** da decomposição da análise comparativa (A pareamento/fusão D+C ·
 > B fidelidade de campo · C política `equipamento_ambiguo` · D qualidade de
