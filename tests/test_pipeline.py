@@ -570,3 +570,41 @@ def test_equipamento_inferido_fica_visivel_no_registro_decidido(
     assert fcom.modulo.tipo == "Alimentador"
     assert fcom.eletrico.equipamento_alvo == "Disjuntor"  # default da topologia
     assert fcom.eletrico.equipamento_inferido is True
+
+
+# --- SP-C: equipamento_ambiguo não bloqueia mais a emissão -------------------
+
+
+def _input_equip_ambiguo(tmp_path):
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    # "IB_1" classifica como módulo tipo Barra (sem equipamento default) --
+    # sinais sem comando (sem seção "Comandos", direção fica Input/status).
+    # 2 linhas: TF-IDF degenera com corpus de 1 doc só (IDF~0 -> mesmo score
+    # pra qualquer candidato, igual o teste_equipamento_inferido evita).
+    ws.title = "IB_1"
+    ws.append(["", "", "SUBESTAÇÃO X", "", ""])
+    ws.append(["IED", "Módulo", "Descrição do Ponto", "Tipo", "Endereço DNP3"])
+    ws.append(["Digitais", "", "", "", ""])
+    ws.append(["01F1", "IB_1", "ALARME BAIXA PRESSAO SF6", "Digital", "10"])
+    ws.append(["01F1", "IB_1", "FALHA COMUNICACAO RELE PROTECAO", "Digital", "11"])
+    p = tmp_path / "input.xlsx"
+    wb.save(p)
+    return p
+
+
+def test_equipamento_ambiguo_sem_comando_vai_pra_tdt(
+    tmp_path, template_dnp3_path, lista_padrao_path,
+):
+    """C1: sinal com sigla decidida, módulo de tipo sem equipamento default
+    (família não inferida) e SEM comando -> entra na TDT (lista.registros),
+    não vira revisão equipamento_ambiguo."""
+    cfg = Config(peso_tfidf=1.0, peso_vetorial=0.0, threshold_pct=0.4, threshold_gap=0.05)
+    inp = _input_equip_ambiguo(tmp_path)
+    resultado, _ = executar(
+        inp, template_dnp3_path, lista_padrao_path,
+        config=cfg, encoder=_fake_encoder, subestacao="GTD", modo="nao-homogeneo",
+    )
+    motivos = {it.motivo for it in resultado.revisao}
+    assert "equipamento_ambiguo" not in motivos
+    assert any(r.sigla_sinal for r in resultado.lista.registros)

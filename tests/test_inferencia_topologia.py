@@ -83,10 +83,10 @@ def test_sinal_com_pista_de_seccionadora_recebe_seccionadora_nao_default():
 # --- C2.2: tipo sem default claro -> revisão --------------------------------
 
 
-def test_tipo_sem_default_claro_fica_none_para_revisao_equipamento_ambiguo():
-    # equipamento_alvo permanece None -- pipeline.py usa isso (rec ainda sem
-    # equipamento após inferir) pra rotear o sinal a revisão com motivo
-    # "equipamento_ambiguo", MANTENDO a sigla decidida como sugestão.
+def test_tipo_sem_default_claro_fica_none():
+    # equipamento_alvo permanece None; o pipeline NÃO bloqueia por isso
+    # (Spec C) — o dc_pairer arbitra sem-comando -> TDT / comando ambíguo ->
+    # pareamento_ambiguo.
     cfg = Config()
     rec = _rec("s:1", "87BAT", "Barra", "FALHA COMUNICACAO")
     saida = inferir_equipamento([rec], cfg)
