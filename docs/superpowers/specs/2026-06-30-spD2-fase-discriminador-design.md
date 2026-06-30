@@ -1,7 +1,7 @@
 # SP-D2 — Fase como discriminador de qualificador (eixo 1, escopo fase)
 
 **Data:** 2026-06-30
-**Status:** Aprovado pelo usuário
+**Status:** Implementado e validado (com ajuste de escopo pós-implementação)
 **Origem:** D1 (`scripts/diag_qualificador.py`, commit `788a745`) — diagnóstico dos
 561 empates `score_baixo` na GTD V11. Refinamento pós-D1 (brainstorming):
 ~254 empates mesma-família ANSI; investigação manual mostrou que boa parte do
@@ -9,6 +9,26 @@ que o D1 rotulou cruamente como "estágio" é, na causa raiz, o mesmo problema
 de **fase** manifestado em duas superfícies textuais diferentes. Esta spec
 ataca só o eixo fase (a fatia mais coesa, mecanicamente bem entendida e
 self-contained do achado da D1).
+
+## Resultado real (pós-implementação, 30jun)
+
+A previsão original do critério de aceite 4 (siglas específicas como `FA`,
+`50F1` vencendo literalmente) **não se confirmou point-a-point** — o sistema
+real mistura TF-IDF+vetorial+fuzzy (não só TF-IDF, usado na validação manual
+do design) e mudanças no texto de entrada cascateiam de formas não-óbvias por
+análise manual. Em compensação, a validação na GTD V11 revelou e corrigiu um
+**efeito colateral real**: o padrão D2.2 original ("‹líder ANSI› ‹fase›")
+capturava também letra única (ex: "67 N"), o que **piorava** esses casos —
+removia o token "N" do texto sem ganho compensador (a descrição-padrão usa a
+palavra "NEUTRO", não a letra solta, então tirar "N" só perde sinal de
+embedding que o bônus fixo de regra (+0.10) não cobre). Corrigido restringindo
+D2.2 a multi-letra (`ABC`/`AB`/`BC`/`CA`) — único, coeso, sem essa ambiguidade.
+
+**Métricas finais na GTD V11** (após a correção de escopo):
+`score_baixo` 590→**520** (-70); `decididos` 1029→**1140** (+111); nenhuma
+outra categoria de revisão regrediu (totais batem: 2228=2228). Benchmark
+`combo(calib-minmax)`: acc@1 69% (igual), `decid` 81%→**82%**, prec@dec 80%
+(igual, sem queda).
 
 ## Problema (causa raiz confirmada no código, dois mecanismos independentes)
 
@@ -130,11 +150,17 @@ específica ≠ `alvo` específica) continua penalizando como hoje.
 3. `r3_fase` dá bônus quando candidato tem fase genérica (`"F"`) e o texto
    aponta fase multi-letra (`"ABC"`/`"AB"`/`"BC"`/`"CA"`); continua penalizando
    divergência explícita entre fases específicas como hoje.
-4. Na GTD V11: os pares `FA`/`PB`/`FC` (vs `PROT`) e `50F1`/`50_1` (e
-   análogos `67_1`/`67F1`, etc.) deixam de empatar sob o gap; `score_baixo`
-   cai, `decididos` sobe. `81IE1`/`81E1` e `79_EXC`/`79_INC` continuam em
-   revisão (confirma que o fix é cirúrgico, não força decisão onde a
-   ambiguidade é real).
+4. Na GTD V11: os empates `50F1`/`50_1` (e análogos `67_1`/`67F1`, `67_2`/
+   `67F2`) deixam de empatar sob o gap (um dos dois decide — qual deles
+   depende da combinação real tfidf+vetorial+fuzzy, não previsível por
+   inspeção manual); `score_baixo` cai (medido: -70), `decididos` sobe
+   (medido: +111), sem regressão em nenhuma outra categoria de revisão.
+   `81IE1`/`81E1` e `79_EXC`/`79_INC` continuam em revisão (confirma que o
+   fix é cirúrgico, não força decisão onde a ambiguidade é real). **Nota
+   pós-implementação:** padrão letra-única ("67 N") removido do escopo de
+   D2.2 — piorava esses casos (ver "Resultado real" acima); `FA`/`PB`/`FC`
+   vs `PROT` (mecanismo D2.1) não decidiram na validação final — o ganho
+   medido veio majoritariamente de D2.2+D2.3 (padrão multi-fase).
 5. `PYTHONPATH=src python bench/benchmark.py`: `combo(calib-minmax)` sobe ou
    mantém acc@1 (69%) e decisão, sem baixar prec@dec (80%).
 6. `python -m pytest -q` verde.
