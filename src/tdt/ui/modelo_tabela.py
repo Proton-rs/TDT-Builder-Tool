@@ -27,6 +27,7 @@ _MOTIVO_LABEL = {
     "sem_fix": "Sem correção automática",
     "modulo_indefinido": "Módulo indefinido",
     "equipamento_ambiguo": "Equipamento ambíguo",
+    "nome_sigla_inconsistente": "Sigla ≠ NOME",
 }
 
 # Cores por faixa de confiança (texto). ponytail: faixas fixas; threshold de

@@ -134,7 +134,7 @@ class ListaHomogenea:
 @dataclass(frozen=True)
 class ItemRevisao:
     registro: SignalRecord
-    motivo: str  # "score_baixo"|"endereco_duplicado"|"sem_endereco"|"sem_fix"|"categoria_ambigua"|"categoria_incompativel"|"modulo_indefinido"|"sigla_multipla"|"posicao_ambigua"|"pareamento_ambiguo"
+    motivo: str  # "score_baixo"|"endereco_duplicado"|"sem_endereco"|"sem_fix"|"categoria_ambigua"|"categoria_incompativel"|"modulo_indefinido"|"sigla_multipla"|"posicao_ambigua"|"pareamento_ambiguo"|"nome_sigla_inconsistente"
     candidatos_sugeridos: tuple[Candidato, ...] = ()
 
 

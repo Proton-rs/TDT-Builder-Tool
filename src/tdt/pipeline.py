@@ -435,8 +435,9 @@ def executar(
             decididos_homog, sinais = estruturar_homogeneo(rows, header_homog, sn, lp, config)
             decididos.extend(decididos_homog)
         else:
-            mapa = analisar(rows, encoder, ref_emb)
-            sinais = list(estruturar(rows, mapa, sheet_name=sn, config=config, vocab=vocab))
+            mapa = analisar(rows, encoder, ref_emb, siglas_set=lp.siglas)
+            sinais = list(estruturar(rows, mapa, sheet_name=sn, config=config, vocab=vocab,
+                                     siglas_set=lp.siglas))
         sinais, conf_mod = aplicar_identidade(sinais, sn, rows, config)
         sinais, rev_modulo = particionar_por_confianca(sinais, conf_mod)
         ids_indefinidos: set[str] = set()
@@ -478,6 +479,11 @@ def executar(
             embedding_vet = emb_lote[j - 1] if len(emb_lote) else None
             if rec.status == "decidido":  # já resolvido pelo pareamento de polaridade
                 decididos.append(rec)
+                continue
+            if rec.status == "revisao":  # sigla de coluna inconsistente com NOME
+                revisao.append(ItemRevisao(
+                    rec, motivo=rec.justificativa or "sigla_inconsistente",
+                ))
                 continue
             if not rec.enderecamento.indices:
                 aud.evento("pipeline", f"{rec.id}: sem endereço — classificando sem decidir", "AVISO")
