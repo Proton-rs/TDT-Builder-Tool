@@ -205,6 +205,23 @@ def test_col_sigla_detectada_quando_maioria_e_sigla_conhecida():
     assert mapa.colunas["sigla"] == 0
 
 
+def test_col_sigla_nao_confunde_coluna_de_ied_constante():
+    # achado real na GTD: coluna "IED" repete o MESMO valor (tag do relé) em
+    # todas as linhas, e esse valor coincide por acaso com uma sigla válida
+    # da lista padrão ("21F1") -- sem exigir diversidade, score=100% vence
+    # mesmo sendo 1 valor só repetido, não uma coluna de sigla por linha.
+    siglas_ied = frozenset({"21F1", "IA", "IB"})
+    rows = [
+        ("IED", "DESCRICAO", "TIPO", "IDX"),
+        ("21F1", "CORRENTE FASE A", "Analogico", "1"),
+        ("21F1", "CORRENTE FASE B", "Analogico", "2"),
+        ("21F1", "CORRENTE FASE C", "Analogico", "3"),
+        ("21F1", "CORRENTE DE FALTA FASE A", "Analogico", "4"),
+    ]
+    mapa = analisar(rows, encoder=_fake_encoder, ref_emb=_REF, siglas_set=siglas_ied)
+    assert "sigla" not in mapa.colunas
+
+
 def test_col_sigla_nao_detecta_coluna_de_nome_padronizado():
     # coluna NOME (códigos tipo SND_LT_IA) não tem nenhum valor em siglas_set
     rows = [

@@ -178,7 +178,10 @@ _SIGLA_THRESHOLD = 0.3
 def _col_sigla(rows, inicio, ncols, siglas_set: frozenset[str]) -> int | None:
     """Coluna cujos valores são majoritariamente siglas conhecidas da lista
     padrão ADMS (``siglas_set``). Exclui colunas predominantemente numéricas
-    (são índice, não sigla)."""
+    (são índice, não sigla) e colunas de baixa diversidade (ex: "IED" repete
+    a mesma tag de relé em várias linhas -- se essa tag coincidir com uma
+    sigla válida por acaso, teria score 100% sem ser uma coluna de sigla por
+    linha; exige pelo menos 2 siglas válidas DISTINTAS, como a SAN2 real)."""
     melhor, melhor_score = None, 0.0
     for c in range(ncols):
         vals = _valores_coluna(rows, c, inicio)
@@ -187,6 +190,9 @@ def _col_sigla(rows, inicio, ncols, siglas_set: frozenset[str]) -> int | None:
         norm = [unicodedata.normalize("NFKD", v).strip().upper() for v in vals]
         digitais = sum(1 for v in norm if v.isdigit())
         if digitais / len(norm) > 0.8:
+            continue
+        validas = {v for v in norm if v in siglas_set}
+        if len(validas) < 2:
             continue
         acertos = sum(1 for v in norm if v in siglas_set)
         score = acertos / len(norm)
