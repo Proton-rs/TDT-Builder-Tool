@@ -90,12 +90,13 @@ comparação de fase no matching).
 No `engine_tdt`, no ponto único de emissão da coluna `Phases` (discreto e
 analógico):
 
-- Se `eletrico.fase` é `None`/vazio ⇒ emitir `"ABC"` (default, alinhado com os
-  82% da real).
-- Se `eletrico.fase` tem valor **fora de `FASES`** ⇒ emitir `"ABC"` e registrar
-  um evento de auditoria (`AVISO`). Defesa-em-profundidade: garante que o ADMS
-  nunca receba fase inválida, mesmo que uma nova origem de fase apareça no
-  futuro.
+- Helper puro `_fase_saida(fase) -> str`: devolve `fase` se estiver em `FASES`,
+  senão `"ABC"`. Cobre num só ponto o `None`/vazio (⇒ ABC default, alinhado com
+  os 82% da real) **e** qualquer valor fora do domínio (⇒ ABC). Defesa-em-
+  profundidade: garante que o ADMS nunca receba fase inválida, mesmo que uma
+  nova origem de fase apareça no futuro. Sem plumbing de auditoria — as funções
+  de emissão (`_valores_discreto`/`_valores_analog`) são construtoras puras de
+  dict e B1 já elimina a única origem conhecida de `"F"`.
 - Fase válida detectada (A/B/C/N/AB/BC/CA/ABC) é preservada como está.
 
 > O default ABC é uma regra de **saída** (preenchimento do campo TDT), não de
@@ -126,9 +127,9 @@ Adicionar entradas literais em `Config.mapa_sheet_modulo` (spC1):
 |---|---|---|
 | B1 | `tests/test_pipeline.py` (estende) | sigla com fase genérica (`PRTF`/`50F1`) ⇒ `eletrico.fase == "ABC"`, nunca `"F"` |
 | B1 | idem | sigla com fase específica (`51A`→A, `IN61`→N) ⇒ fase preservada |
-| B2 | `tests/test_engine_tdt.py` (estende ou cria) | `eletrico.fase=None` ⇒ coluna `Phases == "ABC"` |
-| B2 | idem | `eletrico.fase="F"` (ou qualquer fora de `FASES`) ⇒ `Phases == "ABC"` + evento de auditoria |
-| B2 | idem | `eletrico.fase="A"` ⇒ `Phases == "A"` (preservado) |
+| B2 | `tests/test_engine_tdt.py` (estende) | `_fase_saida(None) == "ABC"` |
+| B2 | idem | `_fase_saida("F")` (ou qualquer fora de `FASES`) `== "ABC"` |
+| B2 | idem | `_fase_saida("A") == "A"` (preservado) |
 | B3 | `tests/test_identidade_modulo.py` (estende) | `resolver_modulo("TRF3_P")` ⇒ `"TRF03"`; `resolver_modulo("TRF-1")` ⇒ `"TRF1"` (sem pad, inalterado) |
 
 **Gate:** `python -m pytest -q` verde; `PYTHONPATH=src python bench/benchmark.py`
@@ -148,6 +149,6 @@ Após implementar, re-gerar a TDT da GTD V11 e conferir na `DNP3_DiscreteSignals
 1. Nenhum sinal sai com `Phases` fora de `FASES` (zero `"F"`, zero vazio).
 2. `_com_fase` mapeia o `"F"` genérico para `"ABC"`; fases específicas preservadas.
 3. `fase_da_sigla` **inalterada** (scoring de `r3_fase` intacto).
-4. Engine aplica default `ABC` + guard de domínio com auditoria.
+4. Engine aplica default `ABC` + guard de domínio (`_fase_saida`, fallback ABC).
 5. Sheets `TRF3_*` ⇒ módulo `TRF03`; `TRF-1`/`TRF-2` inalterados.
 6. `python -m pytest -q` verde; benchmark sem regressão.
