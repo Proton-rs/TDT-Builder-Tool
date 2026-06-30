@@ -4,7 +4,7 @@ from tdt.contracts import (
     Candidato, Descricoes, Diagnostico, Enderecamento, ItemRevisao, Modulo,
     SignalRecord, TipoSinal,
 )
-from tdt.relatorio_revisao import gerar_relatorio_revisao
+from tdt.relatorio_revisao import descricao_para_exibicao, gerar_relatorio_revisao
 
 
 def _rec(id_, sigla=None, candidatos=(), diagnostico=None, status="decidido"):
@@ -45,6 +45,30 @@ def test_sinal_sem_candidatos_nao_quebra(tmp_path):
     ws = wb["Auditoria"]
     assert ws.cell(2, 8).value == "score_baixo"  # Motivo Revisão
     assert ws.cell(2, 9).value in (None, "")  # sem candidato 1
+
+
+def test_descricao_para_exibicao_usa_sigla_quando_bruta_e_codigo():
+    assert descricao_para_exibicao("SND_LT67SAN_LT67SAN_79", "79") == "79"
+
+
+def test_descricao_para_exibicao_mantem_descricao_real():
+    assert descricao_para_exibicao("Disjuntor Aberto", "DJ") == "Disjuntor Aberto"
+
+
+def test_descricao_para_exibicao_sem_sigla_mantem_bruta():
+    assert descricao_para_exibicao("SND_LT67SAN_LT67SAN_79", None) == "SND_LT67SAN_LT67SAN_79"
+
+
+def test_relatorio_usa_sigla_como_descricao_quando_bruta_e_codigo(tmp_path):
+    from dataclasses import replace
+    rec = replace(_rec("S1:3", sigla="79"), descricoes=Descricoes("SND_LT67SAN_LT67SAN_79", "x"))
+    registros = [rec]
+
+    caminho = gerar_relatorio_revisao(registros, (), tmp_path)
+
+    wb = openpyxl.load_workbook(caminho)
+    ws = wb["Auditoria"]
+    assert ws.cell(2, 2).value == "79"  # Descrição Bruta -- sigla, não o código
 
 
 def test_cabecalho_tem_formatacao_visual(tmp_path):

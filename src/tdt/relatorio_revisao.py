@@ -4,12 +4,24 @@ a TDT na auditoria pós-classificação."""
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import openpyxl
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
 from tdt.contracts import ItemRevisao, SignalRecord
+
+_CODIGO_RE = re.compile(r"^[A-Z0-9_/-]+$")
+
+
+def descricao_para_exibicao(desc_bruta: str, sigla: str | None) -> str:
+    """Sigla como descrição exibida quando ``desc_bruta`` é um código interno
+    (ex: "SND_LT67SAN_LT67SAN_79", sem espaços) em vez de descrição real --
+    listas padronizadas com NOME no lugar da descrição (sigla não-homogênea)."""
+    if sigla and _CODIGO_RE.match(desc_bruta.strip().upper()):
+        return sigla
+    return desc_bruta
 
 _LARGURA_MAX_COLUNA = 40
 
@@ -52,7 +64,7 @@ def gerar_relatorio_revisao(
     for rec in registros:
         linha = [
             rec.id,
-            rec.descricoes.bruta,
+            descricao_para_exibicao(rec.descricoes.bruta, rec.sigla_sinal),
             f"{rec.tipo_sinal.categoria}/{rec.tipo_sinal.direcao}",
             ";".join(str(i) for i in rec.enderecamento.indices),
             rec.status,
