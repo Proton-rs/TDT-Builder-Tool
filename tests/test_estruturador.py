@@ -110,3 +110,104 @@ def test_coluna_tipo_codigo_curto_classifica_linha_a_linha():
     assert recs[1].tipo_sinal.direcao == "Output"
     assert recs[2].tipo_sinal.categoria == "Discrete"
     assert recs[2].tipo_sinal.direcao == "Input"
+
+
+def test_marcador_em_coluna_d_nao_vira_sinal_fantasma():
+    """GAU: marcadores MEDIÇÃO/CONTROLE/SINALIZAÇÃO na coluna D (descrição).
+    Antes viravam sinais fantasmas porque _eh_marcador só olhava col 0."""
+    rows = [
+        ("MODULO", "IED", "TIPO", "DESCRICAO DO PONTO", "INDEX"),
+        ("", "", "", "MEDIÇÃO", ""),
+        ("AL21", "UPC1", "A", "Corrente Fase A", "40"),
+        ("AL21", "UPC1", "A", "Corrente Fase B", "41"),
+        ("", "", "", "CONTROLE", ""),
+        ("AL21", "UPC1", "C", "Disj. 52-21 Abrir/Fechar", "30"),
+        ("", "", "", "SINALIZAÇÃO", ""),
+        ("AL21", "UPC1", "D", "Disj. 52-21 Desligado", "130"),
+    ]
+    mapa = MapaColunas(header_row=1, colunas={"descricao": 3, "indice": 4})
+    recs = estruturar(rows, mapa, sheet_name="AL21", config=Config())
+    assert len(recs) == 4
+    assert recs[0].descricoes.bruta == "Corrente Fase A"
+    assert recs[0].tipo_sinal.categoria == "Analog"
+    assert recs[1].descricoes.bruta == "Corrente Fase B"
+    assert recs[1].tipo_sinal.categoria == "Analog"
+    assert recs[2].descricoes.bruta == "Disj. 52-21 Abrir/Fechar"
+    assert recs[2].tipo_sinal.categoria == "Discrete"
+    assert recs[2].tipo_sinal.direcao == "Output"
+    assert recs[3].descricoes.bruta == "Disj. 52-21 Desligado"
+    assert recs[3].tipo_sinal.categoria == "Discrete"
+    assert recs[3].tipo_sinal.direcao == "Input"
+
+
+# --- coluna de sigla (lista não-homogênea com sigla pronta) -----------------
+
+_SIGLAS_LP = frozenset({"79", "IA"})
+
+
+def test_sem_coluna_sigla_comportamento_atual():
+    rows = [
+        ("SIGLA", "NOME", "TIPO", "IDX"),
+        ("79", "SND_LT67SAN_LT67SAN_79", "Digital", "10"),
+    ]
+    mapa = MapaColunas(header_row=1, colunas={"descricao": 1, "tipo": 2, "indice": 3})
+    recs = estruturar(rows, mapa, sheet_name="LT67SAN", config=Config())
+    assert len(recs) == 1
+    assert recs[0].status == "pendente"
+    assert recs[0].sigla_sinal is None
+
+
+def test_sigla_valida_e_nome_consistente_pre_classifica():
+    rows = [
+        ("SIGLA", "NOME", "TIPO", "IDX"),
+        ("79", "SND_LT67SAN_LT67SAN_79", "Digital", "10"),
+    ]
+    mapa = MapaColunas(header_row=1, colunas={"sigla": 0, "descricao": 1, "tipo": 2, "indice": 3})
+    recs = estruturar(rows, mapa, sheet_name="LT67SAN", config=Config(), siglas_set=_SIGLAS_LP)
+    assert len(recs) == 1
+    rec = recs[0]
+    assert rec.status == "decidido"
+    assert rec.sigla_sinal == "79"
+    assert rec.modulo.nome == "LT67SAN"
+    assert rec.modulo.origem_contexto == "coluna:SIGLA"
+
+
+def test_sigla_valida_mas_nome_inconsistente_vai_pra_revisao():
+    rows = [
+        ("SIGLA", "NOME", "TIPO", "IDX"),
+        ("79", "SND_LT67SAN_LT67SAN_80", "Digital", "10"),
+    ]
+    mapa = MapaColunas(header_row=1, colunas={"sigla": 0, "descricao": 1, "tipo": 2, "indice": 3})
+    recs = estruturar(rows, mapa, sheet_name="LT67SAN", config=Config(), siglas_set=_SIGLAS_LP)
+    assert len(recs) == 1
+    rec = recs[0]
+    assert rec.status == "revisao"
+    assert rec.justificativa == "nome_sigla_inconsistente"
+
+
+def test_sigla_valida_sem_coluna_descricao_pre_classifica_pelo_modulo_da_sheet():
+    # lista só com sigla (Caso de Uso #3) -- sem coluna "descricao" detectada
+    rows = [
+        ("SIGLA", "IDX"),
+        ("79", "10"),
+    ]
+    mapa = MapaColunas(header_row=1, colunas={"sigla": 0, "indice": 1})
+    recs = estruturar(rows, mapa, sheet_name="LT67SAN", config=Config(), siglas_set=_SIGLAS_LP)
+    assert len(recs) == 1
+    rec = recs[0]
+    assert rec.status == "decidido"
+    assert rec.sigla_sinal == "79"
+    assert rec.modulo.nome == "LT67SAN"  # módulo da sheet, sem NOME pra extrair
+
+
+def test_sigla_invalida_recai_no_scoring():
+    rows = [
+        ("SIGLA", "NOME", "TIPO", "IDX"),
+        ("INVENTADO", "SND_LT67SAN_INVENTADO", "Digital", "10"),
+    ]
+    mapa = MapaColunas(header_row=1, colunas={"sigla": 0, "descricao": 1, "tipo": 2, "indice": 3})
+    recs = estruturar(rows, mapa, sheet_name="LT67SAN", config=Config(), siglas_set=_SIGLAS_LP)
+    assert len(recs) == 1
+    rec = recs[0]
+    assert rec.status == "pendente"
+    assert rec.sigla_sinal is None

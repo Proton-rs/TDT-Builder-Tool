@@ -21,6 +21,7 @@ from ..contracts import (
     TipoSinal,
 )
 from .normalizador import canonizar, extrair_contexto_estrutural
+from .parse_nome import extrair_modulo_do_nome, sigla_esta_no_nome
 from .vocabulario_tipo import classificar as _classificar, norm as _norm
 
 
@@ -43,11 +44,13 @@ def estruturar(
     config: Config,
     modulo: str | None = None,
     vocab: set[str] | frozenset[str] | None = None,
+    siglas_set: frozenset[str] | None = None,
 ) -> list[SignalRecord]:
     cols = mapa.colunas
     c_desc = cols.get("descricao")
     c_idx = cols.get("indice")
     c_tipo = cols.get("tipo")
+    c_sigla = cols.get("sigla")
     nome_mod = modulo if modulo is not None else sheet_name
     col0 = 0  # marcadores de seção ficam na 1ª coluna
 
@@ -58,7 +61,9 @@ def estruturar(
     for i, row in enumerate(rows):
         if i + 1 <= mapa.header_row:  # pula header e metadados acima
             continue
-        if c_desc is None or c_desc >= len(row):
+        tem_desc = c_desc is not None and c_desc < len(row)
+        tem_sigla = c_sigla is not None and c_sigla < len(row)
+        if not tem_desc and not tem_sigla:
             continue
 
         if _eh_marcador(row, col0):
@@ -66,7 +71,7 @@ def estruturar(
             secao_explicita = True
             continue
 
-        bruta = row[c_desc]
+        bruta = row[c_desc] if tem_desc else row[c_sigla]
         if not _norm(bruta):
             continue
 
@@ -84,15 +89,40 @@ def estruturar(
             barra=ctx_estrutural.barra,
         )
 
+        # --- pré-classificação por coluna de sigla (sigla não-homogênea) ---
+        sigla_sinal = None
+        status = "pendente"
+        motivo_revisao = None
+        origem_modulo = "sheet_name"
+        nome_mod_final = nome_mod
+        if tem_sigla and siglas_set is not None:
+            sv = str(row[c_sigla] or "").strip().upper()
+            if sv and sv in siglas_set:
+                sigla_sinal = sv
+                nome_str = str(row[c_desc]) if tem_desc else ""
+                if nome_str and not sigla_esta_no_nome(nome_str, sv):
+                    status = "revisao"
+                    motivo_revisao = "nome_sigla_inconsistente"
+                else:
+                    status = "decidido"
+                    mod_extraido = extrair_modulo_do_nome(nome_str) if nome_str else None
+                    if mod_extraido:
+                        nome_mod_final, origem_modulo = mod_extraido, "coluna:SIGLA"
+            # sv não-vazia mas fora da LP -> status fica "pendente": recai no scoring
+        # ---------------------------------------------------------------------
+
         registros.append(
             SignalRecord(
                 id=f"{sheet_name}:{i + 1}",
-                modulo=Modulo(nome_mod, "sheet_name"),
+                modulo=Modulo(nome_mod_final, origem_modulo),
                 tipo_sinal=TipoSinal(categoria, is_double_bit=False, direcao=direcao,
                                      categoria_confiavel=confiavel),
                 enderecamento=Enderecamento("DNP3", indices),
                 descricoes=Descricoes(str(bruta), canonizar(remanescente, config, vocab)),
                 eletrico=eletrico,
+                sigla_sinal=sigla_sinal,
+                status=status,
+                justificativa=motivo_revisao,
             )
         )
     return registros
