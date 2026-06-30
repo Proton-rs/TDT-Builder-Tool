@@ -34,6 +34,20 @@ def test_sinal_analogico_conhecido(lista_padrao_path):
     assert in61.signal_type == "Valor Medido"
 
 
+def test_siglas_inclui_discretos_e_analogicos(lista_padrao_path):
+    lp = ListaPadraoADMS.carregar(lista_padrao_path)
+    siglas = lp.siglas
+    assert isinstance(siglas, frozenset)
+    assert "CMDE" in siglas  # discreto
+    assert "IN61" in siglas  # analógico
+    assert len(siglas) == len({s.sigla for s in (*lp.discretos, *lp.analogicos)})
+
+
+def test_siglas_normaliza_maiusculas(lista_padrao_path):
+    lp = ListaPadraoADMS.carregar(lista_padrao_path)
+    assert all(s == s.upper() for s in lp.siglas)
+
+
 def test_ignora_linhas_invalidas(lista_padrao_path):
     lp = ListaPadraoADMS.carregar(lista_padrao_path)
     # nenhuma sigla vazia ou "#N/A" deve entrar

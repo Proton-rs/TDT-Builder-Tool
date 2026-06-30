@@ -136,3 +136,9 @@ class ListaPadraoADMS:
             if s.sigla.upper() == alvo:
                 return s
         return None
+
+    @property
+    def siglas(self) -> frozenset[str]:
+        """Todas as siglas (discretos + analógicos), normalizadas maiúsculas —
+        usado pela detecção de coluna de sigla em listas não-homogêneas."""
+        return frozenset(s.sigla.upper() for s in (*self.discretos, *self.analogicos))
