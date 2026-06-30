@@ -207,6 +207,12 @@ def r3_fase(
     if fase_cand is None:
         return _ZERO
     peso = cfg.pesos_regras["fase"]
+    if fase_cand == "F" and alvo in ("ABC", "AB", "BC", "CA"):
+        # D2.3: sigla de fase pura genérica (ex: 50F1) é compatível com um
+        # alvo multi-fase do texto (ex: "50 ABC") -- não é divergência, é a
+        # mesma generalidade. Não estende a fase específica única (A/B/C/N):
+        # a sigla com letra explícita já compara exato e deve prevalecer.
+        return AjusteRegra(peso, f"fase: candidato genérico compatível com {alvo}")
     if fase_cand == alvo:
         return AjusteRegra(peso, f"fase: candidato e texto em {alvo}")
     return AjusteRegra(-peso, f"fase: candidato {fase_cand} diverge de {alvo}")

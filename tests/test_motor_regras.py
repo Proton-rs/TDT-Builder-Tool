@@ -91,6 +91,24 @@ def test_r3_neutro_favorece_n_penaliza_fase_pura():
     assert out[0].sigla == "51N"
 
 
+def test_r3_fase_generica_compativel_com_multifase_do_texto():
+    # "50 ABC" extrai fase="ABC" (D2.2); 50F1 (genérica) compatível com ABC,
+    # 50_1 (sem fase) não recebe bônus -- desempata na direção certa.
+    rec = _rec("PROTECAO 50 ABC ESTAGIO 1", eletrico=Eletrico(fase="ABC"))
+    cands = [Candidato("50_1", 0.74, "mesclado"), Candidato("50F1", 0.74, "mesclado")]
+    out = aplicar(rec, cands, _CFG)
+    assert out[0].sigla == "50F1"
+
+
+def test_r3_fase_especifica_explicita_vence_variante_generica():
+    # alvo de fase específica (ex "A") -- candidato genérico (F) NÃO ganha o
+    # novo bônus (só multi-fase); comportamento pré-D2.3 preservado.
+    rec = _rec("PROTECAO FASE A", eletrico=Eletrico(fase="A"))
+    cands = [Candidato("FA", 0.70, "mesclado"), Candidato("50F1", 0.70, "mesclado")]
+    out = aplicar(rec, cands, _CFG)
+    assert out[0].sigla == "FA"
+
+
 # --- R4: estágio ------------------------------------------------------------
 
 
