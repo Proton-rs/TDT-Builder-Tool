@@ -26,6 +26,7 @@ from tdt.engine_tdt import (
     _coords_comando,
     _adicionar_dv_lista,
     _measurement_type,
+    _fase_saida,
 )
 
 
@@ -316,6 +317,21 @@ def test_measurement_type_none_sem_tipo_medicao():
     sp = SinalPadrao(sigla="IA", descricao="", signal_type="Current", direction=None,
                       mm=None, categoria="Analog")
     assert _measurement_type(sp) is None
+
+
+def test_fase_saida_default_abc_para_none():
+    assert _fase_saida(None) == "ABC"
+
+
+def test_fase_saida_fallback_abc_para_valor_invalido():
+    assert _fase_saida("F") == "ABC"
+    assert _fase_saida("XYZ") == "ABC"
+
+
+def test_fase_saida_preserva_fase_valida():
+    assert _fase_saida("A") == "A"
+    assert _fase_saida("ABC") == "ABC"
+    assert _fase_saida("N") == "N"
 
 
 def test_escreve_sheet_analogica(template_dnp3_path, lista_padrao_path, tmp_path):

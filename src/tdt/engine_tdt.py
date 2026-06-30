@@ -135,6 +135,13 @@ def _coords_comando(indices: tuple[int, ...]) -> str:
     return ";".join(str(i) for i in indices)
 
 
+def _fase_saida(fase: str | None) -> str:
+    """Fase para a coluna TDT ``Phases``: default ``ABC`` quando vazia, e
+    fallback ``ABC`` para qualquer valor fora do domínio ``FASES`` (guard de
+    domínio — o ADMS rejeita fase inválida)."""
+    return fase if fase in FASES else "ABC"
+
+
 def _valores(rec: SignalRecord, subestacao: str | None, padrao: ListaPadraoADMS) -> dict:
     sp = padrao.por_sigla(rec.sigla_sinal) if rec.sigla_sinal else None
     nome = _nome_hierarquico(
@@ -169,7 +176,7 @@ def _valores(rec: SignalRecord, subestacao: str | None, padrao: ListaPadraoADMS)
         "Output Register": False,
         "Remote Point Type": "Status",
         "Remote Point Name": nome,
-        "Phases": rec.eletrico.fase,
+        "Phases": _fase_saida(rec.eletrico.fase),
         "Signal AOR Group": _aor_group(subestacao, alimentador),
         "Device Mapping": _device_mapping(nome, rec.sigla_sinal or "?", eh_prot),
         "Direction": _DIRECAO.get(direcao, "Read"),
@@ -217,7 +224,7 @@ def _valores_analog(rec: SignalRecord, subestacao: str | None, padrao: ListaPadr
         "Signal Name": nome,
         "Signal Alias": rec.descricoes.bruta,
         "Signal Type": sp.signal_type if sp else "Custom",
-        "Phases": rec.eletrico.fase,
+        "Phases": _fase_saida(rec.eletrico.fase),
         "Direction": "Read",
         "Input Coordinates": coords,
         "Side": "None",
