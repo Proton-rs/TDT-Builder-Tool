@@ -44,6 +44,16 @@ def test_remove_stopwords():
     assert normalizar("DJ DE BC", CFG) == "DISJUNTOR BANCO CAPACITORES"
 
 
+def test_preserva_letra_fase_apos_fase_mesmo_sendo_stopword():
+    # "A" é stopword (artigo "a"), mas aqui é discriminador de fase -- D2.1
+    assert "A" in normalizar("FASE A", CFG).split()
+
+
+def test_letra_a_isolada_continua_removida_como_stopword():
+    # fora do contexto "FASE <letra>", "A" continua sendo o artigo -- sem regressão
+    assert normalizar("DJ A BC", CFG) == "DISJUNTOR BANCO CAPACITORES"
+
+
 def test_vazio():
     assert normalizar("", CFG) == ""
     assert normalizar(None, CFG) == ""

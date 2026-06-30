@@ -394,6 +394,13 @@ def _stemmar(texto: str) -> str:
 # --- orquestradores -------------------------------------------------------
 
 
+def _eh_letra_fase_apos_fase(tokens: list[str], i: int) -> bool:
+    """D2.1: protege a letra de fase (A/B/C/N) de ser removida como stopword
+    genérico quando vem logo após o token "FASE" (ex: "FASE A" -- "A" é
+    artigo em STOPWORDS_PADRAO, mas aqui é discriminador de sigla)."""
+    return tokens[i] in ("A", "B", "C", "N") and i > 0 and tokens[i - 1] == "FASE"
+
+
 def normalizar(texto: str | None, config: Config) -> str:
     """Forma normalizada legada: maiúsculas, sem acentos, separadores, abrev,
     stopwords. Preservada para quem já chama (pipeline, benchmark)."""
@@ -403,7 +410,10 @@ def normalizar(texto: str | None, config: Config) -> str:
     texto = preservar_siglas_especiais(texto)  # N0.5: extrai (sigla) antes do colapso de separadores
     texto = _SEPARADORES.sub(" ", texto)
     tokens = texto.split()
-    sem_stop = [t for t in tokens if t not in config.stopwords]
+    sem_stop = [
+        t for i, t in enumerate(tokens)
+        if t not in config.stopwords or _eh_letra_fase_apos_fase(tokens, i)
+    ]
     return expandir_abreviacoes(" ".join(sem_stop), config)
 
 
