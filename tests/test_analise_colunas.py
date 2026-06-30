@@ -101,6 +101,33 @@ def test_tipo_por_codigo_curto_nao_pega_coluna_de_fase():
     assert "tipo" not in mapa.colunas
 
 
+def test_header_descricao_boost_seleciona_coluna_com_descricao_no_titulo():
+    # colunas com conteúdo idêntico: a que tem "DESCRICAO" no header ganha
+    rows = [
+        ("", "", "", ""),
+        ("", "DESCRICAO DO PONTO", "OUTRO TITULO", ""),
+        ("001", "FALHA COMUNICACAO IED 01F1", "FALHA COMUNICACAO IED 01F1", "10"),
+        ("001", "DISJUNTOR ABERTO 52-1", "DISJUNTOR ABERTO 52-1", "11"),
+        ("001", "CORRENTE FASE A", "CORRENTE FASE A", "12"),
+    ]
+    mapa = analisar(rows, encoder=_fake_encoder, ref_emb=_REF)
+    assert mapa.colunas["descricao"] == 1
+
+
+def test_header_descricao_nao_seleciona_coluna_vazia_mesmo_com_titulo():
+    # header com "DESCRICAO" mas coluna vazia → não ganha (não entra nos
+    # candidatos)
+    rows = [
+        ("", "", "", "", ""),
+        ("IED", "DESCRICAO", "MELHOR TITULO", "TIPO", "ADDR"),
+        ("01F1", "", "FALHA COMUNICACAO", "Digital", "10"),
+        ("01F1", "", "DISJUNTOR ABERTO", "Digital", "11"),
+        ("01F1", "", "CORRENTE FASE", "Analogico", "12"),
+    ]
+    mapa = analisar(rows, encoder=_fake_encoder, ref_emb=_REF)
+    assert mapa.colunas["descricao"] == 2  # conteúdo vence, não header
+
+
 def test_header_ignora_metadado_espalhado():
     # linha de metadado com 4 células de texto ESPALHADAS não é o header;
     # o header real preenche a maioria das colunas de dados (contíguas).
@@ -159,3 +186,71 @@ def test_descricao_limita_amostra_por_coluna_para_nao_codificar_tudo():
     assert chamadas[0] <= 80  # amostra pequena já é suficiente (medido: sem
     # divergência de coluna detectada com cap 200→20 em sheets reais de até
     # 1238 linhas; cap=40 dá ~2-4x menos texto codificado sem mudar resultado)
+
+
+# --- _col_sigla() / siglas_set (sigla em lista não-homogênea) ---------------
+
+_SIGLAS = frozenset({"IA", "IB", "IC", "P", "Q", "FREQ", "79"})
+
+
+def test_col_sigla_detectada_quando_maioria_e_sigla_conhecida():
+    rows = [
+        ("SIGLA", "NOME", "DESCRICAO", "TIPO", "IDX"),
+        ("IA", "SND_LT_IA", "CORRENTE FASE A", "Analogico", "1"),
+        ("IB", "SND_LT_IB", "CORRENTE FASE B", "Analogico", "2"),
+        ("IC", "SND_LT_IC", "CORRENTE FASE C", "Analogico", "3"),
+        ("P", "SND_LT_P", "FALHA COMUNICACAO", "Analogico", "4"),
+    ]
+    mapa = analisar(rows, encoder=_fake_encoder, ref_emb=_REF, siglas_set=_SIGLAS)
+    assert mapa.colunas["sigla"] == 0
+
+
+def test_col_sigla_nao_detecta_coluna_de_nome_padronizado():
+    # coluna NOME (códigos tipo SND_LT_IA) não tem nenhum valor em siglas_set
+    rows = [
+        ("NOME", "DESCRICAO", "TIPO", "IDX"),
+        ("SND_LT_IA", "CORRENTE FASE A", "Analogico", "1"),
+        ("SND_LT_IB", "CORRENTE FASE B", "Analogico", "2"),
+        ("SND_LT_IC", "CORRENTE FASE C", "Analogico", "3"),
+    ]
+    mapa = analisar(rows, encoder=_fake_encoder, ref_emb=_REF, siglas_set=_SIGLAS)
+    assert "sigla" not in mapa.colunas
+
+
+def test_col_sigla_exclui_coluna_puramente_numerica():
+    # mesmo que os dígitos "coincidam" com siglas_set, coluna >80% dígitos é índice
+    siglas_com_numeros = _SIGLAS | {"1", "2", "3", "4"}
+    rows = [
+        ("IDX", "DESCRICAO", "TIPO", "ADDR"),
+        ("1", "CORRENTE FASE A", "Analogico", "10"),
+        ("2", "CORRENTE FASE B", "Analogico", "11"),
+        ("3", "CORRENTE FASE C", "Analogico", "12"),
+        ("4", "FALHA COMUNICACAO", "Analogico", "13"),
+    ]
+    mapa = analisar(rows, encoder=_fake_encoder, ref_emb=_REF, siglas_set=siglas_com_numeros)
+    assert "sigla" not in mapa.colunas
+
+
+def test_col_sigla_threshold_30_porcento():
+    # 2 de 5 valores (40%) são siglas conhecidas -> detecta (>= 0.3)
+    rows = [
+        ("COL", "DESCRICAO", "TIPO", "IDX"),
+        ("79", "PROTECAO ATUADA", "Digital", "1"),
+        ("SINAL_79", "OUTRO PONTO", "Digital", "2"),
+        ("LX_80", "MAIS UM PONTO", "Digital", "3"),
+        ("P", "FALHA COMUNICACAO", "Digital", "4"),
+        ("ZZ_INVALIDO", "CORRENTE FASE A", "Digital", "5"),
+    ]
+    mapa = analisar(rows, encoder=_fake_encoder, ref_emb=_REF, siglas_set=_SIGLAS)
+    assert mapa.colunas["sigla"] == 0
+
+
+def test_sem_siglas_set_nao_detecta_sigla():
+    # comportamento atual preservado quando siglas_set não é passado
+    rows = [
+        ("SIGLA", "DESCRICAO", "TIPO", "IDX"),
+        ("IA", "CORRENTE FASE A", "Analogico", "1"),
+        ("IB", "CORRENTE FASE B", "Analogico", "2"),
+    ]
+    mapa = analisar(rows, encoder=_fake_encoder, ref_emb=_REF)
+    assert "sigla" not in mapa.colunas

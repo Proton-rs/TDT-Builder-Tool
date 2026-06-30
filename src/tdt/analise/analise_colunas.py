@@ -172,7 +172,33 @@ def _col_tipo(rows, inicio, ncols) -> int | None:
     return melhor if melhor_score >= 0.5 else None
 
 
-def analisar(rows: list[tuple], encoder, ref_emb: np.ndarray) -> MapaColunas:
+_SIGLA_THRESHOLD = 0.3
+
+
+def _col_sigla(rows, inicio, ncols, siglas_set: frozenset[str]) -> int | None:
+    """Coluna cujos valores são majoritariamente siglas conhecidas da lista
+    padrão ADMS (``siglas_set``). Exclui colunas predominantemente numéricas
+    (são índice, não sigla)."""
+    melhor, melhor_score = None, 0.0
+    for c in range(ncols):
+        vals = _valores_coluna(rows, c, inicio)
+        if len(vals) < 2:
+            continue
+        norm = [unicodedata.normalize("NFKD", v).strip().upper() for v in vals]
+        digitais = sum(1 for v in norm if v.isdigit())
+        if digitais / len(norm) > 0.8:
+            continue
+        acertos = sum(1 for v in norm if v in siglas_set)
+        score = acertos / len(norm)
+        if score >= _SIGLA_THRESHOLD and score > melhor_score:
+            melhor, melhor_score = c, score
+    return melhor
+
+
+def analisar(
+    rows: list[tuple], encoder, ref_emb: np.ndarray,
+    siglas_set: frozenset[str] | None = None,
+) -> MapaColunas:
     ncols = _ncols(rows)
     h = _header_por_densidade(rows)
     inicio = h + 1
@@ -183,6 +209,7 @@ def analisar(rows: list[tuple], encoder, ref_emb: np.ndarray) -> MapaColunas:
             ("descricao", _col_descricao(rows, inicio, ncols, encoder, ref_emb)),
             ("indice", _col_indice(rows, inicio, ncols)),
             ("tipo", _col_tipo(rows, inicio, ncols)),
+            ("sigla", _col_sigla(rows, inicio, ncols, siglas_set) if siglas_set is not None else None),
         )
         if v is not None
     }

@@ -165,7 +165,7 @@ class MapaColunas:
     """Resultado da análise de colunas de uma sheet não-homogênea.
 
     ``header_row`` é 1-based; ``colunas`` mapeia campo lógico -> índice 0-based.
-    Campos lógicos: descricao, modulo, indice, tipo, ied, variavel.
+    Campos lógicos: descricao, modulo, indice, tipo, ied, variavel, sigla.
     """
 
     header_row: int
