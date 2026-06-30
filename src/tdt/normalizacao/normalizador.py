@@ -86,10 +86,17 @@ def _fase_no_texto(tokens: list[str]) -> tuple[str | None, str | None]:
         idx = tokens.index("FASE")
         if idx + 1 < len(tokens) and tokens[idx + 1] in FASES:
             return tokens[idx + 1], tokens[idx + 1]
-    # D2.2: "<líder ANSI 2-3 dígitos> <fase>" sem a palavra "FASE" (ex: "50 ABC").
+    # D2.2: "<líder ANSI 2-3 dígitos> <fase multi-letra>" sem a palavra "FASE"
+    # (ex: "50 ABC"). Restrito a multi-letra (ABC/AB/BC/CA): uma letra única
+    # (A/B/C/N) sozinha após um número é ambígua demais (não é exclusivamente
+    # fase) e descrições-padrão tipo "...NEUTRO..." não compartilham token com
+    # a letra "N" -- extrair "N" aqui só perde sinal de texto sem ganho.
     # Só dispara se os padrões acima (prioritários) não capturaram nada.
     for i, tok in enumerate(tokens):
-        if tok.isdigit() and len(tok) in (2, 3) and i + 1 < len(tokens) and tokens[i + 1] in FASES:
+        if (
+            tok.isdigit() and len(tok) in (2, 3)
+            and i + 1 < len(tokens) and tokens[i + 1] in ("ABC", "AB", "BC", "CA")
+        ):
             return tokens[i + 1], tokens[i + 1]
     return None, None
 

@@ -307,9 +307,13 @@ def test_extrai_fase_apos_lider_ansi_sem_palavra_fase():
     assert "50" in texto.split()  # número ANSI preservado, só a fase é removida
 
 
-def test_extrai_fase_apos_lider_ansi_letra_unica():
+def test_lider_ansi_letra_unica_nao_extrai_fase():
+    # restrito a multi-letra (ABC/AB/BC/CA) -- letra única após número é
+    # ambígua demais (ex: "67 N" não vira fase="N"; descrições-padrão tipo
+    # "...NEUTRO..." não compartilham token com a letra solta "N").
     texto, ctx = extrair_contexto_estrutural("PROTECAO 67 N TEMPORIZADO")
-    assert ctx.fase == "N"
+    assert ctx.fase is None
+    assert "N" in texto.split()
 
 
 def test_fase_explicita_tem_prioridade_sobre_padrao_lider_ansi():
