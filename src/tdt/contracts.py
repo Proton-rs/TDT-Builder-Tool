@@ -76,7 +76,7 @@ class MapeamentoEstados:
 class Candidato:
     sigla: str
     score: float
-    fonte: str  # "tfidf" | "vetorial" | "mesclado"
+    fonte: str  # "tfidf" | "vetorial" | "mesclado" | "expandido" | "ancora_sigla"
 
 
 @dataclass(frozen=True)
@@ -131,7 +131,7 @@ class ListaHomogenea:
 @dataclass(frozen=True)
 class ItemRevisao:
     registro: SignalRecord
-    motivo: str  # "score_baixo"|"endereco_duplicado"|"sem_endereco"|"sem_fix"|"categoria_ambigua"
+    motivo: str  # "score_baixo"|"endereco_duplicado"|"sem_endereco"|"sem_fix"|"categoria_ambigua"|"categoria_incompativel"|"modulo_indefinido"|"sigla_multipla"|"posicao_ambigua"|"pareamento_ambiguo"
     candidatos_sugeridos: tuple[Candidato, ...] = ()
 
 

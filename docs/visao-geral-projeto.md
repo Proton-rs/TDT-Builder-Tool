@@ -1,7 +1,7 @@
 # Projeto TDT v2 — Visão Geral
 
-Gerado em: 24/jun/2026
-Último SP: SP6 (commit `226e180`)
+Gerado em: 29/jun/2026
+Último SP: SP-Pareamento-Double-Bit (commit em andamento)
 
 ---
 
@@ -51,14 +51,28 @@ input.xlsx
 │ equipamento, barra, fase               │
 └────────────────────────────────────────┘
     ↓
+┌─ pareamento_polaridade ────────────────┐
+│ Par aberto/fechado mesmo equipamento   │
+│ → sigla de posição (DJF1/DJA1/SEC*)   │
+│ → posicao_ambigua se variante incerta  │
+└────────────────────────────────────────┘
+    ↓
 ┌─ 3 scorers paralelos ─────────────────┐
-│ TF-IDF  (sklearn, coseno)  — peso 0.34│
-│ FAISS   (sentence-transformers) — 0.33│
-│ FUZZY   (rapidfuzz token_set) — 0.33  │
+│ TF-IDF  (sklearn, coseno)  — peso 0.70│
+│ FAISS   (sentence-transformers) — 0.25│
+│ FUZZY   (rapidfuzz token_set) — 0.05  │
 └────────────────────────────────────────┘
     ↓
 ┌─ mescla ────────────────────────────────┐
 │ Soma ponderada por sigla candidata      │
+└─────────────────────────────────────────┘
+    ↓
+┌─ ancoragem_sigla (ANCORAGEM) ──────────┐
+│ 1. ancorar: injeta sigla literal       │
+│    encontrada na descrição (score 0.85)│
+│ 2. expansao_candidatos: abre família   │
+│ 3. filtrar_subarvore: restringe ao     │
+│    sub-ramo da âncora (67N→sem 67P/67F)│
 └─────────────────────────────────────────┘
     ↓
 ┌─ motor_regras (R1-R6 + R_equip) ──────┐
@@ -205,6 +219,55 @@ input.xlsx
 
 ---
 
+### SP-Categoria — Barreira de domínio no dual-pass (29/jun)
+
+**Problema:** 213 sinais analógicos classificados como discretos (e vice-versa) porque o dual-pass não respeitava a categoria do bundle durante a expansão de candidatos.
+
+**Solução:** ancoragem de categoria por bundle — cada bundle (disc/ana) expande candidatos e aplica filtro de especificidade **só dentro do seu domínio**; candidatos do domínio oposto não entram na disputa do bundle. Se ambos os bundles decidem siglas de categoria diferente, o sinal vai para revisão com `motivo="categoria_incompativel"`.
+
+Spec: `docs/superpowers/specs/2026-06-29-sp-categoria-dual-pass-fix-design.md`
+
+---
+
+### SP-Ancoragem — Sigla explícita na descrição (29/jun)
+
+**Problema diagnosticado:** 132 sinais com a própria sigla escrita na descrição sendo decididos para famílias erradas (ex.: `"Proteção 67 N Temporizado"` → `PRTF`), porque a sigla `67N` nunca entrava como candidato.
+
+**Solução:** novo módulo `ancoragem_sigla.py` com três etapas dentro de `_classificar_sinal`:
+
+1. **`detectar`** — encontra siglas da LP embutidas nos tokens da descrição (âncora exata + junção de tokens adjacentes "67"+"N"→"67N").
+2. **`ancorar`** — injeta a sigla detectada como candidato com `score=0.85` (ou re-pontua se já presente).
+3. **`filtrar_subarvore`** — após `expansao_candidatos` abrir toda a família pelo prefixo de 2 dígitos, restringe cada família ancorada ao sub-ramo da âncora (`67N` → mantém `67N*`, remove `67F*/67P*/67_*`). Isso evita empate entre ramos irmãos causado pela expansão ampla.
+
+**Guard de precisão:** apenas siglas "específicas" (len ≥ 3, tem dígito E letra) são ancoradas — exclui números de identificação de equipamento (`52-21`, `21Q0`). Múltiplas famílias → `motivo="sigla_multipla"` na revisão.
+
+**Resultado no input real:** `67 N - Estágio 2` → `67N2` ✓; `67N REVERSE` → `67NR` ✓; `63C` → `63C` ✓.
+
+Spec: `docs/superpowers/specs/2026-06-29-sp-ancoragem-sigla-explicita-design.md`
+
+---
+
+### SP-Pareamento-Double-Bit — Seccionadora aberta/fechada (29/jun)
+
+**Problema:** pares aberto/fechado de **seccionadora** não eram pareados pelo módulo de polaridade — `pareamento_polaridade.py` só cobria Disjuntor (`DJF1`). Seccionadoras divergiam para o scorer e se separavam.
+
+**Catálogo auditado** (`Export_base_Full_limpo.json`): 12 siglas double-bit na LP; 9 são posição de chave:
+- Disjuntor: `DJF1` (NF), `DJA1` (NA)
+- Seccionadora: `SECB` (bypass), `SECC` (carga), `SECF` (fonte), `SECG` (terra/aterramento), `SECI` (interbarras), `SECL` (interlinhas), `SECT` (transferência)
+
+**Solução:** resolução por **palavra-função** na descrição combinada do par:
+- `CARG*` → SECC · `BYPASS/BY/BYPS*` → SECB · `TRANSFER*` → SECT · `TERRA/ATERR*` → SECG · `FONT*` → SECF · `INTERBAR*` → SECI · `INTERLINHA*` → SECL
+- Disjuntor NA detectado pelo token exato "NA" → `DJA1`
+- Sem keyword reconhecida → `ItemRevisao(motivo="posicao_ambigua")` (nunca chuta)
+
+**Guard TRANSF vs TRANSFORMADOR:** keyword usa `"TRANSFER"` (8 chars); `"TRANSFORMADOR"` começa com `"TRANSFOR"`, não `"TRANSFER"` — evita falso positivo de seccionadora de transformador sendo classificada como transferência.
+
+**Retorno:** `forcar_polaridade_equipamento` agora retorna `tuple[list[SignalRecord], list[ItemRevisao]]`; pipeline desempacota e coleta revisões.
+
+Spec: `docs/superpowers/specs/2026-06-29-sp-pareamento-double-bit-posicao-design.md`
+
+---
+
 ## 5. Motor de Regras — Detalhamento
 
 | # | Função | O que faz | Delta | Gatilho |
@@ -265,11 +328,11 @@ Texto bruto
 
 ## 8. Testes
 
-**234 testes, 0 falhas** (24/jun/2026).
+**511 testes, 0 falhas** (29/jun/2026).
 
-41 arquivos de teste em `tests/`. Fixtures globais em `conftest.py`:
+Arquivos de teste em `tests/`. Fixtures globais em `conftest.py`:
 - `docs/dnp3_template.xlsx`
-- `docs/Pontos Padrao ADMS_v1.xlsx`
+- `docs/Pontos Padrao ADMS_v2.xlsx` (`lista_padrao_path`)
 - `docs/input_homogeneo.xlsx`
 
 TDD obrigatório: todo módulo tem seu `test_<modulo>.py`.
@@ -300,6 +363,13 @@ SP4:  UI PySide6 → 3 telas, worker, modelo, proxy, delegate, tema
       Redesenho, correção output TDT, escopo analógico
 SP5:  5 tracks paralelas → classificação A/C/D, GPU, filtros, relatório, pasta default
 SP6:  Normalização estrutural → N0, equipamento/barra/fase, r_equipamento
+SP7-SP10, spA-spF: lista homogênea determinística, filtros UI, completude TDT,
+      pareamento D+C (DJF1), identidade módulo, melhorias de análise e scoring
+SP-Categoria (29/jun): barreira de domínio dual-pass → elimina 213 FPs categoria
+SP-Ancoragem (29/jun): ancoragem_sigla.py → injeta sigla explícita como candidato;
+      filtrar_subarvore limita expansão ao sub-ramo da âncora (67N→sem 67P/67F)
+SP-Pareamento-Double-Bit (29/jun): pareamento_polaridade generalizado para SEC*
+      (7 variantes por palavra-função + DJA1 + posicao_ambigua); retorno com revisão
 ```
 
 ---

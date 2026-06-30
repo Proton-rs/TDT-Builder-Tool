@@ -29,7 +29,7 @@ Toda mudança significativa exige um DOX pass antes de concluir. Atualize o AGEN
 Transformar planilha Excel de pontos de subestação em arquivo **TDT** (EcoStruxure ADMS). Pipeline em `docs/Pipeline-projetoTDT v2.svg`.
 
 ## Ownership
-- Decomposição: **SP1** backbone determinístico+embeddings (DNP3) — implementado; **SP2** agentes LLM (em espera); **SP4** UI desktop — implementado. SP3 absorvido no SP1.
+- Decomposição: **SP1** backbone determinístico+embeddings (DNP3) — implementado; **SP2** agentes LLM (em espera); **SP4** UI desktop — implementado; SP3 absorvido no SP1. **SP-Categoria** barreira dual-pass — implementado; **SP-Ancoragem** sigla explícita na descrição — implementado; **SP-Pareamento-Double-Bit** pareamento posição seccionadora — implementado.
 - Código vive em `src/tdt/` (pipeline: módulos raiz + sub-dirs `normalizacao/`, `analise/`, `scoring/`, `matchers/`, `dados/`) e `src/tdt/ui/` (UI PySide6). Specs em `docs/superpowers/specs/`.
 
 ## Local Contracts (regras globais do projeto)
@@ -55,3 +55,4 @@ Transformar planilha Excel de pontos de subestação em arquivo **TDT** (EcoStru
 - `tests/AGENTS.md` — convenções de teste/fixtures.
 - `bench/AGENTS.md` — harness de benchmark e ground-truth.
 - `docs/AGENTS.md` — specs, inputs e templates.
+- `.opencode/skills/` — skills do opencode (especialista-adms-tdt, dox, superpowers, ponytail, graphify).

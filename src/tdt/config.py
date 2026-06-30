@@ -96,6 +96,12 @@ class Config:
     gaps_por_confianca: dict[str, float] = field(
         default_factory=lambda: {"alta": 0.05, "media": 0.10, "baixa": 0.15}
     )
+    # Ancoragem por sigla explícita (SP ancoragem-sigla)
+    ancora_sigla_ativa: bool = True
+    # Score injetado para âncoras exatas/junção — alto o bastante para vencer
+    # candidatos textuais genéricos com gap; abaixo de 1.0 para que filhos
+    # (expansao_candidatos) e filtro_especificidade selecionem a variante certa.
+    ancora_sigla_score: float = 0.85
     # Identidade do módulo (C1) — sementes calibráveis; confirmar nos inputs.
     mapa_prefixo_modulo: dict[str, str] = field(
         default_factory=lambda: {

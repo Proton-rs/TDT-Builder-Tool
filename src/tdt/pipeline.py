@@ -20,6 +20,7 @@ from typing import Callable, NamedTuple
 import openpyxl
 
 from tdt import (
+    ancoragem_sigla,
     criador_lista_homogenea, dc_pairer, engine_tdt, expansao_candidatos, filtro_preciso,
     motor_regras, roteador,
 )
@@ -158,6 +159,7 @@ def _com_fase(rec: SignalRecord) -> SignalRecord:
 def _classificar_sinal(
     rec, scorers: "_Scorers", diagnostico: bool = False, embedding_vet=None,
     lista_padrao: "ListaPadraoADMS | None" = None,
+    ancoras: "list | None" = None,
 ) -> SignalRecord:
     config = scorers.config
     c_tfidf = scorers.tfidf.pontuar(rec, k=config.k_vizinhos)
@@ -189,7 +191,14 @@ def _classificar_sinal(
         ]
     # F1 + Filtro Preciso: expande candidatos e remove contraditórios
     if lista_padrao is not None:
+        if ancoras:
+            fundidos = ancoragem_sigla.ancorar(fundidos, ancoras, config.ancora_sigla_score)
         fundidos = expansao_candidatos.expandir(fundidos, lista_padrao)
+        if ancoras:
+            # A expansão por prefixo de 2 dígitos reintroduz ramos irmãos
+            # (67F*/67P*) que a sigla âncora explícita (67N) exclui. Restringe
+            # cada família ancorada ao sub-ramo da âncora antes dos filtros.
+            fundidos = ancoragem_sigla.filtrar_subarvore(fundidos, ancoras)
         fundidos = filtro_preciso.filtrar(rec, fundidos, config)
         fundidos = filtro_preciso.filtrar_especificidade(rec, fundidos, lista_padrao, config)
     com_regras, ajustes = motor_regras.aplicar_rastreado(rec, fundidos, config)
@@ -239,29 +248,77 @@ def _desempatar_ambiguo(d_disc, d_ana, disc: "_Scorers", ana: "_Scorers", descri
     return d_disc if afin_disc > afin_ana else d_ana
 
 
+# Domínios que cada categoria de sinal admite no dual-pass. DiscreteAnalog (e
+# qualquer categoria não mapeada, via .get default) admite os dois — equivale
+# ao dual-pass livre de antes nesse caso.
+_DOMINIOS_POR_CATEGORIA: dict[str, frozenset[str]] = {
+    "Discrete": frozenset({"Discrete"}),
+    "Analog": frozenset({"Analog"}),
+    "DiscreteAnalog": frozenset({"Discrete", "Analog"}),
+}
+
+
 def _classificar_roteado(rec, disc: "_Scorers", ana: "_Scorers", diagnostico: bool,
                          embedding_vet=None, lista_padrao: "ListaPadraoADMS | None" = None):
     """Devolve (decidido_ou_None, item_revisao_ou_None).
 
     Confiável: usa o bundle da própria categoria.
-    Incerto: roda os dois; usa o único que decidir; se ambos decidirem,
-    tenta desempatar (gap, depois centroide); só vai pra revisão se também
-    o desempate for inconclusivo.
+
+    Incerto (categoria_confiavel=False): roda os dois bundles, mas só aceita
+    a decisão de um bundle cujo domínio seja admitido por
+    ``rec.tipo_sinal.categoria`` (barreira de domínio — ver
+    docs/superpowers/specs/2026-06-29-sp-categoria-dual-pass-fix-design.md).
+
+    ``rec.tipo_sinal.categoria`` pode ser um placeholder sem evidência real
+    quando a sheet não tinha coluna Tipo nem marcador de seção (estruturador
+    cai no default "Discrete"). Por isso, quando o domínio barrado TAMBÉM
+    decidiu (conflito real, não só score baixo), não se auto-aceita o lado
+    "permitido" — vai para revisão (categoria_ambigua), igual ao caso em que
+    os dois bundles decidem dentro do mesmo domínio admitido. Barrar só
+    "vence" silenciosamente quando o lado barrado é o único que decidiu
+    (motivo categoria_incompativel) — aí sim é o FP cross-categoria que esta
+    barreira existe para eliminar.
     """
+    _cfg = disc.config
+    _ancora_ativa = _cfg.ancora_sigla_ativa and lista_padrao is not None
+
     if rec.tipo_sinal.categoria_confiavel:
         bundle = disc if rec.tipo_sinal.categoria == "Discrete" else ana
+        categoria_bundle = "Discrete" if rec.tipo_sinal.categoria == "Discrete" else "Analog"
+        _ancoras = (
+            ancoragem_sigla.detectar(rec, lista_padrao, categoria_bundle)
+            if _ancora_ativa else []
+        )
+        _multiplas = ancoragem_sigla.tem_multiplas_familias(_ancoras)
         d = _classificar_sinal(rec, bundle, diagnostico=diagnostico, embedding_vet=embedding_vet,
-                               lista_padrao=lista_padrao)
+                               lista_padrao=lista_padrao, ancoras=_ancoras)
         if d.status == "decidido":
             return d, None
-        return None, ItemRevisao(d, motivo="score_baixo", candidatos_sugeridos=d.candidatos[:3])
+        motivo_conf = "sigla_multipla" if _multiplas else "score_baixo"
+        return None, ItemRevisao(d, motivo=motivo_conf, candidatos_sugeridos=d.candidatos[:3])
 
+    _ancoras_disc = (
+        ancoragem_sigla.detectar(rec, lista_padrao, "Discrete")
+        if _ancora_ativa else []
+    )
+    _ancoras_ana = (
+        ancoragem_sigla.detectar(rec, lista_padrao, "Analog")
+        if _ancora_ativa else []
+    )
     d_disc = _classificar_sinal(rec, disc, diagnostico=diagnostico, embedding_vet=embedding_vet,
-                                lista_padrao=lista_padrao)
+                                lista_padrao=lista_padrao, ancoras=_ancoras_disc)
     d_ana = _classificar_sinal(rec, ana, diagnostico=diagnostico, embedding_vet=embedding_vet,
-                               lista_padrao=lista_padrao)
-    ok_disc = d_disc.status == "decidido"
-    ok_ana = d_ana.status == "decidido"
+                               lista_padrao=lista_padrao, ancoras=_ancoras_ana)
+    decidiu_disc = d_disc.status == "decidido"
+    decidiu_ana = d_ana.status == "decidido"
+
+    dominios = _DOMINIOS_POR_CATEGORIA.get(
+        rec.tipo_sinal.categoria, frozenset({"Discrete", "Analog"})
+    )
+    permite_disc = "Discrete" in dominios
+    permite_ana = "Analog" in dominios
+    ok_disc = decidiu_disc and permite_disc
+    ok_ana = decidiu_ana and permite_ana
 
     if ok_disc and ok_ana:
         vencedor = _desempatar_ambiguo(d_disc, d_ana, disc, ana, rec.descricoes.normalizada)
@@ -269,12 +326,30 @@ def _classificar_roteado(rec, disc: "_Scorers", ana: "_Scorers", diagnostico: bo
             return vencedor, None
         cands = d_disc.candidatos[:3] + d_ana.candidatos[:3]
         return None, ItemRevisao(d_disc, motivo="categoria_ambigua", candidatos_sugeridos=cands)
-    if ok_disc and not ok_ana:
+
+    if decidiu_disc and decidiu_ana:
+        # Ambos decidiram, mas a barreira bloqueia ao menos um -> conflito
+        # real entre domínios. Categoria pode ser placeholder sem evidência
+        # (ver docstring) — não auto-aceita o lado "permitido".
+        cands = d_disc.candidatos[:3] + d_ana.candidatos[:3]
+        base = d_disc if permite_disc else d_ana
+        return None, ItemRevisao(base, motivo="categoria_ambigua", candidatos_sugeridos=cands)
+
+    if ok_disc:
         return d_disc, None
-    if ok_ana and not ok_disc:
+    if ok_ana:
         return d_ana, None
+
+    # Nenhum bundle decidiu DENTRO do domínio admitido.
+    decidiu_fora = decidiu_disc or decidiu_ana
+    base = d_disc if permite_disc else (d_ana if permite_ana else d_disc)
+    motivo = "categoria_incompativel" if decidiu_fora else "score_baixo"
+    if motivo == "score_baixo" and ancoragem_sigla.tem_multiplas_familias(
+        _ancoras_disc + _ancoras_ana
+    ):
+        motivo = "sigla_multipla"
     cands = d_disc.candidatos[:3] + d_ana.candidatos[:3]
-    return None, ItemRevisao(d_disc, motivo="score_baixo", candidatos_sugeridos=cands)
+    return None, ItemRevisao(base, motivo=motivo, candidatos_sugeridos=cands)
 
 
 def _aplicar_aliases(registros: list, aliases: dict[str, str] | None) -> list:
@@ -361,7 +436,8 @@ def executar(
                        f"Sheet {sn}: módulo indefinido — {len(rev_modulo)} sinais p/ revisão",
                        "AVISO")
             ids_indefinidos = {ir.registro.id for ir in rev_modulo}
-        sinais = forcar_polaridade_equipamento(sinais, config)
+        sinais, rev_polaridade = forcar_polaridade_equipamento(sinais, config)
+        revisao.extend(rev_polaridade)
         total = len(sinais)
         aud.evento("identificador", f"Sheet {sn}: {total} sinais lidos", "INFO")
         # Batch encode das descrições da sheet inteira — evita uma chamada ao

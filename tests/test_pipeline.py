@@ -388,10 +388,13 @@ def test_classificar_roteado_categoria_incerta_apenas_um_decide(lista_padrao_pat
 
 
 def test_classificar_roteado_categoria_incerta_ambos_decidem_categoria_ambigua(lista_padrao_path):
-    # thresholds frouxos nos dois bundles -> ambos decidem; o desempate por
-    # gap (Task 6) resolve automaticamente nessa fixture (gap_disc=0.53 vs
-    # gap_ana bem menor — diferença > margem de 0.03), então o resultado
-    # observado é "resolve automaticamente", não "permanece ambíguo".
+    # thresholds frouxos nos dois bundles -> ambos decidem. A fixture tem
+    # categoria="Discrete" (placeholder do estruturador) -> a barreira de
+    # domínio bloqueia o lado Analog. Como os DOIS decidiram (conflito real,
+    # não só score baixo), não se auto-aceita o lado "permitido" (Discrete):
+    # vai para revisão como categoria_ambigua, sem rodar o desempate por
+    # gap/centroide (esse só roda quando os dois domínios decididos são
+    # admitidos pela categoria — ver test_dual_pass_discreteanalog_*).
     cfg = Config(
         peso_tfidf=1.0, peso_vetorial=0.0, threshold_pct=0.01, threshold_gap=0.0,
         peso_tfidf_analog=1.0, peso_vetorial_analog=0.0,
@@ -400,10 +403,75 @@ def test_classificar_roteado_categoria_incerta_ambos_decidem_categoria_ambigua(l
     disc, ana = _bundles(lista_padrao_path, cfg)
     rec = _rec_incerto()
     decidido, item = _classificar_roteado(rec, disc, ana, diagnostico=False)
+    assert decidido is None
+    assert item is not None
+    assert item.motivo == "categoria_ambigua"
+    assert len(item.candidatos_sugeridos) > 0
+
+
+def test_dual_pass_barra_dominio_so_bundle_errado_decide(lista_padrao_path):
+    # categoria="Analog" (evidência real, ex: veio de coluna Tipo, módulo
+    # indefinido forçou confiavel=False). Disc decide (threshold frouxo);
+    # ana não decide (threshold travado). A barreira bloqueia o disc (fora
+    # do domínio Analog) e, como ana nem tentou (não houve conflito), não
+    # auto-aceita nem manda pro desempate -> revisão categoria_incompativel.
+    cfg = Config(
+        peso_tfidf=1.0, peso_vetorial=0.0, threshold_pct=0.01, threshold_gap=0.0,
+        peso_tfidf_analog=1.0, peso_vetorial_analog=0.0,
+        threshold_pct_analog=5.0, threshold_gap_analog=5.0,
+    )
+    disc, ana = _bundles(lista_padrao_path, cfg)
+    rec = _replace(
+        _rec_incerto(),
+        tipo_sinal=TipoSinal("Analog", False, "Input", categoria_confiavel=False),
+    )
+    decidido, item = _classificar_roteado(rec, disc, ana, diagnostico=False)
+    assert decidido is None
+    assert item is not None
+    assert item.motivo == "categoria_incompativel"
+    assert len(item.candidatos_sugeridos) > 0
+
+
+def test_dual_pass_discreteanalog_ambos_decidem_aceita_desempate(lista_padrao_path):
+    # categoria="DiscreteAnalog" admite os dois domínios -> a barreira não
+    # restringe nada; ambos decidem e o desempate normal (gap/centroide)
+    # roda como no dual-pass livre de antes.
+    cfg = Config(
+        peso_tfidf=1.0, peso_vetorial=0.0, threshold_pct=0.01, threshold_gap=0.0,
+        peso_tfidf_analog=1.0, peso_vetorial_analog=0.0,
+        threshold_pct_analog=0.01, threshold_gap_analog=0.0,
+    )
+    disc, ana = _bundles(lista_padrao_path, cfg)
+    rec = _replace(
+        _rec_incerto(),
+        tipo_sinal=TipoSinal("DiscreteAnalog", False, "Input", categoria_confiavel=False),
+    )
+    decidido, item = _classificar_roteado(rec, disc, ana, diagnostico=False)
     assert decidido is not None
     assert item is None
-    # categoria resolvida pelo desempate (gap ou centroide) — ver _desempatar_ambiguo
-    assert decidido.tipo_sinal.categoria in ("Discrete", "Analog")
+    # tipo_sinal.categoria não é alterado por _classificar_sinal — segue
+    # "DiscreteAnalog" (o que importa é que decidiu, via desempate normal).
+    assert decidido.status == "decidido"
+    assert decidido.sigla_sinal
+
+
+def test_dual_pass_discreteanalog_so_um_decide_aceita(lista_padrao_path):
+    # categoria="DiscreteAnalog"; só disc decide (ana travado). Sem conflito
+    # (ana não decidiu) -> aceita direto, sem ir pra revisão.
+    cfg = Config(
+        peso_tfidf=1.0, peso_vetorial=0.0, threshold_pct=0.01, threshold_gap=0.0,
+        peso_tfidf_analog=1.0, peso_vetorial_analog=0.0,
+        threshold_pct_analog=5.0, threshold_gap_analog=5.0,
+    )
+    disc, ana = _bundles(lista_padrao_path, cfg)
+    rec = _replace(
+        _rec_incerto(),
+        tipo_sinal=TipoSinal("DiscreteAnalog", False, "Input", categoria_confiavel=False),
+    )
+    decidido, item = _classificar_roteado(rec, disc, ana, diagnostico=False)
+    assert item is None
+    assert decidido is not None
+    assert decidido.status == "decidido"
 
 
 def test_classificar_roteado_categoria_incerta_nenhum_decide_score_baixo(lista_padrao_path):
