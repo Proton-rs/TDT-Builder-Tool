@@ -9,6 +9,7 @@ sheet (vem da coluna Módulo).
 from __future__ import annotations
 
 import re
+from dataclasses import replace
 
 from ..config import Config
 from ..contracts import (
@@ -21,7 +22,11 @@ from ..contracts import (
     TipoSinal,
 )
 from .normalizador import canonizar, extrair_contexto_estrutural
-from .parse_nome import extrair_modulo_do_nome, sigla_esta_no_nome
+from .parse_nome import (
+    extrair_equipamento_do_nome,
+    extrair_modulo_do_nome,
+    sigla_esta_no_nome,
+)
 from .vocabulario_tipo import classificar as _classificar, norm as _norm
 
 
@@ -108,6 +113,14 @@ def estruturar(
                     mod_extraido = extrair_modulo_do_nome(nome_str) if nome_str else None
                     if mod_extraido:
                         nome_mod_final, origem_modulo = mod_extraido, "coluna:SIGLA"
+                        # 3º token do NOME (equipamento/instância) -- sem isso,
+                        # múltiplas instâncias do mesmo módulo+sigla (ex:
+                        # "SLOTD" vs "SLOTD-2") colidem na chave de dedup de
+                        # normalizador_estrutural (modulo, nome_equipamento,
+                        # sigla) e são descartadas como endereco_duplicado.
+                        equip_extraido = extrair_equipamento_do_nome(nome_str)
+                        if equip_extraido:
+                            eletrico = replace(eletrico, nome_equipamento=equip_extraido)
             # sv não-vazia mas fora da LP -> status fica "pendente": recai no scoring
         # ---------------------------------------------------------------------
 

@@ -172,6 +172,24 @@ def test_sigla_valida_e_nome_consistente_pre_classifica():
     assert rec.modulo.origem_contexto == "coluna:SIGLA"
 
 
+def test_sigla_pre_classificada_popula_nome_equipamento_do_nome():
+    # mesma sigla/módulo, instâncias de equipamento DIFERENTES (3º token do
+    # NOME) -- sem isso, normalizador_estrutural._chave (modulo,
+    # nome_equipamento, sigla) trata como duplicata de endereço e descarta
+    # 3 dos 4 sinais (achado real na integração com SAN2).
+    rows = [
+        ("SIGLA", "NOME", "TIPO", "IDX"),
+        ("DR", "SND_SLOTD_SLOTD_DR", "Digital", "69"),
+        ("DR", "SND_SLOTD_SLOTD-2_DR", "Digital", "161"),
+    ]
+    siglas = frozenset({"DR"})
+    mapa = MapaColunas(header_row=1, colunas={"sigla": 0, "descricao": 1, "tipo": 2, "indice": 3})
+    recs = estruturar(rows, mapa, sheet_name="SLOTD", config=Config(), siglas_set=siglas)
+    assert len(recs) == 2
+    assert recs[0].eletrico.nome_equipamento == "SLOTD"
+    assert recs[1].eletrico.nome_equipamento == "SLOTD-2"
+
+
 def test_sigla_valida_mas_nome_inconsistente_vai_pra_revisao():
     rows = [
         ("SIGLA", "NOME", "TIPO", "IDX"),

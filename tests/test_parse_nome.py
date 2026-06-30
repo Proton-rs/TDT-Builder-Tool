@@ -1,4 +1,5 @@
 from tdt.normalizacao.parse_nome import (
+    extrair_equipamento_do_nome,
     extrair_modulo_do_nome,
     extrair_se_do_nome,
     sigla_esta_no_nome,
@@ -20,6 +21,20 @@ def test_extrair_modulo_do_nome_sem_underscore_suficiente():
 
 def test_extrair_modulo_do_nome_vazio():
     assert extrair_modulo_do_nome("") is None
+
+
+def test_extrair_equipamento_do_nome_distingue_instancias():
+    # Mesmo módulo (token 2), instâncias de equipamento diferentes (token 3)
+    # -- é o que distingue "SND_SLOTD_SLOTD-2_DR" de "SND_SLOTD_SLOTD-3_DR"
+    # na chave de dedup (modulo, nome_equipamento, sigla) do normalizador_estrutural.
+    assert extrair_equipamento_do_nome("SND_SLOTD_SLOTD-2_DR") == "SLOTD-2"
+    assert extrair_equipamento_do_nome("SND_SLOTD_SLOTD-3_DR") == "SLOTD-3"
+    assert extrair_equipamento_do_nome("SND_LT67SAN_LT67SAN_79") == "LT67SAN"
+
+
+def test_extrair_equipamento_do_nome_sem_tokens_suficientes():
+    assert extrair_equipamento_do_nome("SND_LT67SAN") is None
+    assert extrair_equipamento_do_nome("") is None
 
 
 def test_extrair_se_do_nome():

@@ -20,6 +20,19 @@ def extrair_se_do_nome(nome: str) -> str | None:
     return partes[0] if partes else None
 
 
+def extrair_equipamento_do_nome(nome: str) -> str | None:
+    """3º token (EQUIPAMENTO) após split por '_', se existir.
+
+    Distingue instâncias do mesmo módulo (ex: "SLOTD" vs "SLOTD-2" vs
+    "SLOTD-3") -- necessário pra alimentar ``eletrico.nome_equipamento``,
+    que é o que a chave de dedup de `normalizador_estrutural._chave`
+    (modulo, nome_equipamento, sigla) usa pra não tratar instâncias
+    diferentes como duplicata de endereço.
+    """
+    partes = str(nome).strip().split("_")
+    return partes[2] if len(partes) >= 4 else None
+
+
 def sigla_esta_no_nome(nome: str, sigla: str) -> bool:
     """A sigla aparece como TOKEN FINAL do nome (case-insensitive).
 
