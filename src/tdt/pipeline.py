@@ -151,9 +151,15 @@ def _vocab_dominio(corpus: list[tuple[str, str]]) -> frozenset[str]:
 
 
 def _com_fase(rec: SignalRecord) -> SignalRecord:
-    """Grava a fase derivada da sigla decidida em ``eletrico.fase`` (se vazia)."""
+    """Grava a fase derivada da sigla decidida em ``eletrico.fase`` (se vazia).
+
+    ``fase_da_sigla`` devolve ``"F"`` como sentinela de fase genérica (usado no
+    scoring de ``r3_fase``); proteção genérica trifásica = ``ABC`` na saída.
+    """
     if rec.sigla_sinal and rec.eletrico.fase is None:
         f = fase_da_sigla(rec.sigla_sinal.upper())
+        if f == "F":
+            f = "ABC"
         if f:
             return replace(rec, eletrico=replace(rec.eletrico, fase=f))
     return rec

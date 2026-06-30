@@ -308,6 +308,17 @@ def test_com_fase_nao_sobrescreve_existente():
     assert out.eletrico.fase == "ABC"
 
 
+def test_com_fase_mapeia_F_generico_para_ABC():
+    # PRTF/50F1 -> fase_da_sigla devolve "F" (genérica trifásica) -> ABC
+    assert _com_fase(_rec_min("PRTF")).eletrico.fase == "ABC"
+    assert _com_fase(_rec_min("50F1")).eletrico.fase == "ABC"
+
+
+def test_com_fase_preserva_fase_especifica():
+    assert _com_fase(_rec_min("51N")).eletrico.fase == "N"
+    assert _com_fase(_rec_min("51A")).eletrico.fase == "A"
+
+
 def _input_com_analogico(tmp_path):
     import openpyxl
     wb = openpyxl.Workbook()
