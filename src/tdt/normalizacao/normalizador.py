@@ -86,6 +86,11 @@ def _fase_no_texto(tokens: list[str]) -> tuple[str | None, str | None]:
         idx = tokens.index("FASE")
         if idx + 1 < len(tokens) and tokens[idx + 1] in FASES:
             return tokens[idx + 1], tokens[idx + 1]
+    # D2.2: "<líder ANSI 2-3 dígitos> <fase>" sem a palavra "FASE" (ex: "50 ABC").
+    # Só dispara se os padrões acima (prioritários) não capturaram nada.
+    for i, tok in enumerate(tokens):
+        if tok.isdigit() and len(tok) in (2, 3) and i + 1 < len(tokens) and tokens[i + 1] in FASES:
+            return tokens[i + 1], tokens[i + 1]
     return None, None
 
 

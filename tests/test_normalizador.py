@@ -300,6 +300,24 @@ def test_extrai_fase_trifasico():
     assert ctx.fase == "ABC"
 
 
+def test_extrai_fase_apos_lider_ansi_sem_palavra_fase():
+    texto, ctx = extrair_contexto_estrutural("PROTECAO 50 ABC ESTAGIO 1 ATUADO")
+    assert ctx.fase == "ABC"
+    assert "ABC" not in texto.split()
+    assert "50" in texto.split()  # número ANSI preservado, só a fase é removida
+
+
+def test_extrai_fase_apos_lider_ansi_letra_unica():
+    texto, ctx = extrair_contexto_estrutural("PROTECAO 67 N TEMPORIZADO")
+    assert ctx.fase == "N"
+
+
+def test_fase_explicita_tem_prioridade_sobre_padrao_lider_ansi():
+    # "FASE <letra>" (padrão já existente) continua tendo prioridade
+    texto, ctx = extrair_contexto_estrutural("PROTECAO FASE A 50 ATUADO")
+    assert ctx.fase == "A"
+
+
 def test_sem_fase_no_texto():
     texto, ctx = extrair_contexto_estrutural("FALHA COMUNICACAO")
     assert ctx.fase is None
