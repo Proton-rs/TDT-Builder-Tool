@@ -72,7 +72,7 @@ def test_resolver_modulo_dois_prefixos_distintos_e_ambiguo():
 
 def test_resolver_modulo_trf_nao_funde_com_tr():
     cfg = Config()
-    assert resolver_modulo("TRF3_P", [], cfg).nome == "TRF3"
+    assert resolver_modulo("TRF3_P", [], cfg).nome == "TRF03"  # SP-B: TRF3 -> TRF03
     assert resolver_modulo("TRF3_P", [], cfg).confianca == "alta"
     assert resolver_modulo("TRF-1", [], cfg).nome == "TRF1"
     assert resolver_modulo("TRF-2", [], cfg).nome == "TRF2"
@@ -122,6 +122,20 @@ def test_resolver_modulo_sps_tr1_tr2_continua_baixa_confianca():
     r = resolver_modulo("SPS_TR1_TR2", [], cfg)
     assert r.confianca == "baixa"
     assert r.nome == "SPS_TR1_TR2"
+
+
+def test_resolver_modulo_trf3_vira_trf03():
+    cfg = Config()
+    assert resolver_modulo("TRF3_P", [], cfg).nome == "TRF03"
+    assert resolver_modulo("TRF3_A", [], cfg).nome == "TRF03"
+    assert resolver_modulo("TRF3_P", [], cfg).confianca == "alta"
+
+
+def test_resolver_modulo_trf1_trf2_sem_padding():
+    # quirk de dado é só do TRF3 (real tem TRF03 mas TRF1/TRF2 sem pad)
+    cfg = Config()
+    assert resolver_modulo("TRF-1", [], cfg).nome == "TRF1"
+    assert resolver_modulo("TRF-2", [], cfg).nome == "TRF2"
 
 
 def test_classificar_tipo_trf_e_transferencia():

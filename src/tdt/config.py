@@ -158,6 +158,7 @@ class Config:
             "87BMT2": "87BMT2",
             "IB23KV": "IB",
             "PSACACC": "PSACA",
+            "TRF3P": "TRF03", "TRF3A": "TRF03",
         }
     )
     # Sheets que não são de dados DNP3 (capa, índice, consolidação cross-
