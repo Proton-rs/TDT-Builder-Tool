@@ -62,6 +62,13 @@ def test_ambiguo_com_descricoes_empatadas_greedy_escolhe_um_e_outro_fica_standal
     dirs = sorted(r.tipo_sinal.direcao for r in pareados)
     assert dirs == ["Input", "InputOutput"]
     assert revisao == ()
+    # Trava o desempate atual (maior índice de enumeração vence): s:2 funde,
+    # s:1 fica standalone. Se o critério de desempate mudar deliberadamente,
+    # este teste deve ser atualizado junto (não é um comportamento prescrito
+    # pela spec, só o efeito observável do sort atual).
+    por_id = {r.id: r for r in pareados}
+    assert por_id["s:2"].tipo_sinal.direcao == "InputOutput"
+    assert por_id["s:1"].tipo_sinal.direcao == "Input"
 
 
 def test_grupos_mesma_direcao_nao_sao_tocados():

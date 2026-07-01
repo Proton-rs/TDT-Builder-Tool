@@ -103,6 +103,14 @@ def _parear_catchall(inputs, outputs, limiar):
     """Greedy: casa cada Output com o Input de maior similaridade de descrição
     (>= limiar). Inputs sem par -> Input standalone (saída). Outputs sem par ->
     revisão. Ver spec discriminador-genérico Fase 2.
+
+    Empate de similaridade: `candidatos.sort(reverse=True)` desempata por
+    `(oi, ii)` decrescente — entre 2 Inputs igualmente similares, vence o de
+    maior índice na lista de entrada (não é ordem de dict nem estável por
+    identidade do registro). A spec não prescreve desempate; não há gate real
+    exercitando esse caminho hoje (catch-all real, ex. SGF, falha antes na
+    classificação). Se isso importar no futuro, desempatar por outro critério
+    explícito (ex. endereço) em vez de depender da ordem de enumeração.
     """
     candidatos = []
     for oi, o in enumerate(outputs):
