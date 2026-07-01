@@ -13,6 +13,18 @@ from tdt.ui.busca_adms import buscar
 from tdt.ui.estado import AppState
 
 
+def _preselecionar(editor: QComboBox, valor) -> None:
+    """Sincroniza o combo com o valor atual da célula ao abrir o editor.
+
+    "—" é o sentinela de exibição p/ campo vazio (ver modelo_tabela._texto);
+    mapeia p/ a opção vazia "". Em combo não-editável (DelegateCombo),
+    setCurrentText só muda a seleção se o texto for uma opção existente —
+    sem match, o Qt não altera a seleção (comportamento padrão do widget).
+    """
+    texto = "" if valor in (None, "—") else str(valor)
+    editor.setCurrentText(texto)
+
+
 class DelegateSinal(QStyledItemDelegate):
     def __init__(self, estado: AppState, modelo, proxy, parent=None):
         super().__init__(parent)
@@ -57,6 +69,9 @@ class DelegateCombo(QStyledItemDelegate):
         combo.addItems(self._opcoes)
         return combo
 
+    def setEditorData(self, editor, index):
+        _preselecionar(editor, index.data(Qt.DisplayRole))
+
     def setModelData(self, editor, model, index):
         model.setData(index, editor.currentText().strip(), Qt.EditRole)
 
@@ -79,6 +94,9 @@ class DelegateModulo(QStyledItemDelegate):
         })
         combo.addItems(modulos)
         return combo
+
+    def setEditorData(self, editor, index):
+        _preselecionar(editor, index.data(Qt.DisplayRole))
 
     def setModelData(self, editor, model, index):
         model.setData(index, editor.currentText().strip(), Qt.EditRole)

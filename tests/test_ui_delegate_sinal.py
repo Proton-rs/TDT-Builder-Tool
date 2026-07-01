@@ -2,18 +2,24 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-from tdt.contracts import Descricoes, Enderecamento, Modulo, SignalRecord, TipoSinal
-from tdt.ui.delegate_sinal import DelegateModulo
+from tdt.contracts import Descricoes, Eletrico, Enderecamento, Modulo, SignalRecord, TipoSinal
+from tdt.ui.delegate_sinal import DelegateCombo, DelegateModulo
 from tdt.ui.estado import AppState
+from tdt.ui.modelo_tabela import ModeloSinais
 
 
-def _rec(id_, modulo_nome):
+def _rec(id_, modulo_nome, eletrico=None):
     return SignalRecord(
         id=id_, modulo=Modulo(modulo_nome, "sheet_name"),
         tipo_sinal=TipoSinal("Discrete", False, "Input"),
         enderecamento=Enderecamento("DNP3", (1,)),
         descricoes=Descricoes("d", "D"),
+        eletrico=eletrico if eletrico is not None else Eletrico(),
     )
+
+
+def _col(nome):
+    return ModeloSinais.COLUNAS.index(nome)
 
 
 def test_delegate_modulo_sugere_nomes_distintos_ordenados_sem_none(qtbot):
@@ -27,3 +33,36 @@ def test_delegate_modulo_sugere_nomes_distintos_ordenados_sem_none(qtbot):
     qtbot.addWidget(combo)
     assert combo.isEditable() is True
     assert [combo.itemText(i) for i in range(combo.count())] == ["AL21", "AL22"]
+
+
+def test_delegate_combo_set_editor_data_preseleciona_valor_atual(qtbot):
+    st = AppState()
+    st.registros = [_rec("a:1", "M", eletrico=Eletrico(fase="B"))]
+    m = ModeloSinais(st)
+    delegate = DelegateCombo(["", "A", "B", "C"])
+    combo = delegate.createEditor(None, None, None)
+    qtbot.addWidget(combo)
+    delegate.setEditorData(combo, m.index(0, _col("Fase")))
+    assert combo.currentText() == "B"
+
+
+def test_delegate_combo_set_editor_data_mapeia_traco_para_opcao_vazia(qtbot):
+    st = AppState()
+    st.registros = [_rec("a:1", "M")]  # Eletrico() default -> Fase exibe "—"
+    m = ModeloSinais(st)
+    delegate = DelegateCombo(["", "A", "B", "C"])
+    combo = delegate.createEditor(None, None, None)
+    qtbot.addWidget(combo)
+    delegate.setEditorData(combo, m.index(0, _col("Fase")))
+    assert combo.currentText() == ""
+
+
+def test_delegate_modulo_set_editor_data_preseleciona_modulo_atual(qtbot):
+    st = AppState()
+    st.registros = [_rec("a:1", "AL21"), _rec("a:2", "AL22")]
+    m = ModeloSinais(st)
+    delegate = DelegateModulo(st)
+    combo = delegate.createEditor(None, None, None)
+    qtbot.addWidget(combo)
+    delegate.setEditorData(combo, m.index(0, _col("Módulo")))
+    assert combo.currentText() == "AL21"
