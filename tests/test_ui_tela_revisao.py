@@ -3,6 +3,7 @@ from PySide6.QtCore import QItemSelectionModel, QPoint
 import pytest
 
 from tdt.contracts import Descricoes, Enderecamento, Modulo, SignalRecord, TipoSinal
+from tdt.ui.delegate_sinal import DelegateCombo, DelegateModulo
 from tdt.ui.estado import AppState
 from tdt.ui.modelo_tabela import ModeloSinais
 from tdt.ui.tela_revisao import TelaRevisao, decidir_acao_pareamento
@@ -265,3 +266,18 @@ def test_parear_sinais_desvincular_confirmado_separa_em_dois(qtbot, monkeypatch)
     assert comando_rec.enderecamento.indices == (0,)
     assert comando_rec.id.startswith("1_saida_")
     assert comando_rec.id != status_rec.id
+
+
+def test_carregar_registra_delegate_combo_nas_colunas_de_dominio(qtbot):
+    tela = _tela_carregada(qtbot, [_rec("1", "SE1", "A")])
+    for nome in ("Tipo", "Fase", "Nível Tensão", "Barra", "Tipo Equip."):
+        col = ModeloSinais.COLUNAS.index(nome)
+        delegate = tela.tabela.itemDelegateForColumn(col)
+        assert isinstance(delegate, DelegateCombo), nome
+
+
+def test_carregar_registra_delegate_modulo_na_coluna_modulo(qtbot):
+    tela = _tela_carregada(qtbot, [_rec("1", "SE1", "A")])
+    col = ModeloSinais.COLUNAS.index("Módulo")
+    delegate = tela.tabela.itemDelegateForColumn(col)
+    assert isinstance(delegate, DelegateModulo)

@@ -19,13 +19,22 @@ from tdt import pipeline
 from tdt.contracts import Descricoes, Enderecamento, Modulo, SignalRecord, TipoSinal
 from tdt.dc_pairer import fundir, separar
 from tdt.ui.busca_adms import buscar
-from tdt.ui.delegate_sinal import DelegateSinal
+from tdt.ui.delegate_sinal import DelegateCombo, DelegateModulo, DelegateSinal
 from tdt.ui.estado import AppState
 from tdt.ui.modelo_tabela import ModeloSinais, cor_faixa
 from tdt.relatorio_revisao import gerar_relatorio_revisao
 from tdt.ui.proxy_revisao import ProxyRevisao
 
 _METODOS = (("emb", "vetorial"), ("tfidf", "tfidf"), ("fuzzy", "fuzzy"))
+
+_OPCOES_COMBO = {
+    "Tipo": ["Discrete/Input", "Discrete/Output", "Discrete/InputOutput",
+             "Analog/Input", "Analog/Output"],
+    "Fase": ["", "A", "B", "C", "N", "AB", "BC", "CA", "ABC"],
+    "Nível Tensão": ["", "AT", "BT"],
+    "Barra": ["", "Principal", "Auxiliar"],
+    "Tipo Equip.": ["", "Disjuntor", "Seccionadora"],
+}
 
 
 def decidir_acao_pareamento(registros: list[SignalRecord]):
@@ -177,6 +186,11 @@ class TelaRevisao(QWidget):
         col_sinal = ModeloSinais.COLUNAS.index("Sinal")
         self.tabela.setItemDelegateForColumn(
             col_sinal, DelegateSinal(self._estado, self._modelo, self._proxy, self.tabela))
+        for nome, opcoes in _OPCOES_COMBO.items():
+            col = ModeloSinais.COLUNAS.index(nome)
+            self.tabela.setItemDelegateForColumn(col, DelegateCombo(opcoes, self.tabela))
+        col_modulo = ModeloSinais.COLUNAS.index("Módulo")
+        self.tabela.setItemDelegateForColumn(col_modulo, DelegateModulo(self._estado, self.tabela))
         self.tabela.selectionModel().currentRowChanged.connect(self._linha_mudou)
         self.tabela.selectionModel().selectionChanged.connect(self._atualizar_selecao)
 
