@@ -2,7 +2,7 @@
 por endereço (gate_tdt_real) e checa os casos travados. Exit != 0 se algum
 caso travado falha.
 
-Uso: PYTHONPATH=src python bench/regressao.py
+Uso: PYTHONPATH=src python -m bench.regressao
 """
 from __future__ import annotations
 
@@ -51,7 +51,7 @@ _TEMPLATE = "docs/dnp3_template.xlsx"
 _LISTA = "docs/Pontos Padrao ADMS_v2.xlsx"
 
 
-def _gerar_nosso_tdt(input_path: str, saida: str) -> None:
+def _gerar_nosso_tdt(input_path: str, saida: str, subestacao: str) -> None:
     """Roda o pipeline real e salva o TDT gerado em `saida`."""
     import warnings, logging
     warnings.simplefilter("ignore"); logging.disable(logging.CRITICAL)
@@ -60,7 +60,9 @@ def _gerar_nosso_tdt(input_path: str, saida: str) -> None:
     from tdt import pipeline
     cfg = Config()
     enc = criar_encoder(cfg.modelo_embedding)
-    _res, wb = pipeline.executar(input_path, _TEMPLATE, _LISTA, config=cfg, encoder=enc)
+    _res, wb = pipeline.executar(
+        input_path, _TEMPLATE, _LISTA, config=cfg, encoder=enc, subestacao=subestacao
+    )
     wb.save(saida)
 
 
@@ -69,7 +71,7 @@ def main() -> int:
     falhas = 0
     for se, inp, real in _PARES:
         saida = f"bench/_tdt_gerado_{se}.xlsx"
-        _gerar_nosso_tdt(inp, saida)
+        _gerar_nosso_tdt(inp, saida, se)
         r = comparar(saida, real)
         print(f"[{se}] comum={r.comum} iguais={r.iguais} pct={r.pct:.1f}%")
         for c, obtida, ok in checar_casos(saida, [x for x in casos if x.subestacao == se]):
