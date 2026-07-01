@@ -2,6 +2,13 @@
 por endereço (gate_tdt_real) e checa os casos travados. Exit != 0 se algum
 caso travado falha.
 
+⚠️ Estado inicial: os casos em `casos_travados.csv` documentam bugs
+CONHECIDOS AINDA NÃO CORRIGIDOS — por design, começam FALHANDO (GATE FALHOU
+é esperado até as fases de fix corrigirem cada um). O sinal que importa é
+"nenhum caso que passava passou a falhar" (regressão), não "tudo verde".
+Ao corrigir um caso, ele deve virar PASS; se um caso que já era PASS virar
+FAIL, isso sim é regressão real.
+
 Uso: PYTHONPATH=src python -m bench.regressao
 """
 from __future__ import annotations
