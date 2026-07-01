@@ -14,7 +14,7 @@ from tdt.dados.lista_padrao import ListaPadraoADMS
 from tdt.dados.encoder import criar_encoder
 from tdt.analise.identificador import classificar, ler_rows
 
-inp = sys.argv[1] if len(sys.argv) > 1 else "docs/input_nao_homogeneo_1.xlsx"
+inp = sys.argv[1] if len(sys.argv) > 1 else "docs/input_nao_homogeneo_1_GTD.xlsx"
 HEADERISH = ("DESCRICAO", "DESCRICAO DO PONTO", "DESCRICAO PONTO")
 
 cfg = Config(); enc = criar_encoder(cfg.modelo_embedding)

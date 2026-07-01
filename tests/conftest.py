@@ -25,4 +25,4 @@ def template_dnp3_path():
 
 @pytest.fixture
 def input_homogeneo_path():
-    return DOCS / "input_homogeneo.xlsx"
+    return DOCS / "input_homogeneo_IMA.xlsx"
