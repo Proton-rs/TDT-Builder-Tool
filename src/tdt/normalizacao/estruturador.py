@@ -31,9 +31,11 @@ from .vocabulario_tipo import classificar as _classificar, norm as _norm
 
 
 def _eh_marcador(row: tuple, col0: int) -> bool:
-    """col0 tem categoria e o resto da linha está vazio."""
+    """Uma única célula tem categoria (em qq coluna) e o resto está vazio."""
     preenchidas = [i for i, c in enumerate(row) if _norm(c)]
-    return preenchidas == [col0] and _classificar(row[col0]) is not None
+    if len(preenchidas) != 1:
+        return False
+    return _classificar(row[preenchidas[0]]) is not None
 
 
 def _parse_indices(cell) -> tuple[int, ...]:
@@ -72,7 +74,8 @@ def estruturar(
             continue
 
         if _eh_marcador(row, col0):
-            secao = _classificar(row[col0])
+            idx_marc = [i for i, c in enumerate(row) if _norm(c)][0]
+            secao = _classificar(row[idx_marc])
             secao_explicita = True
             continue
 
