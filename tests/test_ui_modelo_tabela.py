@@ -1,7 +1,10 @@
+from dataclasses import replace
+
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 from tdt.contracts import (
-    Candidato, Descricoes, Diagnostico, Eletrico, Enderecamento, Modulo, SignalRecord, TipoSinal,
+    Candidato, Descricoes, Diagnostico, Eletrico, Enderecamento, GrandezasAnalogicas,
+    Modulo, SignalRecord, TipoSinal,
 )
 from tdt.dados.lista_padrao import ListaPadraoADMS, SinalPadrao
 from tdt.ui.estado import AppState
@@ -212,3 +215,80 @@ def test_remover_linhas_emite_sinais_de_remocao(qtbot):
     m = ModeloSinais(st)
     with qtbot.waitSignal(m.rowsRemoved, timeout=1000):
         m.remover_linhas([0])
+
+
+def test_flags_colunas_dominio_sao_editaveis():
+    m = ModeloSinais(_state(_rec()))
+    for nome in ("Sinal", "Tipo", "Fase", "Nível Tensão", "Barra",
+                 "Tipo Equip.", "Módulo", "Escala"):
+        flags = m.flags(m.index(0, _col(nome)))
+        assert flags & Qt.ItemIsEditable, nome
+
+
+def test_flags_colunas_derivadas_nao_sao_editaveis():
+    m = ModeloSinais(_state(_rec()))
+    for nome in ("Status", "Motivo", "Descr. ADMS", "Score tf-idf",
+                 "Justificativa", "Equipamento"):
+        flags = m.flags(m.index(0, _col(nome)))
+        assert not (flags & Qt.ItemIsEditable), nome
+
+
+def test_set_data_fase_atualiza_estado_e_emite_data_changed(qtbot):
+    st = _state(_rec())
+    m = ModeloSinais(st)
+    idx = m.index(0, _col("Fase"))
+    with qtbot.waitSignal(m.dataChanged, timeout=1000):
+        ok = m.setData(idx, "B", Qt.EditRole)
+    assert ok is True
+    assert st.registros[0].eletrico.fase == "B"
+
+
+def test_set_data_tipo_faz_split_categoria_direcao():
+    st = _state(_rec())
+    m = ModeloSinais(st)
+    ok = m.setData(m.index(0, _col("Tipo")), "Analog/Output", Qt.EditRole)
+    assert ok is True
+    assert st.registros[0].tipo_sinal.categoria == "Analog"
+    assert st.registros[0].tipo_sinal.direcao == "Output"
+
+
+def test_set_data_tipo_sem_barra_retorna_false():
+    st = _state(_rec())
+    m = ModeloSinais(st)
+    ok = m.setData(m.index(0, _col("Tipo")), "Discrete", Qt.EditRole)
+    assert ok is False
+
+
+def test_set_data_escala_converte_texto_com_virgula_para_float():
+    st = _state(_rec())
+    m = ModeloSinais(st)
+    ok = m.setData(m.index(0, _col("Escala")), "1,5", Qt.EditRole)
+    assert ok is True
+    assert st.registros[0].grandezas_analogicas.escala_transmissao == 1.5
+
+
+def test_set_data_escala_vazio_limpa_valor():
+    st = _state(_rec())
+    st.registros[0] = replace(
+        st.registros[0],
+        grandezas_analogicas=GrandezasAnalogicas(escala_transmissao=3.0),
+    )
+    m = ModeloSinais(st)
+    ok = m.setData(m.index(0, _col("Escala")), "", Qt.EditRole)
+    assert ok is True
+    assert st.registros[0].grandezas_analogicas.escala_transmissao is None
+
+
+def test_set_data_escala_invalida_retorna_false_sem_mutar():
+    st = _state(_rec())
+    m = ModeloSinais(st)
+    ok = m.setData(m.index(0, _col("Escala")), "abc", Qt.EditRole)
+    assert ok is False
+    assert st.registros[0].grandezas_analogicas.escala_transmissao is None
+
+
+def test_set_data_coluna_nao_editavel_retorna_false():
+    st = _state(_rec())
+    m = ModeloSinais(st)
+    ok = m.setData(m.index(0, _col("Status")), "decidido", Qt.EditRole)
+    assert ok is False

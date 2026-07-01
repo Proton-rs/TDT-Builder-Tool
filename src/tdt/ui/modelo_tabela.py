@@ -38,6 +38,11 @@ COR_BAIXO = QColor("#c0492a")
 COR_DECIDIDO = QColor("#1d9e75")
 COR_REVISAO = QColor("#c0492a")
 
+_EDITAVEIS = frozenset({
+    "Sinal", "Tipo", "Fase", "Nível Tensão", "Barra", "Tipo Equip.",
+    "Módulo", "Escala",
+})
+
 
 def cor_faixa(score) -> QColor | None:
     if score is None:
@@ -77,7 +82,7 @@ class ModeloSinais(QAbstractTableModel):
 
     def flags(self, index):
         base = super().flags(index)
-        if COLUNAS[index.column()] == "Sinal":
+        if COLUNAS[index.column()] in _EDITAVEIS:
             return base | Qt.ItemIsEditable
         return base
 
@@ -159,6 +164,40 @@ class ModeloSinais(QAbstractTableModel):
         if role == Qt.ToolTipRole and nome in ("Sinal", "Descr. ADMS"):
             return self._adms(rec) or None
         return None
+
+    def setData(self, index, value, role=Qt.EditRole):
+        if role != Qt.EditRole or not index.isValid():
+            return False
+        nome = COLUNAS[index.column()]
+        linha = index.row()
+        texto = str(value).strip()
+        if nome == "Tipo":
+            if "/" not in texto:
+                return False
+            categoria, direcao = texto.split("/", 1)
+            self._estado.definir_tipo(linha, categoria, direcao)
+        elif nome == "Fase":
+            self._estado.definir_fase(linha, texto or None)
+        elif nome == "Nível Tensão":
+            self._estado.definir_nivel_tensao(linha, texto or None)
+        elif nome == "Barra":
+            self._estado.definir_barra(linha, texto or None)
+        elif nome == "Tipo Equip.":
+            self._estado.definir_tipo_equip(linha, texto or None)
+        elif nome == "Módulo":
+            self._estado.definir_modulo(linha, texto or None)
+        elif nome == "Escala":
+            try:
+                valor = float(texto.replace(",", ".")) if texto else None
+            except ValueError:
+                return False
+            self._estado.definir_escala(linha, valor)
+        else:
+            return False
+        topo = self.index(linha, 0)
+        fim = self.index(linha, len(COLUNAS) - 1)
+        self.dataChanged.emit(topo, fim)
+        return True
 
     def definir_sigla(self, linha: int, sigla: str) -> None:
         self._estado.definir_sigla(linha, sigla)
