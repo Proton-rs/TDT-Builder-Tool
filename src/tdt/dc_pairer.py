@@ -12,6 +12,8 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import replace
 
+from rapidfuzz import fuzz
+
 from tdt.contracts import ItemRevisao, SignalRecord
 
 
@@ -69,7 +71,9 @@ def separar(fundido: SignalRecord, novo_id_saida: str) -> tuple[SignalRecord, Si
 
 def parear(
     registros: list[SignalRecord],
+    config=None,
 ) -> tuple[tuple[SignalRecord, ...], tuple[ItemRevisao, ...]]:
+    limiar = 60.0 if config is None else config.limiar_pareamento_similaridade
     grupos: dict[tuple, list[SignalRecord]] = defaultdict(list)
     for rec in registros:
         grupos[_chave(rec)].append(rec)
@@ -87,7 +91,46 @@ def parear(
             saida.extend(grupo)
         elif len(inputs) == 1 and len(outputs) == 1:
             saida.append(fundir(inputs[0], outputs[0]))
-        else:  # ambíguo: não dá para confirmar o equipamento
-            revisao.extend(ItemRevisao(r, motivo="pareamento_ambiguo") for r in grupo)
+        else:  # N×M: desempata por similaridade de descrição (catch-all)
+            saida_pares, sobra_rev = _parear_catchall(inputs, outputs, limiar)
+            saida.extend(saida_pares)
+            revisao.extend(sobra_rev)
 
     return tuple(saida), tuple(revisao)
+
+
+def _parear_catchall(inputs, outputs, limiar):
+    """Greedy: casa cada Output com o Input de maior similaridade de descrição
+    (>= limiar). Inputs sem par -> Input standalone (saída). Outputs sem par ->
+    revisão. Ver spec discriminador-genérico Fase 2.
+    """
+    candidatos = []
+    for oi, o in enumerate(outputs):
+        for ii, i in enumerate(inputs):
+            sim = fuzz.token_sort_ratio(
+                o.descricoes.normalizada, i.descricoes.normalizada
+            )
+            candidatos.append((sim, oi, ii))
+    candidatos.sort(reverse=True)
+
+    usados_o: set[int] = set()
+    usados_i: set[int] = set()
+    saida: list[SignalRecord] = []
+    for sim, oi, ii in candidatos:
+        if sim < limiar:
+            break
+        if oi in usados_o or ii in usados_i:
+            continue
+        saida.append(fundir(inputs[ii], outputs[oi]))
+        usados_o.add(oi)
+        usados_i.add(ii)
+
+    for ii, inp in enumerate(inputs):
+        if ii not in usados_i:
+            saida.append(inp)  # standalone decidido
+
+    revisao = [
+        ItemRevisao(o, motivo="pareamento_ambiguo")
+        for oi, o in enumerate(outputs) if oi not in usados_o
+    ]
+    return saida, revisao

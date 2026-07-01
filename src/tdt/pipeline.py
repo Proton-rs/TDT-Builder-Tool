@@ -523,7 +523,7 @@ def executar(
     wb_in.close()
 
     with _timer("dc_pairer + corrigir + montar + tdt", aud):
-        pareados, rev_pair = dc_pairer.parear(decididos)
+        pareados, rev_pair = dc_pairer.parear(decididos, config)
         corrigidos, rev_estrut = corrigir(list(pareados))
         revisao.extend(rev_pair)
         revisao.extend(rev_estrut)

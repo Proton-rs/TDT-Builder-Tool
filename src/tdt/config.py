@@ -62,6 +62,10 @@ class Config:
     # Pareamento de polaridade (SP10) — rede de segurança quando a descrição
     # padrão da sigla de posição é genérica demais pro scorer de texto.
     parear_polaridade_equipamento: bool = True
+    # Pareamento D+C de catch-all: similaridade mínima (rapidfuzz token_sort_ratio,
+    # 0-100) para casar 1 Output com 1 Input quando N inputs/M outputs compartilham
+    # a mesma sigla no módulo. Abaixo disso, output órfão vai pra revisão.
+    limiar_pareamento_similaridade: float = 60.0
     # Motor de regras — delta base por regra (calibrável; defaults conservadores)
     pesos_regras: dict[str, float] = field(
         default_factory=lambda: {

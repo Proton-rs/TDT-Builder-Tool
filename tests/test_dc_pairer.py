@@ -45,16 +45,23 @@ def test_comando_orfao_passa_como_write():
     assert revisao == ()
 
 
-def test_ambiguo_vai_para_revisao():
+def test_ambiguo_com_descricoes_empatadas_greedy_escolhe_um_e_outro_fica_standalone():
+    # _rec usa Descricoes(sigla, sigla): os 2 inputs têm descrição idêntica
+    # ("DJ"), empatando a 100 de similaridade com o único output. Fase 2
+    # (greedy catch-all) resolve o empate deterministicamente: 1 funde,
+    # o outro sobra como Input standalone — nenhum vai pra revisão, pois o
+    # output não fica órfão. Nome/expectativa anteriores (tudo pra revisão)
+    # eram do comportamento pré-Fase-2; ver spec discriminador-genérico Fase 2.
     regs = [
         _rec("s:1", "DJ", "Input", [5]),
         _rec("s:2", "DJ", "Input", [6]),
         _rec("s:3", "DJ", "Output", [0]),
     ]
     pareados, revisao = parear(regs)
-    assert pareados == ()
-    assert len(revisao) == 3
-    assert all(it.motivo == "pareamento_ambiguo" for it in revisao)
+    assert len(pareados) == 2
+    dirs = sorted(r.tipo_sinal.direcao for r in pareados)
+    assert dirs == ["Input", "InputOutput"]
+    assert revisao == ()
 
 
 def test_grupos_mesma_direcao_nao_sao_tocados():
@@ -100,3 +107,45 @@ def test_separar_e_fundir_sao_inversos_para_enderecos():
     refundido = fundir(novo_status, novo_comando)
     assert refundido.enderecamento.indices == fundido.enderecamento.indices
     assert refundido.enderecamento.indices_saida == fundido.enderecamento.indices_saida
+
+
+def _rec_desc(rid, sigla, direcao, desc, modulo, indices):
+    from tdt.contracts import Descricoes, Enderecamento, Modulo, SignalRecord, TipoSinal
+    return SignalRecord(
+        id=rid, modulo=Modulo(modulo, "sheet_name"),
+        tipo_sinal=TipoSinal("Discrete", False, direcao),
+        enderecamento=Enderecamento("DNP3", tuple(indices)),
+        descricoes=Descricoes(desc, desc), sigla_sinal=sigla, status="decidido",
+    )
+
+
+def test_catchall_pareia_por_similaridade_e_deixa_sem_par_standalone():
+    # 1 output "Excluir" + 2 inputs "Excluida"/"Atuado", todos sigla SGF, mesmo modulo.
+    out = _rec_desc("o", "SGF", "Output", "PROTECAO SENSIVEL TERRA SGF EXCLUIR", "GTD_11", (20,))
+    in_exc = _rec_desc("i1", "SGF", "Input", "PROTECAO SGF EXCLUIDA", "GTD_11", (71,))
+    in_atu = _rec_desc("i2", "SGF", "Input", "PROTECAO SGF ATUADO", "GTD_11", (72,))
+    saida, revisao = parear([out, in_exc, in_atu])
+    dirs = sorted(r.tipo_sinal.direcao for r in saida)
+    # Excluir+Excluida fundem (InputOutput); Atuado sobra como Input standalone.
+    assert "InputOutput" in dirs
+    assert "Input" in dirs           # Atuado standalone, decidido
+    assert revisao == ()             # nada vai pra revisao
+
+
+def test_catchall_output_orfao_vai_revisao():
+    # 2 outputs, 1 input; o 2o output nao casa nada -> sobra -> revisao.
+    out1 = _rec_desc("o1", "SGF", "Output", "PROTECAO SGF EXCLUIR", "GTD_11", (20,))
+    out2 = _rec_desc("o2", "SGF", "Output", "ZZZ QQQ WWW NADA A VER", "GTD_11", (21,))
+    inp = _rec_desc("i1", "SGF", "Input", "PROTECAO SGF EXCLUIDA", "GTD_11", (71,))
+    saida, revisao = parear([out1, out2, inp])
+    assert any(r.tipo_sinal.direcao == "InputOutput" for r in saida)
+    assert len(revisao) == 1
+    assert revisao[0].motivo == "pareamento_ambiguo"
+
+
+def test_um_input_um_output_ainda_funde_direto():
+    out = _rec_desc("o", "DJF1", "Output", "DISJ DESLIGAR LIGAR", "GTD_11", (18,))
+    inp = _rec_desc("i", "DJF1", "Input", "DISJ DESLIGADO", "GTD_11", (35,))
+    saida, revisao = parear([out, inp])
+    assert len(saida) == 1 and saida[0].tipo_sinal.direcao == "InputOutput"
+    assert revisao == ()
