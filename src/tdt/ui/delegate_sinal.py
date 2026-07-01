@@ -6,6 +6,7 @@ delega ao ModeloSinais.definir_sigla (mesma rota do painel).
 
 from __future__ import annotations
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QComboBox, QStyledItemDelegate
 
 from tdt.ui.busca_adms import buscar
@@ -40,3 +41,44 @@ class DelegateSinal(QStyledItemDelegate):
         sigla = editor.currentText().strip()
         if sigla:
             self._modelo.definir_sigla(fonte.row(), sigla)
+
+
+class DelegateCombo(QStyledItemDelegate):
+    """Editor combo p/ colunas de domínio fechado (Tipo/Fase/Nível Tensão/
+    Barra/Tipo Equip.). Sempre não-editável — só os valores fixos passados.
+    """
+
+    def __init__(self, opcoes: list[str], parent=None):
+        super().__init__(parent)
+        self._opcoes = opcoes
+
+    def createEditor(self, parent, option, index):
+        combo = QComboBox(parent)
+        combo.addItems(self._opcoes)
+        return combo
+
+    def setModelData(self, editor, model, index):
+        model.setData(index, editor.currentText().strip(), Qt.EditRole)
+
+
+class DelegateModulo(QStyledItemDelegate):
+    """Editor combo editável p/ Módulo: sugere nomes já presentes nos
+    registros, aceita texto livre (módulo novo).
+    """
+
+    def __init__(self, estado: AppState, parent=None):
+        super().__init__(parent)
+        self._estado = estado
+
+    def createEditor(self, parent, option, index):
+        combo = QComboBox(parent)
+        combo.setEditable(True)
+        modulos = sorted({
+            r.modulo.nome for r in self._estado.registros
+            if r.modulo and r.modulo.nome
+        })
+        combo.addItems(modulos)
+        return combo
+
+    def setModelData(self, editor, model, index):
+        model.setData(index, editor.currentText().strip(), Qt.EditRole)
