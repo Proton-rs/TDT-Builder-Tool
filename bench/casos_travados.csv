@@ -1,0 +1,7 @@
+subestacao,endereco,sigla_esperada,origem,nota
+GTD,5,MOLA,2026-07-01 baseline,Mola descarregada vira MLCC (regressao batch 30-jun; ver auditoria SGF/DJA1)
+GTD,7,BBFC,2026-07-01 baseline,Verbo de comando LIGAR vaza como sigla em vez de BBFC (bobina falha comando)
+GTD,16,DSEC,2026-07-01 baseline,Seccionadora classificada como 43LR generico em vez de DSEC
+GTD,51,AJG2,2026-07-01 baseline,Prefixo AJ perdido na sigla de ajuste (AJG2 vira G2)
+GTD,62,50F1,2026-07-01 baseline,Sigla truncada ao numero lider (50F1 vira 1) - padrao sistematico em 50F1/50F2/67F1/67F2
+GTD,67,51N1,2026-07-01 baseline,Digito de estagio perdido (51N1 vira 51N)

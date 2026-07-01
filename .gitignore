@@ -18,6 +18,7 @@ docs/Claude Setup.exe
 
 # Saídas geradas e config local
 output/
+bench/_tdt_gerado_*.xlsx
 config.toml
 
 .opencode/

@@ -48,6 +48,8 @@ Transformar planilha Excel de pontos de subestação em arquivo **TDT** (EcoStru
 ## Verification
 - `python -m pytest -q` (raiz). Todos verdes antes de concluir.
 - Qualidade de matching: `PYTHONPATH=src python bench/benchmark.py` (gate de regressão; log em `bench/resultados/`).
+- Gate de regressão por sinal real: `PYTHONPATH=src python -m bench.regressao` compara o TDT gerado do input real com o TDT real por endereço e checa `bench/casos_travados.csv`. Rodar no closeout de mudança de matching/estrutura.
+  Ao corrigir um sinal, adicionar seu caso ao CSV (trava contra regressão). Casos recém-semeados começam FALHANDO (documentam bug conhecido ainda não corrigido) — o sinal de regressão real é um caso que **já passava** virar FAIL, não o total de FAILs.
 
 ## Child DOX Index
 - `src/tdt/AGENTS.md` — código do SP1 (módulos, contrato, orquestração) + SP4 (UI PySide6 em `src/tdt/ui/`).
