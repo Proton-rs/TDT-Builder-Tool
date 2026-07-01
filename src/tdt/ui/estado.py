@@ -69,3 +69,34 @@ class AppState:
             r, sigla_sinal=sigla, status="decidido",
             justificativa="editado manualmente",
         )
+
+    def _editar_nested(self, indice: int, campo: str, **kwargs) -> None:
+        """Substitui atributos de um campo aninhado (Eletrico/TipoSinal/
+        Modulo/GrandezasAnalogicas) via replace, sem tocar status/justificativa.
+        """
+        r = self.registros[indice]
+        novo = replace(getattr(r, campo), **kwargs)
+        self.registros[indice] = replace(r, **{campo: novo})
+
+    def definir_tipo(self, indice: int, categoria: str, direcao: str) -> None:
+        self._editar_nested(indice, "tipo_sinal", categoria=categoria,
+                             direcao=direcao, categoria_confiavel=True)
+
+    def definir_fase(self, indice: int, fase: str | None) -> None:
+        self._editar_nested(indice, "eletrico", fase=fase)
+
+    def definir_nivel_tensao(self, indice: int, nivel: str | None) -> None:
+        self._editar_nested(indice, "eletrico", nivel_tensao=nivel)
+
+    def definir_barra(self, indice: int, barra: str | None) -> None:
+        self._editar_nested(indice, "eletrico", barra=barra)
+
+    def definir_tipo_equip(self, indice: int, equip: str | None) -> None:
+        self._editar_nested(indice, "eletrico", equipamento_alvo=equip,
+                             equipamento_inferido=False)
+
+    def definir_modulo(self, indice: int, nome: str | None) -> None:
+        self._editar_nested(indice, "modulo", nome=nome)
+
+    def definir_escala(self, indice: int, valor: float | None) -> None:
+        self._editar_nested(indice, "grandezas_analogicas", escala_transmissao=valor)

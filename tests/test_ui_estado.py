@@ -1,5 +1,7 @@
+from dataclasses import replace
+
 from tdt.contracts import (
-    Candidato, Descricoes, Enderecamento, ItemRevisao, ListaHomogenea,
+    Candidato, Descricoes, Eletrico, Enderecamento, ItemRevisao, ListaHomogenea,
     Modulo, ResultadoPipeline, SignalRecord, TipoSinal,
 )
 from tdt.ui.estado import AppState
@@ -77,3 +79,67 @@ def test_desfazer_restaura_snapshot_anterior():
 def test_desfazer_sem_historico_retorna_false():
     st = AppState()
     assert st.desfazer() is False
+
+
+def test_definir_fase_atualiza_eletrico():
+    st = AppState()
+    st.registros = [_rec("a:1", "DJF1", "decidido")]
+    st.definir_fase(0, "B")
+    assert st.registros[0].eletrico.fase == "B"
+
+
+def test_definir_nivel_tensao_atualiza_eletrico():
+    st = AppState()
+    st.registros = [_rec("a:1", "DJF1", "decidido")]
+    st.definir_nivel_tensao(0, "AT")
+    assert st.registros[0].eletrico.nivel_tensao == "AT"
+
+
+def test_definir_barra_atualiza_eletrico():
+    st = AppState()
+    st.registros = [_rec("a:1", "DJF1", "decidido")]
+    st.definir_barra(0, "Auxiliar")
+    assert st.registros[0].eletrico.barra == "Auxiliar"
+
+
+def test_definir_tipo_equip_atualiza_e_zera_inferido():
+    st = AppState()
+    rec = _rec("a:1", "DJF1", "decidido")
+    rec = replace(rec, eletrico=Eletrico(equipamento_alvo="Disjuntor", equipamento_inferido=True))
+    st.registros = [rec]
+    st.definir_tipo_equip(0, "Seccionadora")
+    assert st.registros[0].eletrico.equipamento_alvo == "Seccionadora"
+    assert st.registros[0].eletrico.equipamento_inferido is False
+
+
+def test_definir_modulo_atualiza_nome():
+    st = AppState()
+    st.registros = [_rec("a:1", "DJF1", "decidido")]
+    st.definir_modulo(0, "AL21")
+    assert st.registros[0].modulo.nome == "AL21"
+
+
+def test_definir_escala_atualiza_grandezas_analogicas():
+    st = AppState()
+    st.registros = [_rec("a:1", "DJF1", "decidido")]
+    st.definir_escala(0, 1.5)
+    assert st.registros[0].grandezas_analogicas.escala_transmissao == 1.5
+
+
+def test_definir_tipo_atualiza_categoria_direcao_e_marca_confiavel():
+    st = AppState()
+    rec = _rec("a:1", "DJF1", "decidido")
+    rec = replace(rec, tipo_sinal=TipoSinal("DiscreteAnalog", False, "Input", categoria_confiavel=False))
+    st.registros = [rec]
+    st.definir_tipo(0, "Analog", "Output")
+    assert st.registros[0].tipo_sinal.categoria == "Analog"
+    assert st.registros[0].tipo_sinal.direcao == "Output"
+    assert st.registros[0].tipo_sinal.categoria_confiavel is True
+
+
+def test_editar_campo_nao_muda_status_nem_justificativa():
+    st = AppState()
+    st.registros = [_rec("a:1", None, "revisao")]
+    st.definir_fase(0, "A")
+    assert st.registros[0].status == "revisao"
+    assert st.registros[0].justificativa is None
