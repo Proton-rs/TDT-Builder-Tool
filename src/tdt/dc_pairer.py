@@ -100,6 +100,10 @@ def parear(
                     saida.append(o)  # Write legítimo (ex. CDC raise/lower)
                 else:
                     revisao.append(ItemRevisao(o, motivo="comando_sem_discreto"))
+        # Gate semântico (D5): só *morde* quando AMBOS os textos carregam
+        # evidência de estado — comando com texto sem verbo de estado (só sigla
+        # após N3) passa (compatibilidade_texto devolve True). "Filtro nenhum >
+        # filtro errado": não bloqueia pareamento legítimo por falta de sinal.
         elif len(inputs) == 1 and len(outputs) == 1 and compatibilidade_texto(
             outputs[0].descricoes.normalizada, inputs[0].descricoes.normalizada
         ):
