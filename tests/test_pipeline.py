@@ -248,9 +248,12 @@ def _input_djf1_sintetico(tmp_path):
     return p
 
 
-def test_djf1_par_ligado_desligado_converge_para_double_bit(
+def test_djf1_par_ligado_desligado_converge_para_multicoord(
     tmp_path, template_dnp3_path, lista_padrao_path,
 ):
+    # D3: par de POSIÇÃO (DJF1 é SwitchStatus na lista padrão) com estados
+    # opostos e endereços consecutivos vira MultiCoord — não DoubleBit
+    # (reservado ao par N;M nativo do input).
     cfg = Config(peso_tfidf=1.0, peso_vetorial=0.0, threshold_pct=0.5, threshold_gap=0.05)
     inp = _input_djf1_sintetico(tmp_path)
     resultado, _ = executar(
@@ -259,7 +262,7 @@ def test_djf1_par_ligado_desligado_converge_para_double_bit(
     )
     djf1 = [r for r in resultado.lista.registros if r.sigla_sinal == "DJF1"]
     assert len(djf1) == 1
-    assert djf1[0].tipo_sinal.datatype == "DoubleBit"
+    assert djf1[0].tipo_sinal.datatype == "MultiCoord"
     assert sorted(djf1[0].enderecamento.indices) == [100, 101]
 
 

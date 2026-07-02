@@ -150,6 +150,16 @@ def _vocab_dominio(corpus: list[tuple[str, str]]) -> frozenset[str]:
     return frozenset(tok for _, desc in corpus for tok in desc.split())
 
 
+def _whitelist_posicao(lp: ListaPadraoADMS, config: Config | None = None) -> frozenset[str]:
+    """Siglas fundíveis em MultiCoord (D3): SwitchStatus da lista padrão +
+    extras de config."""
+    wl = frozenset(
+        s.sigla.upper() for s in lp.discretos if s.signal_type == "SwitchStatus"
+    )
+    extra = config.siglas_fundiveis_extra if config is not None else frozenset()
+    return wl | extra
+
+
 def _com_fase(rec: SignalRecord) -> SignalRecord:
     """Grava a fase derivada da sigla decidida em ``eletrico.fase`` (se vazia).
 
@@ -376,11 +386,11 @@ def _aplicar_aliases(registros: list, aliases: dict[str, str] | None) -> list:
     return novos
 
 
-def gerar_tdt(registros, template_path, lp, subestacao=None, aliases=None):
+def gerar_tdt(registros, template_path, lp, subestacao=None, aliases=None, config=None):
     """Gera o workbook TDT a partir de uma lista (já decidida/editada) de registros."""
     lst = _aplicar_aliases(list(registros), aliases)
-    pareados, _rev = dc_pairer.parear(lst)
-    corrigidos, _rev2 = corrigir(list(pareados))
+    pareados, _rev = dc_pairer.parear(lst, config)
+    corrigidos, _rev2 = corrigir(list(pareados), _whitelist_posicao(lp, config))
     lista = criador_lista_homogenea.montar(list(corrigidos), subestacao=subestacao)
     return engine_tdt.gerar(lista, template_path, lp)
 
@@ -524,7 +534,7 @@ def executar(
 
     with _timer("dc_pairer + corrigir + montar + tdt", aud):
         pareados, rev_pair = dc_pairer.parear(decididos, config)
-        corrigidos, rev_estrut = corrigir(list(pareados))
+        corrigidos, rev_estrut = corrigir(list(pareados), _whitelist_posicao(lp, config))
         revisao.extend(rev_pair)
         revisao.extend(rev_estrut)
 
