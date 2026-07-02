@@ -32,7 +32,10 @@ def fundir(status: SignalRecord, comando: SignalRecord) -> SignalRecord:
     """
     return replace(
         status,
-        tipo_sinal=replace(status.tipo_sinal, direcao="InputOutput"),
+        tipo_sinal=replace(
+            status.tipo_sinal, direcao="InputOutput",
+            comando_duplo=comando.tipo_sinal.comando_duplo,
+        ),
         enderecamento=replace(
             status.enderecamento, indices_saida=comando.enderecamento.indices
         ),

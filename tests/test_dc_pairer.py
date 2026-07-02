@@ -156,3 +156,13 @@ def test_um_input_um_output_ainda_funde_direto():
     saida, revisao = parear([out, inp])
     assert len(saida) == 1 and saida[0].tipo_sinal.direcao == "InputOutput"
     assert revisao == ()
+
+
+def test_fundir_propaga_comando_duplo():
+    from dataclasses import replace
+    status = _rec("s:1", "81U1", "Input", [1539])
+    comando = _rec("s:2", "81U1", "Output", [1504])
+    comando = replace(comando, tipo_sinal=replace(comando.tipo_sinal, comando_duplo=False))
+    fundido = fundir(status, comando)
+    assert fundido.tipo_sinal.comando_duplo is False
+    assert fundido.enderecamento.indices_saida == (1504,)
