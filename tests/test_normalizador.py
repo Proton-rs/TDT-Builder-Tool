@@ -334,6 +334,16 @@ def test_sem_fase_no_texto():
     assert ctx.fase is None
 
 
+def test_n0_equipamento_com_ponto_final():
+    _, ctx = extrair_contexto_estrutural("Secc. Barra Aberta")
+    assert ctx.equipamento_alvo == "Seccionadora"
+
+
+def test_n0_equipamento_com_ponto_disj():
+    _, ctx = extrair_contexto_estrutural("Disj. Intertravamento Manual Bloqueado")
+    assert ctx.equipamento_alvo == "Disjuntor"
+
+
 def test_parenteses_e_pontuacao_extra_virram_espaco():
     cfg = Config()
     assert normalizar("DISJUNTOR (52-1) ABERTO, FECHADO; TESTE: OK", cfg) == \

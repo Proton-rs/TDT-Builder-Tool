@@ -76,16 +76,27 @@ _FASE_TOKENS: dict[str, str] = {
     "TRIFASICA": "ABC",
 }
 
+# Pontuação periférica que pode colar em siglas/palavras em input real (ex:
+# "Secc." / "Disj."). Usada só para as CHECAGENS de pertencimento a dicionário
+# nos lookups por palavra (equipamento/fase) -- o token original (com a
+# pontuação) continua sendo o que é removido/mantido no texto remanescente.
+_PONTUACAO_BORDA = ".,;:()"
+
+
+def _tok_limpo(tok: str) -> str:
+    return tok.strip(_PONTUACAO_BORDA)
+
 
 def _fase_no_texto(tokens: list[str]) -> tuple[str | None, str | None]:
     """Devolve (fase, token_a_remover) ou (None, None)."""
     for i, tok in enumerate(tokens):
-        if tok in _FASE_TOKENS:
-            return _FASE_TOKENS[tok], tok
-    if "FASE" in tokens:
-        idx = tokens.index("FASE")
-        if idx + 1 < len(tokens) and tokens[idx + 1] in FASES:
-            return tokens[idx + 1], tokens[idx + 1]
+        if _tok_limpo(tok) in _FASE_TOKENS:
+            return _FASE_TOKENS[_tok_limpo(tok)], tok
+    tokens_limpos = [_tok_limpo(t) for t in tokens]
+    if "FASE" in tokens_limpos:
+        idx = tokens_limpos.index("FASE")
+        if idx + 1 < len(tokens) and tokens_limpos[idx + 1] in FASES:
+            return tokens_limpos[idx + 1], tokens[idx + 1]
     # D2.2: "<líder ANSI 2-3 dígitos> <fase multi-letra>" sem a palavra "FASE"
     # (ex: "50 ABC"). Restrito a multi-letra (ABC/AB/BC/CA): uma letra única
     # (A/B/C/N) sozinha após um número é ambígua demais (não é exclusivamente
@@ -93,11 +104,12 @@ def _fase_no_texto(tokens: list[str]) -> tuple[str | None, str | None]:
     # a letra "N" -- extrair "N" aqui só perde sinal de texto sem ganho.
     # Só dispara se os padrões acima (prioritários) não capturaram nada.
     for i, tok in enumerate(tokens):
+        tok_limpo = _tok_limpo(tok)
         if (
-            tok.isdigit() and len(tok) in (2, 3)
-            and i + 1 < len(tokens) and tokens[i + 1] in ("ABC", "AB", "BC", "CA")
+            tok_limpo.isdigit() and len(tok_limpo) in (2, 3)
+            and i + 1 < len(tokens) and tokens_limpos[i + 1] in ("ABC", "AB", "BC", "CA")
         ):
-            return tokens[i + 1], tokens[i + 1]
+            return tokens_limpos[i + 1], tokens[i + 1]
     return None, None
 
 
@@ -128,8 +140,9 @@ def extrair_contexto_estrutural(texto: str) -> tuple[str, ContextoEstrutural]:
 
     if equipamento_alvo is None:
         for tok in base.split():
-            if tok in _EQUIPAMENTO_PALAVRA:
-                equipamento_alvo = _EQUIPAMENTO_PALAVRA[tok]
+            tok_limpo = _tok_limpo(tok)
+            if tok_limpo in _EQUIPAMENTO_PALAVRA:
+                equipamento_alvo = _EQUIPAMENTO_PALAVRA[tok_limpo]
                 break
 
     barra = None
