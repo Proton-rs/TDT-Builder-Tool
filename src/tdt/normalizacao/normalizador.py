@@ -88,7 +88,14 @@ def _tok_limpo(tok: str) -> str:
 
 
 def _fase_no_texto(tokens: list[str]) -> tuple[str | None, str | None]:
-    """Devolve (fase, token_a_remover) ou (None, None)."""
+    """Devolve (fase, token_origem) ou (None, None).
+
+    O 2º item identifica o token que casou (histórico: já foi usado para
+    remoção do texto remanescente). Desde spG/Task 3 o token NÃO é mais
+    removido -- o chamador só anota ``ctx.fase`` e deixa o texto intacto,
+    já que D2.1 (``_eh_letra_fase_apos_fase``) protege a letra do filtro de
+    stopwords adiante. Mantido na assinatura para menor diff.
+    """
     for i, tok in enumerate(tokens):
         if _tok_limpo(tok) in _FASE_TOKENS:
             return _FASE_TOKENS[_tok_limpo(tok)], tok
@@ -153,13 +160,10 @@ def extrair_contexto_estrutural(texto: str) -> tuple[str, ContextoEstrutural]:
         base = (base[:inicio] + " " + base[fim:]).strip()
         base = " ".join(base.split())
 
-    fase = None
     tokens = base.split()
-    fase_val, tok_remover = _fase_no_texto(tokens)
-    if tok_remover is not None:
-        tokens.remove(tok_remover)
-        base = " ".join(tokens)
-        fase = fase_val
+    fase, _tok = _fase_no_texto(tokens)
+    # anota apenas; o token fica no texto (discriminador para os scorers,
+    # D2.1 já protege a letra do filtro de stopwords adiante)
 
     return base, ContextoEstrutural(
         equipamento_alvo=equipamento_alvo, nome_equipamento=nome_equipamento, barra=barra, fase=fase,
