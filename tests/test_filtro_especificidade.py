@@ -41,7 +41,7 @@ _SINAIS = [
 def _rec(bruta: str, cfg: Config) -> SignalRecord:
     return SignalRecord(
         id="x", modulo=Modulo(None, "M"),
-        tipo_sinal=TipoSinal("Discrete", True, "Input"),
+        tipo_sinal=TipoSinal("Discrete", "DoubleBit", "Input"),
         enderecamento=Enderecamento("DNP3", (1,)),
         descricoes=Descricoes(bruta, canonizar(bruta, cfg)),
     )
@@ -105,7 +105,7 @@ def test_fase_filtro_duro_usa_eletrico_fase():
     cfg = Config()
     rec = SignalRecord(
         id="x", modulo=Modulo(None, "M"),
-        tipo_sinal=TipoSinal("Analog", True, "Input"),
+        tipo_sinal=TipoSinal("Analog", "DoubleBit", "Input"),
         enderecamento=Enderecamento("DNP3", (1,)),
         descricoes=Descricoes("Corrente Fase B", "CORRENTE FASE"),
         eletrico=Eletrico(fase="B"),

@@ -29,7 +29,7 @@ def _rec(bruta: str, normalizada: str, eletrico: Eletrico | None = None) -> Sign
     return SignalRecord(
         id="x",
         modulo=Modulo(None, "M"),
-        tipo_sinal=TipoSinal("Discrete", True, "Input"),
+        tipo_sinal=TipoSinal("Discrete", "DoubleBit", "Input"),
         enderecamento=Enderecamento("DNP3", (1,)),
         descricoes=Descricoes(bruta, normalizada),
         eletrico=eletrico if eletrico is not None else Eletrico(),

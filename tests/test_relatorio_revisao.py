@@ -10,7 +10,7 @@ from tdt.relatorio_revisao import descricao_para_exibicao, gerar_relatorio_revis
 def _rec(id_, sigla=None, candidatos=(), diagnostico=None, status="decidido"):
     return SignalRecord(
         id=id_, modulo=Modulo("M", "sheet_name"),
-        tipo_sinal=TipoSinal("Discrete", False, "Input"),
+        tipo_sinal=TipoSinal("Discrete", "SingleBit", "Input"),
         enderecamento=Enderecamento("DNP3", (10,)),
         descricoes=Descricoes("Disjuntor Aberto", "disjuntor aberto"),
         sigla_sinal=sigla, candidatos=candidatos, status=status,
@@ -97,7 +97,7 @@ def test_largura_colunas_ajustada_pelo_conteudo(tmp_path):
     registros = [
         SignalRecord(
             id="S1:1", modulo=Modulo("M", "sheet_name"),
-            tipo_sinal=TipoSinal("Discrete", False, "Input"),
+            tipo_sinal=TipoSinal("Discrete", "SingleBit", "Input"),
             enderecamento=Enderecamento("DNP3", (10,)),
             descricoes=Descricoes(descricao_longa, "x"),
             sigla_sinal=None, candidatos=(), status="decidido",

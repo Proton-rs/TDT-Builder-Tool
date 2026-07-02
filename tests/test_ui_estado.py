@@ -10,7 +10,7 @@ from tdt.ui.estado import AppState
 def _rec(id_, sigla, status):
     return SignalRecord(
         id=id_, modulo=Modulo("M", "sheet_name"),
-        tipo_sinal=TipoSinal("Discrete", False, "Input"),
+        tipo_sinal=TipoSinal("Discrete", "SingleBit", "Input"),
         enderecamento=Enderecamento("DNP3", (1,)),
         descricoes=Descricoes("d", "D"), sigla_sinal=sigla, status=status,
     )
@@ -129,7 +129,7 @@ def test_definir_escala_atualiza_grandezas_analogicas():
 def test_definir_tipo_atualiza_categoria_direcao_e_marca_confiavel():
     st = AppState()
     rec = _rec("a:1", "DJF1", "decidido")
-    rec = replace(rec, tipo_sinal=TipoSinal("DiscreteAnalog", False, "Input", categoria_confiavel=False))
+    rec = replace(rec, tipo_sinal=TipoSinal("DiscreteAnalog", "SingleBit", "Input", categoria_confiavel=False))
     st.registros = [rec]
     st.definir_tipo(0, "Analog", "Output")
     assert st.registros[0].tipo_sinal.categoria == "Analog"

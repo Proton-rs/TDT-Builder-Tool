@@ -73,7 +73,7 @@ def _rec(desc: str, cfg: Config) -> SignalRecord:
     return SignalRecord(
         id="x",
         modulo=Modulo("m", "s"),
-        tipo_sinal=TipoSinal("Discrete", False, "Input"),
+        tipo_sinal=TipoSinal("Discrete", "SingleBit", "Input"),
         enderecamento=Enderecamento("DNP3", (1,)),
         descricoes=Descricoes(desc, canonizar(desc, cfg)),
     )

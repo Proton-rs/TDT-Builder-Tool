@@ -87,7 +87,17 @@ def estruturar(
         categoria, direcao = cat_dir or secao
         confiavel = cat_dir is not None or secao_explicita
 
+        tipo_norm = (
+            _norm(row[c_tipo]) if c_tipo is not None and c_tipo < len(row) else ""
+        )
+        comando_duplo = not (direcao == "Output" and tipo_norm == "COMANDO S")
+
         indices = _parse_indices(row[c_idx]) if c_idx is not None and c_idx < len(row) else ()
+        datatype = (
+            "DoubleBit"
+            if len(indices) == 2 and indices[0] != indices[1]
+            else "SingleBit"
+        )
 
         remanescente, ctx_estrutural = extrair_contexto_estrutural(str(bruta))
         eletrico = Eletrico(
@@ -131,8 +141,9 @@ def estruturar(
             SignalRecord(
                 id=f"{sheet_name}:{i + 1}",
                 modulo=Modulo(nome_mod_final, origem_modulo),
-                tipo_sinal=TipoSinal(categoria, is_double_bit=False, direcao=direcao,
-                                     categoria_confiavel=confiavel),
+                tipo_sinal=TipoSinal(categoria, datatype=datatype, direcao=direcao,
+                                     categoria_confiavel=confiavel,
+                                     comando_duplo=comando_duplo),
                 enderecamento=Enderecamento("DNP3", indices),
                 descricoes=Descricoes(str(bruta), canonizar(remanescente, config, vocab)),
                 eletrico=eletrico,

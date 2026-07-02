@@ -16,7 +16,7 @@ def _rec(rid, status):
     return SignalRecord(
         id=rid,
         modulo=Modulo("LT_GTA", "coluna:modulo"),
-        tipo_sinal=TipoSinal("Discrete", False, "Input"),
+        tipo_sinal=TipoSinal("Discrete", "SingleBit", "Input"),
         enderecamento=Enderecamento("DNP3", (5,)),
         descricoes=Descricoes("DJ", "DISJUNTOR"),
         sigla_sinal="DJ",

@@ -14,7 +14,7 @@ from tdt.ui.modelo_tabela import ModeloSinais
 def _rec(status="decidido", sigla="DJF1", eletrico=None):
     return SignalRecord(
         id="a:1", modulo=Modulo("M", "sheet_name"),
-        tipo_sinal=TipoSinal("Discrete", False, "Input"),
+        tipo_sinal=TipoSinal("Discrete", "SingleBit", "Input"),
         enderecamento=Enderecamento("DNP3", (10,)),
         descricoes=Descricoes("Falha DJ 52-1", "FALHA DJ"),
         sigla_sinal=sigla, status=status,
@@ -147,7 +147,7 @@ def test_adicionar_registro_aumenta_rowcount_e_anexa_no_fim():
     m = ModeloSinais(st)
     novo = SignalRecord(
         id="manual_1", modulo=Modulo(None, "manual"),
-        tipo_sinal=TipoSinal("Discrete", False, "Input"),
+        tipo_sinal=TipoSinal("Discrete", "SingleBit", "Input"),
         enderecamento=Enderecamento("DNP3", ()),
         descricoes=Descricoes("", ""),
     )
@@ -161,7 +161,7 @@ def test_adicionar_registro_emite_sinais_de_insercao(qtbot):
     m = ModeloSinais(st)
     novo = SignalRecord(
         id="manual_1", modulo=Modulo(None, "manual"),
-        tipo_sinal=TipoSinal("Discrete", False, "Input"),
+        tipo_sinal=TipoSinal("Discrete", "SingleBit", "Input"),
         enderecamento=Enderecamento("DNP3", ()),
         descricoes=Descricoes("", ""),
     )
@@ -174,7 +174,7 @@ def test_remover_linhas_reduz_rowcount_e_remove_o_registro():
     st = _state(rec1)
     rec2 = SignalRecord(
         id="a:2", modulo=Modulo("M", "sheet_name"),
-        tipo_sinal=TipoSinal("Discrete", False, "Input"),
+        tipo_sinal=TipoSinal("Discrete", "SingleBit", "Input"),
         enderecamento=Enderecamento("DNP3", (11,)),
         descricoes=Descricoes("d2", "D2"),
     )
@@ -191,7 +191,7 @@ def test_remover_linhas_multiplas_indices_fora_de_ordem():
     for i in range(2, 5):
         st.registros.append(SignalRecord(
             id=f"a:{i}", modulo=Modulo("M", "sheet_name"),
-            tipo_sinal=TipoSinal("Discrete", False, "Input"),
+            tipo_sinal=TipoSinal("Discrete", "SingleBit", "Input"),
             enderecamento=Enderecamento("DNP3", (i,)),
             descricoes=Descricoes(f"d{i}", f"D{i}"),
         ))
@@ -208,7 +208,7 @@ def test_remover_linhas_emite_sinais_de_remocao(qtbot):
     st = _state(rec1)
     st.registros.append(SignalRecord(
         id="a:2", modulo=Modulo("M", "sheet_name"),
-        tipo_sinal=TipoSinal("Discrete", False, "Input"),
+        tipo_sinal=TipoSinal("Discrete", "SingleBit", "Input"),
         enderecamento=Enderecamento("DNP3", (11,)),
         descricoes=Descricoes("d2", "D2"),
     ))

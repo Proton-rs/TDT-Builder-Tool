@@ -55,7 +55,7 @@ def _rec(rid, sigla, indices, direcao="Input", double=False, fase="ABC"):
     return SignalRecord(
         id=rid,
         modulo=Modulo("3", "sheet_name"),
-        tipo_sinal=TipoSinal("Discrete", double, direcao),
+        tipo_sinal=TipoSinal("Discrete", "DoubleBit" if double else "SingleBit", direcao),
         enderecamento=Enderecamento("DNP3", tuple(indices)),
         descricoes=Descricoes(f"{sigla} BRUTO", sigla),
         sigla_sinal=sigla,
@@ -127,6 +127,42 @@ def test_output_orfao_escreve_output_coords_nao_input(template_dnp3_path, lista_
     assert ws.cell(5, col["Direction"]).value == "Write"
     assert ws.cell(5, col["Output Coordinates"]).value == "42;42"  # comando simples duplica o indice
     assert ws.cell(5, col["Input Coordinates"]).value is None
+
+
+def test_outcoords_comando_s_sem_duplicar(template_dnp3_path, lista_padrao_path, tmp_path):
+    from dataclasses import replace
+
+    # comando_duplo=False (comando S) -> Output Coordinates "1504" (sem duplicar)
+    base_s = _rec("LT3:10", "81U1", [1539], direcao="InputOutput")
+    rec_s = replace(
+        base_s,
+        tipo_sinal=replace(base_s.tipo_sinal, comando_duplo=False),
+        enderecamento=replace(base_s.enderecamento, indices_saida=(1504,)),
+    )
+
+    # comando_duplo=True (comando D, default) -> Output Coordinates "1502;1502"
+    base_d = _rec("LT3:11", "81U2", [1540], direcao="InputOutput")
+    rec_d = replace(
+        base_d,
+        enderecamento=replace(base_d.enderecamento, indices_saida=(1502,)),
+    )
+
+    # MultiCoord -> Input Data Type "MultiCoord"
+    base_mc = _rec("LT3:12", "81U3", [1600, 1601], direcao="Input")
+    rec_mc = replace(
+        base_mc,
+        tipo_sinal=replace(base_mc.tipo_sinal, datatype="MultiCoord"),
+    )
+
+    lista = ListaHomogenea(
+        subestacao="IMA", protocolo="DNP3", registros=(rec_s, rec_d, rec_mc),
+    )
+    lp = ListaPadraoADMS.carregar(lista_padrao_path)
+    ws = gerar(lista, template_dnp3_path, lp)["DNP3_DiscreteSignals"]
+    col = {ws.cell(4, c).value: c for c in range(1, ws.max_column + 1)}
+    assert ws.cell(5, col["Output Coordinates"]).value == "1504"
+    assert ws.cell(6, col["Output Coordinates"]).value == "1502;1502"
+    assert ws.cell(7, col["Input Data Type"]).value == "MultiCoord"
 
 
 def test_output_orfao_multiplos_indices_nao_duplica(template_dnp3_path, lista_padrao_path, tmp_path):
@@ -292,7 +328,7 @@ def _rec_analog(rid, sigla, indices):
     return SignalRecord(
         id=rid,
         modulo=Modulo("AL11", "sheet_name"),
-        tipo_sinal=TipoSinal("Analog", False, "Input"),
+        tipo_sinal=TipoSinal("Analog", "SingleBit", "Input"),
         enderecamento=Enderecamento("DNP3", tuple(indices)),
         descricoes=Descricoes(f"{sigla} BRUTO", sigla),
         sigla_sinal=sigla,

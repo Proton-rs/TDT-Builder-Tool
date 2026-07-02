@@ -11,7 +11,7 @@ from tdt.ui.modelo_tabela import ModeloSinais
 def _rec(id_, modulo_nome, eletrico=None):
     return SignalRecord(
         id=id_, modulo=Modulo(modulo_nome, "sheet_name"),
-        tipo_sinal=TipoSinal("Discrete", False, "Input"),
+        tipo_sinal=TipoSinal("Discrete", "SingleBit", "Input"),
         enderecamento=Enderecamento("DNP3", (1,)),
         descricoes=Descricoes("d", "D"),
         eletrico=eletrico if eletrico is not None else Eletrico(),

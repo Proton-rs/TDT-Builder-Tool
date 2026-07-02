@@ -129,9 +129,9 @@ def _alias_hoje() -> str:
     return date.today().strftime("%m%d%Y")
 
 
-def _coords_comando(indices: tuple[int, ...]) -> str:
+def _coords_comando(indices: tuple[int, ...], duplo: bool = True) -> str:
     if len(indices) == 1:
-        return f"{indices[0]};{indices[0]}"
+        return f"{indices[0]};{indices[0]}" if duplo else str(indices[0])
     return ";".join(str(i) for i in indices)
 
 
@@ -160,11 +160,11 @@ def _valores(rec: SignalRecord, subestacao: str | None, padrao: ListaPadraoADMS)
         # Comando órfão (sem par de status): o próprio endereço é o de escrita,
         # não há leitura — não preencher Input Coordinates.
         coords_entrada = None
-        coords_saida = _coords_comando(rec.enderecamento.indices)
+        coords_saida = _coords_comando(rec.enderecamento.indices, rec.tipo_sinal.comando_duplo)
     else:
         coords_entrada = coords
         coords_saida = (
-            _coords_comando(rec.enderecamento.indices_saida)
+            _coords_comando(rec.enderecamento.indices_saida, rec.tipo_sinal.comando_duplo)
             if rec.enderecamento.indices_saida else ""
         )
     return {
@@ -181,7 +181,7 @@ def _valores(rec: SignalRecord, subestacao: str | None, padrao: ListaPadraoADMS)
         "Device Mapping": _device_mapping(nome, rec.sigla_sinal or "?", eh_prot),
         "Direction": _DIRECAO.get(direcao, "Read"),
         "Message Mapping": sp.mm if sp else None,
-        "Input Data Type": "DoubleBit" if rec.tipo_sinal.is_double_bit else "SingleBit",
+        "Input Data Type": rec.tipo_sinal.datatype,
         "Input Coordinates": coords_entrada,
         "Output Data Type": "SingleBit" if tem_comando else None,
         "Output Coordinates": coords_saida if tem_comando and coords_saida else None,

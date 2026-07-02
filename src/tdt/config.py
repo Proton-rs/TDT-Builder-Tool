@@ -216,3 +216,27 @@ class Config:
             "Outros": Topologia(equipamentos=(), default=None),
         }
     )
+    # --- SP-E: semântica de estados e políticas por projeto ------------------
+    # D2: filtro duro estado-detectado × par de estados do MM da lista padrão.
+    filtro_semantica_estados: bool = True
+    # Sigla decidida que cada projeto escolhe incluir ou não (real GTD
+    # descartou LIBM; base full tem 36) -> rebaixa para revisão.
+    siglas_revisao_projeto: frozenset[str] = frozenset({"LIBM"})
+    # D5: comandos que são Write legítimo (sem discreto de status).
+    siglas_write_legitimo: frozenset[str] = frozenset({"CDC"})
+    # D3: siglas fundíveis além das SwitchStatus da lista padrão.
+    siglas_fundiveis_extra: frozenset[str] = frozenset()
+    # D6: whitelist de siglas por equipamento_alvo (semente = medição no
+    # Export Base Full 27fev2026, sinais com equip 89-*/29-* no nome; 2103
+    # sinais). Estender por medição quando aparecer sigla nova real.
+    siglas_por_equipamento: dict[str, frozenset[str]] = field(
+        default_factory=lambda: {
+            "Seccionadora": frozenset({
+                "SECF", "DSEC", "SECC", "43LR", "SECG", "SECB", "SECT",
+                "CCCO", "CCFL", "CCMO", "FSEC", "OI", "LIBM", "CCCM",
+                "CCAL", "BSEC", "MANI", "MDCM", "FLFC", "BBFC", "BBAB",
+                "FLAB", "FALH", "PROT", "CCLO", "VMTC", "BBA2", "SOBC",
+                "BATA", "MINC",
+            }),
+        }
+    )

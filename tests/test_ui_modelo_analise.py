@@ -10,7 +10,7 @@ def _rec(id_="s1", sigla="DJF1", candidatos=None, diagnostico=None, status="deci
     return SignalRecord(
         id=id_,
         modulo=Modulo("M", "sheet_name"),
-        tipo_sinal=TipoSinal("Discrete", False, "Input"),
+        tipo_sinal=TipoSinal("Discrete", "SingleBit", "Input"),
         enderecamento=Enderecamento("DNP3", (1,)),
         descricoes=Descricoes("DJ 52 FALHA", "DJ 52 FALHA"),
         sigla_sinal=sigla,

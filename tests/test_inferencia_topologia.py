@@ -23,7 +23,7 @@ def _rec(
     return SignalRecord(
         id=id_,
         modulo=Modulo(modulo_nome, "sheet_name", tipo=tipo_modulo),
-        tipo_sinal=TipoSinal("Discrete", False, "Input"),
+        tipo_sinal=TipoSinal("Discrete", "SingleBit", "Input"),
         enderecamento=Enderecamento("DNP3", indices),
         descricoes=Descricoes(desc_norm, desc_norm),
         eletrico=Eletrico(equipamento_alvo=equipamento_alvo, nivel_tensao=nivel_tensao),

@@ -5,7 +5,7 @@ from tdt.matchers.cross_encoder import rerank
 def _rec(norm):
     return SignalRecord(
         id="x", modulo=Modulo("m", "s"),
-        tipo_sinal=TipoSinal("Discrete", False, "Input"),
+        tipo_sinal=TipoSinal("Discrete", "SingleBit", "Input"),
         enderecamento=Enderecamento("DNP3", (1,)), descricoes=Descricoes(norm, norm),
     )
 

@@ -13,7 +13,7 @@ pytest.importorskip("PySide6")
 def _rec(id_, status, bruta):
     return SignalRecord(
         id=id_, modulo=Modulo("M", "sheet_name"),
-        tipo_sinal=TipoSinal("Discrete", False, "Input"),
+        tipo_sinal=TipoSinal("Discrete", "SingleBit", "Input"),
         enderecamento=Enderecamento("DNP3", (1,)),
         descricoes=Descricoes(bruta, bruta),
         status=status,

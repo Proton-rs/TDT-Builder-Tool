@@ -15,6 +15,7 @@ from dataclasses import replace
 from rapidfuzz import fuzz
 
 from tdt.contracts import ItemRevisao, SignalRecord
+from tdt.semantica_estados import compatibilidade_texto
 
 
 def _chave(rec: SignalRecord) -> tuple:
@@ -32,7 +33,10 @@ def fundir(status: SignalRecord, comando: SignalRecord) -> SignalRecord:
     """
     return replace(
         status,
-        tipo_sinal=replace(status.tipo_sinal, direcao="InputOutput"),
+        tipo_sinal=replace(
+            status.tipo_sinal, direcao="InputOutput",
+            comando_duplo=comando.tipo_sinal.comando_duplo,
+        ),
         enderecamento=replace(
             status.enderecamento, indices_saida=comando.enderecamento.indices
         ),
@@ -74,6 +78,9 @@ def parear(
     config=None,
 ) -> tuple[tuple[SignalRecord, ...], tuple[ItemRevisao, ...]]:
     limiar = 60.0 if config is None else config.limiar_pareamento_similaridade
+    siglas_write = (
+        config.siglas_write_legitimo if config is not None else frozenset({"CDC"})
+    )
     grupos: dict[tuple, list[SignalRecord]] = defaultdict(list)
     for rec in registros:
         grupos[_chave(rec)].append(rec)
@@ -87,11 +94,21 @@ def parear(
 
         if not outputs:  # sem comando: nada a parear
             saida.extend(grupo)
-        elif not inputs:  # comando(s) órfão(s): Write-only
-            saida.extend(grupo)
-        elif len(inputs) == 1 and len(outputs) == 1:
+        elif not inputs:  # comando(s) sem status
+            for o in outputs:
+                if (o.sigla_sinal or "").upper() in siglas_write:
+                    saida.append(o)  # Write legítimo (ex. CDC raise/lower)
+                else:
+                    revisao.append(ItemRevisao(o, motivo="comando_sem_discreto"))
+        # Gate semântico (D5): só *morde* quando AMBOS os textos carregam
+        # evidência de estado — comando com texto sem verbo de estado (só sigla
+        # após N3) passa (compatibilidade_texto devolve True). "Filtro nenhum >
+        # filtro errado": não bloqueia pareamento legítimo por falta de sinal.
+        elif len(inputs) == 1 and len(outputs) == 1 and compatibilidade_texto(
+            outputs[0].descricoes.normalizada, inputs[0].descricoes.normalizada
+        ):
             saida.append(fundir(inputs[0], outputs[0]))
-        else:  # N×M: desempata por similaridade de descrição (catch-all)
+        else:  # N×M ou 1×1 incompatível: desempata por similaridade (catch-all)
             saida_pares, sobra_rev = _parear_catchall(inputs, outputs, limiar)
             saida.extend(saida_pares)
             revisao.extend(sobra_rev)
@@ -115,6 +132,10 @@ def _parear_catchall(inputs, outputs, limiar):
     candidatos = []
     for oi, o in enumerate(outputs):
         for ii, i in enumerate(inputs):
+            if not compatibilidade_texto(
+                o.descricoes.normalizada, i.descricoes.normalizada
+            ):
+                continue
             sim = fuzz.token_sort_ratio(
                 o.descricoes.normalizada, i.descricoes.normalizada
             )

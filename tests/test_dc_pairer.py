@@ -1,3 +1,4 @@
+from tdt.config import Config
 from tdt.contracts import (
     Descricoes,
     Enderecamento,
@@ -8,13 +9,14 @@ from tdt.contracts import (
 from tdt.dc_pairer import fundir, parear, separar
 
 
-def _rec(rid, sigla, direcao, indices):
+def _rec(rid, sigla, direcao, indices, desc=None):
+    desc = sigla if desc is None else desc
     return SignalRecord(
         id=rid,
         modulo=Modulo("LT_GTA", "coluna:modulo"),
-        tipo_sinal=TipoSinal("Discrete", False, direcao),
+        tipo_sinal=TipoSinal("Discrete", "SingleBit", direcao),
         enderecamento=Enderecamento("DNP3", tuple(indices)),
-        descricoes=Descricoes(sigla, sigla),
+        descricoes=Descricoes(sigla, desc),
         sigla_sinal=sigla,
         status="decidido",
     )
@@ -38,11 +40,13 @@ def test_status_sozinho_passa():
     assert revisao == ()
 
 
-def test_comando_orfao_passa_como_write():
+def test_comando_orfao_fora_da_whitelist_vai_para_revisao():
+    # Fase D5: comando órfão só passa direto como Write se a sigla estiver na
+    # whitelist de write legítimo (ex. CDC); "DJ" órfão sem status vira revisão.
     regs = [_rec("s:1", "DJ", "Output", [0])]
     pareados, revisao = parear(regs)
-    assert pareados[0].tipo_sinal.direcao == "Output"
-    assert revisao == ()
+    assert pareados == ()
+    assert [r.motivo for r in revisao] == ["comando_sem_discreto"]
 
 
 def test_ambiguo_com_descricoes_empatadas_greedy_escolhe_um_e_outro_fica_standalone():
@@ -120,7 +124,7 @@ def _rec_desc(rid, sigla, direcao, desc, modulo, indices):
     from tdt.contracts import Descricoes, Enderecamento, Modulo, SignalRecord, TipoSinal
     return SignalRecord(
         id=rid, modulo=Modulo(modulo, "sheet_name"),
-        tipo_sinal=TipoSinal("Discrete", False, direcao),
+        tipo_sinal=TipoSinal("Discrete", "SingleBit", direcao),
         enderecamento=Enderecamento("DNP3", tuple(indices)),
         descricoes=Descricoes(desc, desc), sigla_sinal=sigla, status="decidido",
     )
@@ -156,3 +160,37 @@ def test_um_input_um_output_ainda_funde_direto():
     saida, revisao = parear([out, inp])
     assert len(saida) == 1 and saida[0].tipo_sinal.direcao == "InputOutput"
     assert revisao == ()
+
+
+def test_comando_orfao_vai_para_revisao():
+    comando = _rec("s:1", "81U1", "Output", [1504])
+    saida, revisao = parear([comando], Config())
+    assert saida == ()
+    assert [r.motivo for r in revisao] == ["comando_sem_discreto"]
+
+
+def test_cdc_orfao_continua_write():
+    comando = _rec("s:1", "CDC", "Output", [700, 701])
+    saida, revisao = parear([comando], Config())
+    assert len(saida) == 1
+    assert revisao == ()
+
+
+def test_catchall_nao_casa_classes_de_estado_diferentes():
+    # comando de função (excluir/incluir) não pode casar status de EVENTO (atuado)
+    status_trip = _rec("s:1", "SGF", "Input", [1535], desc="PROTECAO SGF ATUADO")
+    comando = _rec("s:2", "SGF", "Output", [1502], desc="SGF EXCLUIR INCLUIR")
+    saida, revisao = parear([status_trip, comando], Config())
+    # não funde: status segue standalone, comando vira revisão
+    assert any(r.tipo_sinal.direcao == "Input" for r in saida)
+    assert [r.motivo for r in revisao] == ["pareamento_ambiguo"]
+
+
+def test_fundir_propaga_comando_duplo():
+    from dataclasses import replace
+    status = _rec("s:1", "81U1", "Input", [1539])
+    comando = _rec("s:2", "81U1", "Output", [1504])
+    comando = replace(comando, tipo_sinal=replace(comando.tipo_sinal, comando_duplo=False))
+    fundido = fundir(status, comando)
+    assert fundido.tipo_sinal.comando_duplo is False
+    assert fundido.enderecamento.indices_saida == (1504,)
