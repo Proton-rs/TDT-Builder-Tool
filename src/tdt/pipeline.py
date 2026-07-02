@@ -241,7 +241,9 @@ def _classificar_sinal(
                     justificativa="fora_whitelist_equipamento",
                 )
             fundidos = dentro
-    com_regras, ajustes = motor_regras.aplicar_rastreado(rec, fundidos, config)
+    com_regras, ajustes = motor_regras.aplicar_rastreado(
+        rec, fundidos, config, lista_padrao=lista_padrao
+    )
     diag = None
     if diagnostico:
         por: dict[str, dict[str, float]] = {}

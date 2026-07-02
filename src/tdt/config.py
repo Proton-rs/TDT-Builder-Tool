@@ -76,6 +76,7 @@ class Config:
             "comando_status": 0.08,
             "equipamento": 0.12,
             "lado_tensao": 0.08,
+            "estado": 0.15,
         }
     )
     # Análise — e5 assimétrico + consenso + gap dinâmico + calibração
