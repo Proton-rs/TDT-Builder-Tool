@@ -22,7 +22,7 @@ import openpyxl
 from tdt import (
     ancoragem_sigla,
     criador_lista_homogenea, dc_pairer, engine_tdt, expansao_candidatos, filtro_preciso,
-    motor_regras, roteador,
+    motor_regras, roteador, semantica_estados,
 )
 from tdt.motor_regras import fase_da_sigla
 from tdt.analise.analise_colunas import analisar
@@ -220,6 +220,26 @@ def _classificar_sinal(
             fundidos = ancoragem_sigla.filtrar_subarvore(fundidos, ancoras)
         fundidos = filtro_preciso.filtrar(rec, fundidos, config)
         fundidos = filtro_preciso.filtrar_especificidade(rec, fundidos, lista_padrao, config)
+        # SP-E D2: filtro duro estado-detectado × par de estados do MM.
+        if config.filtro_semantica_estados:
+            fundidos, zerou = semantica_estados.filtrar_por_estado(
+                rec, fundidos, lista_padrao
+            )
+            if zerou:
+                return replace(
+                    rec, candidatos=tuple(fundidos[:3]), status="revisao",
+                    justificativa="estado_sem_candidato",
+                )
+        # SP-E D6: whitelist de siglas por equipamento (só extração explícita).
+        wl_equip = config.siglas_por_equipamento.get(rec.eletrico.equipamento_alvo or "")
+        if wl_equip and not rec.eletrico.equipamento_inferido:
+            dentro = [c for c in fundidos if c.sigla.upper() in wl_equip]
+            if fundidos and not dentro:
+                return replace(
+                    rec, candidatos=tuple(fundidos[:3]), status="revisao",
+                    justificativa="fora_whitelist_equipamento",
+                )
+            fundidos = dentro
     com_regras, ajustes = motor_regras.aplicar_rastreado(rec, fundidos, config)
     diag = None
     if diagnostico:
@@ -313,6 +333,12 @@ def _classificar_roteado(rec, disc: "_Scorers", ana: "_Scorers", diagnostico: bo
                                lista_padrao=lista_padrao, ancoras=_ancoras)
         if d.status == "decidido":
             return d, None
+        if d.status == "revisao" and d.justificativa in (
+            "estado_sem_candidato", "fora_whitelist_equipamento",
+        ):
+            return None, ItemRevisao(
+                d, motivo=d.justificativa, candidatos_sugeridos=d.candidatos[:3]
+            )
         motivo_conf = "sigla_multipla" if _multiplas else "score_baixo"
         return None, ItemRevisao(d, motivo=motivo_conf, candidatos_sugeridos=d.candidatos[:3])
 
@@ -516,7 +542,12 @@ def executar(
                 lista_padrao=lp,
             )
             if decidido is not None:
-                if rec.id in ids_indefinidos:
+                if (decidido.sigla_sinal or "").upper() in config.siglas_revisao_projeto:
+                    revisao.append(ItemRevisao(
+                        decidido, motivo="decisao_por_projeto",
+                        candidatos_sugeridos=decidido.candidatos[:3],
+                    ))
+                elif rec.id in ids_indefinidos:
                     revisao.append(ItemRevisao(decidido, motivo="modulo_indefinido",
                                                candidatos_sugeridos=decidido.candidatos[:3]))
                 else:
