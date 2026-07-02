@@ -12,7 +12,7 @@ def _rec(rid, sigla, indices, double=False):
     return SignalRecord(
         id=rid,
         modulo=Modulo("3", "sheet_name"),
-        tipo_sinal=TipoSinal("Discrete", double, "Input"),
+        tipo_sinal=TipoSinal("Discrete", "DoubleBit" if double else "SingleBit", "Input"),
         enderecamento=Enderecamento("DNP3", tuple(indices)),
         descricoes=Descricoes(sigla, sigla),
         sigla_sinal=sigla,
@@ -25,7 +25,7 @@ def test_merge_double_bit_enderecos_consecutivos():
     corrigidos, erros = corrigir(regs)
     assert len(corrigidos) == 1
     assert corrigidos[0].enderecamento.indices == (100, 101)
-    assert corrigidos[0].tipo_sinal.is_double_bit is True
+    assert corrigidos[0].tipo_sinal.datatype == "DoubleBit"
     assert erros == ()
 
 
@@ -51,7 +51,7 @@ def test_salva_par_consecutivo_e_manda_sobra_pra_revisao():
     corrigidos, erros = corrigir(regs)
     assert len(corrigidos) == 1
     assert corrigidos[0].enderecamento.indices == (100, 101)
-    assert corrigidos[0].tipo_sinal.is_double_bit is True
+    assert corrigidos[0].tipo_sinal.datatype == "DoubleBit"
     assert [e.registro.id for e in erros] == ["LT3:3"]
 
 

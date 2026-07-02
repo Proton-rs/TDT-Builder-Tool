@@ -46,7 +46,7 @@ def _rec(normalizada: str, categoria="Discrete") -> SignalRecord:
     return SignalRecord(
         id="t:1",
         modulo=Modulo("M", "sheet"),
-        tipo_sinal=TipoSinal(categoria, False, "Input"),
+        tipo_sinal=TipoSinal(categoria, "SingleBit", "Input"),
         enderecamento=Enderecamento("DNP3", (1,)),
         descricoes=Descricoes(normalizada, normalizada),
     )
@@ -308,7 +308,7 @@ def test_ancora_injeta_e_pipeline_decide_sigla_familia(lista_padrao_path):
     rec = SignalRecord(
         id="t:1",
         modulo=Modulo("M", "sheet"),
-        tipo_sinal=TipoSinal("Discrete", False, "Input", categoria_confiavel=True),
+        tipo_sinal=TipoSinal("Discrete", "SingleBit", "Input", categoria_confiavel=True),
         enderecamento=Enderecamento("DNP3", (1,)),
         descricoes=Descricoes("PROTECAO 50N E1 ATUADO", "PROTECAO 50N E1 ATUADO"),
     )

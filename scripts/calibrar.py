@@ -49,7 +49,7 @@ print("Pré-computando scores...")
 def _sc(desc):
     d_norm = canonizar(desc, cfg)
     rec = SignalRecord(id="cal", modulo=Modulo("M", "s"),
-        tipo_sinal=TipoSinal("Discrete", False, "Input"),
+        tipo_sinal=TipoSinal("Discrete", "SingleBit", "Input"),
         enderecamento=Enderecamento("DNP3", (1,)), descricoes=Descricoes(desc, d_norm))
     ct = tfidf.pontuar(rec, k=cfg.k_vizinhos)
     q = np.asarray(enc([d_norm]), dtype="float32")
@@ -65,7 +65,7 @@ print(f"Total amostras: {len(PRE)}")
 
 def _rec_vazio():
     return SignalRecord(id="cal", modulo=Modulo("M", "s"),
-        tipo_sinal=TipoSinal("Discrete", False, "Input"),
+        tipo_sinal=TipoSinal("Discrete", "SingleBit", "Input"),
         enderecamento=Enderecamento("DNP3", (1,)), descricoes=Descricoes("", ""))
 
 def _score(ct, cv, cf, pte, pve, pfu):

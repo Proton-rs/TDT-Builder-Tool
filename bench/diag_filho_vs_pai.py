@@ -113,7 +113,7 @@ def agrupar_por_familia(casos: list[CasoFilhoPai]) -> dict[str, list[CasoFilhoPa
 def _rec(desc: str, cfg: Config) -> SignalRecord:
     return SignalRecord(
         id="diag", modulo=Modulo("diag", "script"),
-        tipo_sinal=TipoSinal("Discrete", False, "Input"),
+        tipo_sinal=TipoSinal("Discrete", "SingleBit", "Input"),
         enderecamento=Enderecamento("DNP3", (1,)),
         descricoes=Descricoes(desc, canonizar(desc, cfg)),
     )

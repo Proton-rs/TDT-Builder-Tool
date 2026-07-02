@@ -151,7 +151,7 @@ def _rec(norm: str) -> SignalRecord:
     return SignalRecord(
         id="t:1",
         modulo=Modulo("X", "sheet_name"),
-        tipo_sinal=TipoSinal("Discrete", False, "Input"),
+        tipo_sinal=TipoSinal("Discrete", "SingleBit", "Input"),
         enderecamento=Enderecamento("DNP3", ()),
         descricoes=Descricoes(norm, norm),
     )

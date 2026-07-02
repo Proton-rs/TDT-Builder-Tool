@@ -83,3 +83,11 @@ def test_equipamento_disjuntor_mapeado_por_modulo_dj():
     decididos, _ = estruturar_homogeneo(rows, 0, "DJ1", lp, Config())
     assert decididos[0].eletrico.equipamento_alvo == "Disjuntor"
     assert decididos[0].enderecamento.indices == (100, 101)
+
+
+def test_indice_duplo_nativo_vira_doublebit():
+    rows = [_HEADER, ("SIM", "IMA", "DJ1", "DJ", "D", "DISJUNTOR 52-1 ABERTO", "DJF1",
+                       "IMA_DJ1_DJF1", "-", "-", "-", "-", "-", "1100;1101")]
+    lp = _ListaPadraoFake({"DJF1": _sinal_padrao("DJF1")})
+    decididos, _ = estruturar_homogeneo(rows, 0, "DJ1", lp, Config())
+    assert decididos[0].tipo_sinal.datatype == "DoubleBit"

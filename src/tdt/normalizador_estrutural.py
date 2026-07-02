@@ -64,7 +64,7 @@ def corrigir(
                             a.enderecamento.protocolo,
                             a.enderecamento.indices + b.enderecamento.indices,
                         ),
-                        tipo_sinal=replace(a.tipo_sinal, is_double_bit=True),
+                        tipo_sinal=replace(a.tipo_sinal, datatype="DoubleBit"),
                     )
                 )
                 usados.update((i, i + 1))

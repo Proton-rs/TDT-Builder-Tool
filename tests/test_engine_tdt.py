@@ -55,7 +55,7 @@ def _rec(rid, sigla, indices, direcao="Input", double=False, fase="ABC"):
     return SignalRecord(
         id=rid,
         modulo=Modulo("3", "sheet_name"),
-        tipo_sinal=TipoSinal("Discrete", double, direcao),
+        tipo_sinal=TipoSinal("Discrete", "DoubleBit" if double else "SingleBit", direcao),
         enderecamento=Enderecamento("DNP3", tuple(indices)),
         descricoes=Descricoes(f"{sigla} BRUTO", sigla),
         sigla_sinal=sigla,
@@ -292,7 +292,7 @@ def _rec_analog(rid, sigla, indices):
     return SignalRecord(
         id=rid,
         modulo=Modulo("AL11", "sheet_name"),
-        tipo_sinal=TipoSinal("Analog", False, "Input"),
+        tipo_sinal=TipoSinal("Analog", "SingleBit", "Input"),
         enderecamento=Enderecamento("DNP3", tuple(indices)),
         descricoes=Descricoes(f"{sigla} BRUTO", sigla),
         sigla_sinal=sigla,

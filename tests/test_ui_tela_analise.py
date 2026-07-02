@@ -8,7 +8,7 @@ from tdt.ui.tela_analise import TelaAnalise
 def _sr(id_, sigla, status, candidatos=()):
     return SignalRecord(
         id=id_, modulo=Modulo("M", "sheet_name"),
-        tipo_sinal=TipoSinal("Discrete", False, "Input"),
+        tipo_sinal=TipoSinal("Discrete", "SingleBit", "Input"),
         enderecamento=Enderecamento("DNP3", (1,)),
         descricoes=Descricoes("d", "D"),
         sigla_sinal=sigla, status=status, candidatos=candidatos,

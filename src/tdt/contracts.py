@@ -32,15 +32,16 @@ TIPOS_MODULO: tuple[str, ...] = (
 @dataclass(frozen=True)
 class TipoSinal:
     categoria: str  # "Discrete" | "Analog" | "DiscreteAnalog"
-    is_double_bit: bool
-    direcao: str  # "Input" | "Output" | "InputOutput"
+    datatype: str = "SingleBit"  # "SingleBit" | "DoubleBit" (nativo) | "MultiCoord" (fusão D3)
+    direcao: str = "Input"  # "Input" | "Output" | "InputOutput"
     categoria_confiavel: bool = True
+    comando_duplo: bool = True  # Comando D (OUTCOORDS "N;N") vs Comando S ("N")
 
 
 @dataclass(frozen=True)
 class Enderecamento:
     protocolo: str  # "DNP3"
-    indices: tuple[int, ...]  # (100, 101) double-bit | (17,) | () sem endereço
+    indices: tuple[int, ...]  # (1100, 1101) DoubleBit nativo/MultiCoord | (17,) | () sem endereço
     indices_saida: tuple[int, ...] = ()  # OUTCOORDS do comando (após pareamento D+C)
 
 

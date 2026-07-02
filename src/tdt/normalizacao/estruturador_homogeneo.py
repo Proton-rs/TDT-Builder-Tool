@@ -88,11 +88,17 @@ def estruturar_homogeneo(
         equip_cod = _normaliza_celula(row[idx["equipamento"]]) if idx["equipamento"] is not None else ""
         sigla = str(row[idx["sigla"]] or "").strip() if idx["sigla"] is not None else ""
         indices = _parse_indices(row[idx["index"]]) if idx["index"] is not None and idx["index"] < len(row) else ()
+        datatype = (
+            "DoubleBit"
+            if len(indices) == 2 and indices[0] != indices[1]
+            else "SingleBit"
+        )
 
         rec = SignalRecord(
             id=f"{sheet_name}:{i}",
             modulo=Modulo(modulo_nome, "coluna:MODULO"),
-            tipo_sinal=TipoSinal(categoria, is_double_bit=False, direcao=direcao, categoria_confiavel=True),
+            tipo_sinal=TipoSinal(categoria, datatype=datatype, direcao=direcao,
+                                 categoria_confiavel=True),
             enderecamento=Enderecamento("DNP3", indices),
             descricoes=Descricoes(bruta, canonizar(remanescente, config, None)),
             eletrico=Eletrico(

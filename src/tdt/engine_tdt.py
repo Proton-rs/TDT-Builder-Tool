@@ -181,7 +181,7 @@ def _valores(rec: SignalRecord, subestacao: str | None, padrao: ListaPadraoADMS)
         "Device Mapping": _device_mapping(nome, rec.sigla_sinal or "?", eh_prot),
         "Direction": _DIRECAO.get(direcao, "Read"),
         "Message Mapping": sp.mm if sp else None,
-        "Input Data Type": "DoubleBit" if rec.tipo_sinal.is_double_bit else "SingleBit",
+        "Input Data Type": rec.tipo_sinal.datatype,
         "Input Coordinates": coords_entrada,
         "Output Data Type": "SingleBit" if tem_comando else None,
         "Output Coordinates": coords_saida if tem_comando and coords_saida else None,

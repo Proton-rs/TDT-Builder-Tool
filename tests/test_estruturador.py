@@ -229,3 +229,36 @@ def test_sigla_invalida_recai_no_scoring():
     rec = recs[0]
     assert rec.status == "pendente"
     assert rec.sigla_sinal is None
+
+
+# --- datatype (DoubleBit nativo) + comando_duplo (SP-E / Task 3) -----------
+
+
+def _estruturar_rows(rows):
+    mapa = MapaColunas(header_row=1, colunas={"descricao": 0, "indice": 1, "tipo": 2})
+    return estruturar(rows, mapa, sheet_name="S1", config=Config())
+
+
+def test_input_com_endereco_duplo_nativo_vira_doublebit():
+    rows = [("desc", "idx", "tipo"),
+            ("Secc. 89-16 Aberta/Fechada", "1100;1101", "D")]
+    regs = _estruturar_rows(rows)
+    assert regs[0].tipo_sinal.datatype == "DoubleBit"
+
+
+def test_comando_nn_continua_singlebit():
+    rows = [("desc", "idx", "tipo"),
+            ("CMD Secc. 89-16", "3;3", "C")]
+    regs = _estruturar_rows(rows)
+    assert regs[0].tipo_sinal.datatype == "SingleBit"
+    assert regs[0].tipo_sinal.comando_duplo is True
+
+
+def test_comando_s_marca_comando_nao_duplo():
+    rows = [("desc", "idx", "tipo"),
+            ("CMD RMT.009 81 E1 Habilitar", "1504", "Comando S"),
+            ("CMD RMT.002 SGF Excluir/Incluir", "1502", "Comando D")]
+    regs = _estruturar_rows(rows)
+    assert regs[0].tipo_sinal.direcao == "Output"
+    assert regs[0].tipo_sinal.comando_duplo is False
+    assert regs[1].tipo_sinal.comando_duplo is True

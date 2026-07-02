@@ -12,7 +12,7 @@ def _rec(rid, sigla, direcao, indices):
     return SignalRecord(
         id=rid,
         modulo=Modulo("LT_GTA", "coluna:modulo"),
-        tipo_sinal=TipoSinal("Discrete", False, direcao),
+        tipo_sinal=TipoSinal("Discrete", "SingleBit", direcao),
         enderecamento=Enderecamento("DNP3", tuple(indices)),
         descricoes=Descricoes(sigla, sigla),
         sigla_sinal=sigla,
@@ -120,7 +120,7 @@ def _rec_desc(rid, sigla, direcao, desc, modulo, indices):
     from tdt.contracts import Descricoes, Enderecamento, Modulo, SignalRecord, TipoSinal
     return SignalRecord(
         id=rid, modulo=Modulo(modulo, "sheet_name"),
-        tipo_sinal=TipoSinal("Discrete", False, direcao),
+        tipo_sinal=TipoSinal("Discrete", "SingleBit", direcao),
         enderecamento=Enderecamento("DNP3", tuple(indices)),
         descricoes=Descricoes(desc, desc), sigla_sinal=sigla, status="decidido",
     )

@@ -365,7 +365,7 @@ class TelaRevisao(QWidget):
         registro = SignalRecord(
             id=f"manual_{uuid.uuid4().hex[:8]}",
             modulo=Modulo(None, "manual"),
-            tipo_sinal=TipoSinal("Discrete", False, "Input"),
+            tipo_sinal=TipoSinal("Discrete", "SingleBit", "Input"),
             enderecamento=Enderecamento("DNP3", ()),
             descricoes=Descricoes("", ""),
         )

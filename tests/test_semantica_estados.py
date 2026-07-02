@@ -127,7 +127,7 @@ def _lp_stub():
 def _rec(desc):
     return SignalRecord(
         id="s:1", modulo=Modulo("AL11", "sheet_name"),
-        tipo_sinal=TipoSinal("Discrete", False, "Input"),
+        tipo_sinal=TipoSinal("Discrete", "SingleBit", "Input"),
         enderecamento=Enderecamento("DNP3", (1535,)),
         descricoes=Descricoes(desc, desc),
     )

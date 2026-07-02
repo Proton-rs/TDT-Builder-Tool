@@ -28,7 +28,7 @@ def rec_minimo():
     return SignalRecord(
         id="s:1",
         modulo=Modulo("M", "sheet_name"),
-        tipo_sinal=TipoSinal("Discrete", False, "Input"),
+        tipo_sinal=TipoSinal("Discrete", "SingleBit", "Input"),
         enderecamento=Enderecamento("DNP3", (10,)),
         descricoes=Descricoes("FALHA DJ", "FALHA DJ"),
     )
