@@ -242,3 +242,58 @@ def test_filtrar_config_none_funciona_igual():
     candidatos = [_cand("DJ1"), _cand("SEC1")]
     out = filtrar(rec, candidatos, None)
     assert [c.sigla for c in out] == ["DJ1"]
+
+
+# ---------------------------------------------------------------------------
+# f_posicao / Task 6 (SP-G Caso 2): DJA1/DJF1/SEC* de posição só sobrevive
+# se o texto tiver palavra de posição. Casos reais da população
+# bench/resultados/spG_diag_dja1_populacao.txt (Sigla Decidida==DJA1,
+# Score==0.858, n=91): 4 subgrupos por final da descrição.
+# ---------------------------------------------------------------------------
+
+
+def test_f_posicao_intertravamento_remove_dja1():
+    """Bug confirmado: 'Intertravamento' não é palavra de posição (n=24)."""
+    rec = _rec(
+        "Disj. 52-1 (01Q0)  - Intertravamento",
+        "DISJUNTOR INTERTRAVAMENTO",
+    )
+    out = filtrar(rec, [_cand("DJA1"), _cand("OUTRO", score=0.1)], Config())
+    assert "DJA1" not in [c.sigla for c in out]
+
+
+def test_f_posicao_indefinido_remove_dja1():
+    """Bug confirmado: 'Indefinido' é estado desconhecido, não posição (n=48)."""
+    rec = _rec(
+        "Disj. 52-3 (02Q0)  - Indefinido",
+        "DISJUNTOR INDEFINIDO",
+    )
+    out = filtrar(rec, [_cand("DJA1"), _cand("OUTRO", score=0.1)], Config())
+    assert "DJA1" not in [c.sigla for c in out]
+
+
+def test_f_posicao_desligado_mantem_dja1():
+    """Comportamento correto preservado: 'Desligado' É palavra de posição (n=18)."""
+    rec = _rec(
+        "Disj. 24-3 (05Q0)  - Desligado",
+        "DISJUNTOR DESLIGADO",
+    )
+    out = filtrar(rec, [_cand("DJA1")], Config())
+    assert [c.sigla for c in out] == ["DJA1"]
+
+
+def test_f_posicao_ligado_mantem_dja1():
+    """Comportamento correto preservado: 'Ligado' É palavra de posição (n=1)."""
+    rec = _rec(
+        "Gerador de Emergência - DJ 52 GMG Ligado",
+        "GERADOR DE EMERGENCIA DJ GMG LIGADO",
+    )
+    out = filtrar(rec, [_cand("DJA1")], Config())
+    assert [c.sigla for c in out] == ["DJA1"]
+
+
+def test_f_posicao_nao_afeta_sigla_fora_da_lista():
+    """Sigla que não é de posição não é tocada pelo gate."""
+    rec = _rec("Disjuntor Intertravamento", "DISJUNTOR INTERTRAVAMENTO")
+    out = filtrar(rec, [_cand("52IT")], Config())
+    assert [c.sigla for c in out] == ["52IT"]

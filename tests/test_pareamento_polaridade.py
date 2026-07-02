@@ -3,7 +3,7 @@ import pytest
 
 from tdt.config import Config
 from tdt.contracts import Descricoes, Eletrico, Enderecamento, Modulo, SignalRecord, TipoSinal
-from tdt.pareamento_polaridade import forcar_polaridade_equipamento
+from tdt.pareamento_polaridade import eh_texto_de_posicao, forcar_polaridade_equipamento
 
 
 def _rec(
@@ -220,3 +220,29 @@ def test_terceiro_sinal_sem_polaridade_passa_intacto():
     assert by_id["a"].sigla_sinal == "DJF1"
     assert by_id["b"].sigla_sinal == "DJF1"
     assert by_id["c"].sigla_sinal is None
+
+
+# ---------------------------------------------------------------------------
+# eh_texto_de_posicao (Task 6 — gate de posição p/ DJ*/SEC* de posição)
+# ---------------------------------------------------------------------------
+
+def test_texto_posicao():
+    assert eh_texto_de_posicao("DISJUNTOR DESLIGADO")
+    assert eh_texto_de_posicao("SECCIONADORA ABERTA")
+    assert not eh_texto_de_posicao("DISJUNTOR INTERTRAVAMENTO")
+    assert not eh_texto_de_posicao("MOLA DESCARREGADA")
+
+
+def test_texto_posicao_indefinido_nao_e_posicao():
+    """'Indefinido' significa estado desconhecido — explicitamente NÃO é
+    palavra de posição (achado da investigação de população real, n=48)."""
+    assert not eh_texto_de_posicao("DISJ. 52-1 (01Q0) INDEFINIDO")
+
+
+def test_texto_posicao_ligado_e_posicao():
+    assert eh_texto_de_posicao("GERADOR DE EMERGENCIA DJ 52 GMG LIGADO")
+
+
+def test_texto_posicao_na_marca_posicao():
+    """Token 'NA' (normalmente aberto) também conta como evidência de posição."""
+    assert eh_texto_de_posicao("DISJUNTOR NA")

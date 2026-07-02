@@ -37,6 +37,34 @@ def _tem_prefixo(tokens: list[str], prefixos: tuple[str, ...]) -> bool:
     return any(tok.startswith(p) for tok in tokens for p in prefixos)
 
 
+# Siglas que representam POSIÇÃO de equipamento (aberto/fechado, ligado/
+# desligado) — só podem decidir um sinal se o texto tiver evidência real de
+# posição (ver eh_texto_de_posicao). Task 6 / SP-G: gate contra decisão "por
+# default" quando o texto residual é genérico demais (ex. "DISJUNTOR
+# INTERTRAVAMENTO", "... INDEFINIDO") e não descreve estado algum.
+_SIGLAS_POSICAO: frozenset[str] = frozenset(
+    {"DJF1", "DJA1", "SECC", "SECB", "SECT", "SECG", "SECF", "SECI", "SECL"}
+)
+
+
+def eh_texto_de_posicao(texto_normalizado: str) -> bool:
+    """True se o texto contém evidência de estado de posição (aberto/fechado,
+    ligado/desligado, ou o token "NA" — normalmente aberto).
+
+    Reusa ``_LIGADO_PREFIXOS``/``_DESLIGADO_PREFIXOS`` (mesmas listas do
+    pareamento de par ligado/desligado) — genérico por construção: qualquer
+    texto que já ativaria o pareamento de par também passa aqui. Textos como
+    "INTERTRAVAMENTO" ou "INDEFINIDO" não têm nenhum desses prefixos/token e
+    portanto não contam como evidência de posição.
+    """
+    tokens = texto_normalizado.upper().split()
+    return (
+        "NA" in tokens
+        or _tem_prefixo(tokens, _LIGADO_PREFIXOS)
+        or _tem_prefixo(tokens, _DESLIGADO_PREFIXOS)
+    )
+
+
 def _chave(rec: SignalRecord) -> tuple | None:
     eq = rec.eletrico.equipamento_alvo
     if eq not in ("Disjuntor", "Seccionadora") or not rec.eletrico.nome_equipamento:
