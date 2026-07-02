@@ -106,7 +106,7 @@ def preferir_irmao_qualificado(
     if len(casando) > 1:
         # justificativa é o motivo literal ("qualificador_ambiguo"), no mesmo
         # padrão de "estado_sem_candidato"/"fora_whitelist_equipamento" —
-        # pipeline._classificar_um (linha ~341) faz match exato de
+        # pipeline._classificar_roteado (linhas 341-343) faz match exato de
         # d.justificativa contra a lista de motivos conhecidos para propagar
         # ao ItemRevisao; texto livre aqui seria silenciosamente reclassificado
         # como "score_baixo"/"sigla_multipla".
