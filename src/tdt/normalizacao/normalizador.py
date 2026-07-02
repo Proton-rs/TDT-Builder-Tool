@@ -182,6 +182,7 @@ ABREVIACOES_EXTRA: dict[str, str] = {
     "SOBREC": "SOBRECORRENTE",
     "RELIG": "RELIGADOR",
     "MEDIC": "MEDICAO",
+    "SUCEDIDO": "SUCESSO",
 }
 
 # N2 — IDs de equipamento letra-número (contexto, não sinal). Calibrada para

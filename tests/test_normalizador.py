@@ -83,6 +83,13 @@ def test_n1_config_tem_prioridade():
     assert expandir_abreviacoes("DISJ", cfg) == "FOO"
 
 
+def test_sinonimo_sucedido_vira_sucesso():
+    # "BEM SUCEDIDO" (input) precisa casar com "COM SUCESSO" (descrição-padrão 79OK)
+    canonico = canonizar("Religamento (79) - Bem Sucedido", CFG)
+    assert "SUCESSO" in canonico.split()
+    assert "SUCEDIDO" not in canonico.split()
+
+
 # --- N2: separação de IDs de equipamento ----------------------------------
 
 
