@@ -21,7 +21,8 @@ import openpyxl
 
 from tdt import (
     ancoragem_sigla,
-    criador_lista_homogenea, dc_pairer, engine_tdt, expansao_candidatos, filtro_preciso,
+    criador_lista_homogenea, dc_pairer, engine_tdt, especificidade_qualificador,
+    expansao_candidatos, filtro_preciso,
     motor_regras, roteador, semantica_estados,
 )
 from tdt.motor_regras import fase_da_sigla
@@ -257,6 +258,10 @@ def _classificar_sinal(
         )
     if decidido.status == "decidido":
         decidido = _com_fase(decidido)
+    if lista_padrao is not None:
+        decidido = especificidade_qualificador.preferir_irmao_qualificado(
+            decidido, lista_padrao, config
+        )
     return decidido
 
 
@@ -334,7 +339,7 @@ def _classificar_roteado(rec, disc: "_Scorers", ana: "_Scorers", diagnostico: bo
         if d.status == "decidido":
             return d, None
         if d.status == "revisao" and d.justificativa in (
-            "estado_sem_candidato", "fora_whitelist_equipamento",
+            "estado_sem_candidato", "fora_whitelist_equipamento", "qualificador_ambiguo",
         ):
             return None, ItemRevisao(
                 d, motivo=d.justificativa, candidatos_sugeridos=d.candidatos[:3]
