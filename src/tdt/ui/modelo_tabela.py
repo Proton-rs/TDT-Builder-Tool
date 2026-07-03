@@ -28,6 +28,7 @@ _MOTIVO_LABEL = {
     "modulo_indefinido": "Módulo indefinido",
     "equipamento_ambiguo": "Equipamento ambíguo",
     "nome_sigla_inconsistente": "Sigla ≠ NOME",
+    "qualificador_ambiguo": "Qualificador ambíguo",
 }
 
 # Cores por faixa de confiança (texto). ponytail: faixas fixas; threshold de

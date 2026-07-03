@@ -1,0 +1,97 @@
+SP-G — validação final (Task 8)
+================================
+
+Baseline (Task 0, pre-SP-G, commit 51838bd, TDT.xlsx pré-existente/estático):
+  comum=798 iguais=455 pct=57.0
+
+Final (Task 8, pós-SP-G, HEAD=7a5c861, TDT.xlsx reprocessado do ZERO via
+bench/reprocessar_lista1.py a partir de docs/input_nao_homogeneo_1_GTD.xlsx):
+  comum=1006 iguais=601 pct=59.7
+
+Delta: pct +2.7pp (57.0 -> 59.7), comum +208, iguais +146. Sem regressão —
+critério de aceite (pct >= 57.0) satisfeito com folga. O aumento de `comum`
+(mais endereços comparáveis) é efeito colateral esperado: mais sinais
+decididos corretamente (Task 6 corrigiu 72 linhas DJA1 incorretas, Task 5
+corrigiu a família 79) preenchem mais endereços no TDT gerado que agora
+também existem no TDT real.
+
+Totais do pipeline (reprocessamento fresco): decididos=1538 revisao=783
+(comparar com decididos=1527 revisao=822 registrado no relatório da Task 5 —
+a diferença vem das Tasks 6 e 7 rodando depois daquela medição).
+
+Motivos de revisão (pós-SP-G): score_baixo=398, estado_sem_candidato=145,
+comando_sem_discreto=66, sem_endereco=48, posicao_ambigua=32,
+decisao_por_projeto=20, categoria_ambigua=20, descartado_redundante=19,
+descartado_indefinido=17, fora_whitelist_equipamento=9,
+categoria_incompativel=6, modulo_indefinido=3.
+
+--------------------------------------------------------------------------
+Benchmark (bench/benchmark.py) — referência (commit a427008) vs pós-SP-G
+--------------------------------------------------------------------------
+
+método                acc@1  rec@3  decid  prec@dec
+tfidf                   68%    76%    61%       87%     (idêntico)
+vetorial(MiniLM)        64%    70%    24%       91%     (idêntico)
+fuzzy                   40%    70%    20%       68%     (idêntico)
+tfidf+vet+fuzzy         60%    78%    67%       66%     (idêntico)
+combo(calib-minmax)     69%    81%    82%       80%     (idêntico)
+combo(calib-temp)       73%    82%    47%       92%     (idêntico)
+combo+regras            60%    79%    68%       68%     (idêntico)
+e5                      74%    84%     1%      100%     (idêntico)
+tfidf+e5+fuzzy          62%    84%    58%       62%     (idêntico)
+combo+rerank            52%    72%    38%       73%     (idêntico)
+combo+consenso          60%           82%       44%     (idêntico)
+
+Zero regressão — todas as 11 linhas byte-idênticas à referência. Esperado:
+o benchmark usa um harness próprio (bench/benchmark.py) que não passa
+`lista_padrao` para `motor_regras.aplicar`/`aplicar_rastreado` (Task 7) nem
+exercita `tdt.pipeline`/`filtro_preciso` (Tasks 5, 6) diretamente; as
+correções de Tasks 1-3 (normalizador) também não movem os pares rotulados
+específicos do benchmark (fase A/B/C e a sinonímia SUCEDIDO/SUCESSO não
+aparecem no conjunto rotulado atual, per achados das próprias tasks).
+
+--------------------------------------------------------------------------
+Os 5 casos da spec (2026-07-02-spG-correcoes-classificacao-design.md) —
+verificados contra o reprocessamento fresco
+--------------------------------------------------------------------------
+
+1. "Religamento (79) - Bem Sucedido" -> 79OK. CORRIGIDO (era 79, score>1.0).
+   Todas as ~15 ocorrências na LISTA 1 decidem 79OK.
+
+2. DJA1/Intertravamento — CORRIGIDO: 'Disj. ... - Intertravamento' agora vai
+   para revisão (motivo=score_baixo, candidatos MDCD/62BF/DFDJ), não decide
+   mais DJA1. 'Disj. ... - Desligado' continua decidindo (DJF1, não DJA1 —
+   default sem token "NA", consistente com pareamento_polaridade). 'Indefinido'
+   também não decide mais DJA1 (nenhum decidido encontrado para o padrão).
+
+3. "Secc." com ponto — contexto de equipamento agora É detectado (unit-testado
+   na Task 2). No reprocessamento, "Secc. 89-2/4/6 (...) - Aberta/Fechado" vão
+   para revisão com motivo=posicao_ambigua (comportamento correto e PRÉ-
+   EXISTENTE do módulo pareamento_polaridade para variantes de seccionadora
+   sem keyword — não é regressão, é o desenho já documentado do módulo).
+
+4. "Corrente Fase A/B/C" -> IA/IB/IC. CORRIGIDO/mantido — decide corretamente,
+   discriminador de fase presente no texto de matching (Task 3).
+
+5. "Proteção SGF - Atuado" -> SGFT. CONFIRMADO decidido (score reforçado pela
+   Task 7, mas já decidia antes dela neste dataset — achado documentado no
+   relatório da própria Task 7, não é regressão).
+
+--------------------------------------------------------------------------
+Novos erros/anomalias observados (para o próximo lote — não corrigidos aqui)
+--------------------------------------------------------------------------
+
+- Divergência PRÉ-EXISTENTE (presente também no baseline pré-SP-G, portanto
+  NÃO introduzida por esta série): endereços GTD_LTGTA_89-{2,4,6}_DSEC —
+  nosso sistema decide "43LR" (o texto contém literalmente "Alarme
+  (43LR/Lo...)"), mas o TDT real nomeia o ponto como "DSEC" nesse endereço.
+  Pode ser nomenclatura real divergente (o alarme composto pode ter mais de
+  uma leitura válida) — requer julgamento de domínio, não é claramente um
+  bug de matching. Candidato a investigação futura (SP-H ou dedicado).
+- "score_baixo" caiu de ~604 (medido em diagnóstico anterior, dado potencial-
+  mente de config diferente) para 398 nesta medição — melhoria real vinda das
+  Tasks 5/6, mas ainda é o maior motivo de revisão (398 sinais); zona-alvo do
+  SP-H (resgate por regras, dedupe de gap).
+- "estado_sem_candidato" (145) e "comando_sem_discreto" (66) permanecem os
+  maiores blocos depois de score_baixo — prováveis alvos de SP-H/SP-I,
+  fora do escopo do SP-G.

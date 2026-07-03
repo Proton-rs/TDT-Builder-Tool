@@ -19,6 +19,7 @@ from dataclasses import dataclass, replace
 
 from tdt.config import Config
 from tdt.contracts import AjusteRegra, Candidato, SignalRecord
+from tdt.semantica_estados import INDEFINIDO, classe_do_mm, detectar_estado
 
 _ZERO = AjusteRegra(0.0, "")
 
@@ -29,16 +30,22 @@ class Contexto:
 
     Evita recomputar split/regex por candidato. ``tokens`` é o conjunto de
     tokens do texto canônico; ``eletrico`` é o sub-registro elétrico.
+    ``lista_padrao`` (opcional) permite a regras consultarem o Message
+    Mapping de um candidato (``lista_padrao.por_sigla(sigla).mm``) — ausente
+    (``None``) para chamadores que não a possuem (ex. bench/benchmark.py);
+    regras que dependem dela devem ser no-op nesse caso.
     """
 
     tokens: frozenset[str]
     eletrico: object  # tdt.contracts.Eletrico (evita import circular de tipo)
+    lista_padrao: object | None = None  # tdt.dados.lista_padrao.ListaPadraoADMS
 
     @classmethod
-    def de(cls, rec: SignalRecord) -> Contexto:
+    def de(cls, rec: SignalRecord, lista_padrao: object | None = None) -> Contexto:
         return cls(
             tokens=frozenset(rec.descricoes.normalizada.upper().split()),
             eletrico=rec.eletrico,
+            lista_padrao=lista_padrao,
         )
 
 
@@ -330,6 +337,37 @@ def r6_lado_tensao(
     return _ZERO
 
 
+# --- R7: estado compatível (SP-G Task 7) -------------------------------------
+
+
+def r7_estado_compativel(
+    rec: SignalRecord, cand: Candidato, ctx: Contexto, cfg: Config
+) -> AjusteRegra:
+    """Estado do texto (evento/posição/função/...) × classe do MM do candidato.
+
+    Casa (ex.: texto "ATUADO" = EVENTO, e MM do candidato também é EVENTO):
+    boost. Diverge (ex.: texto EVENTO, MM é FUNCAO): penalidade. Não reimplementa
+    extração/comparação de estados — usa ``semantica_estados`` (SP-E) tal qual.
+    Requer ``ctx.lista_padrao`` para consultar o MM do candidato; ausente
+    (chamador não a threadeou, ex. bench/benchmark.py) = no-op seguro.
+    """
+    if ctx.lista_padrao is None:
+        return _ZERO
+    est = detectar_estado(rec.descricoes.normalizada)
+    if est is None or est.classe == INDEFINIDO:
+        return _ZERO
+    sp = ctx.lista_padrao.por_sigla(cand.sigla)
+    classe_mm = classe_do_mm(sp.mm if sp else None)
+    if classe_mm is None:
+        return _ZERO
+    peso = cfg.pesos_regras["estado"]
+    if classe_mm == est.classe:
+        return AjusteRegra(peso, f"estado: candidato e texto em {est.classe}")
+    return AjusteRegra(
+        -peso, f"estado: candidato em {classe_mm} diverge de {est.classe}"
+    )
+
+
 # Registro de regras — adicione funções aqui para crescer (SRP, sem reescrita).
 _REGRAS = (
     r1_numero_protecao,
@@ -339,6 +377,7 @@ _REGRAS = (
     r5_comando_status,
     r_equipamento,
     r6_lado_tensao,
+    r7_estado_compativel,
 )
 
 
@@ -346,14 +385,18 @@ def aplicar_rastreado(
     rec: SignalRecord,
     candidatos: list[Candidato],
     config: Config | None = None,
+    lista_padrao: object | None = None,  # tdt.dados.lista_padrao.ListaPadraoADMS
 ) -> tuple[list[Candidato], list[AjusteRegra]]:
     """Aplica o registro de regras, reordena e devolve os ajustes que atuaram.
 
     Retorna ``(candidatos_reordenados, ajustes)``; ``ajustes`` traz só os
     ``AjusteRegra`` com delta != 0 (motivos legíveis para a justificativa).
+    ``lista_padrao`` é opcional (retrocompat: chamadores existentes que não a
+    passam mantêm o comportamento antigo — regras que dependem dela, ex.
+    ``r7_estado_compativel``, são no-op nesse caso).
     """
     cfg = config or Config()
-    ctx = Contexto.de(rec)
+    ctx = Contexto.de(rec, lista_padrao)
     ajustados: list[Candidato] = []
     atuantes: list[AjusteRegra] = []
     for cand in candidatos:
@@ -372,7 +415,8 @@ def aplicar(
     rec: SignalRecord,
     candidatos: list[Candidato],
     config: Config | None = None,
+    lista_padrao: object | None = None,  # tdt.dados.lista_padrao.ListaPadraoADMS
 ) -> list[Candidato]:
     """Soma deltas das regras aos scores e reordena (desc). Retrocompat: 2 args."""
-    ajustados, _ = aplicar_rastreado(rec, candidatos, config)
+    ajustados, _ = aplicar_rastreado(rec, candidatos, config, lista_padrao)
     return ajustados

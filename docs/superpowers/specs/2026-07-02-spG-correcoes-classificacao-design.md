@@ -91,6 +91,16 @@ positiva (estado do texto casa com estados da sigla → ajuste positivo).
 Caso-limite da SP-H (resgate por regras na zona cinzenta) — implementar aqui
 apenas a contribuição de estado; o mecanismo geral de resgate é da SP-H.
 
+> **Nota (revisão final de branch, Task 8):** o número 0.439/`score_baixo`
+> acima NÃO reproduz mais na validação final. O sinal já decide `SGFT` antes
+> mesmo da regra da Task 7 rodar (score reforçado pela Task 7, mas já
+> decidia sem ela neste dataset) — provavelmente efeito colateral de outra
+> correção do lote (Task 5 ou o filtro duro pré-existente de SP-E). Ver
+> `bench/resultados/spG_final_gate.txt`, item 5: "CONFIRMADO decidido...
+> achado documentado no relatório da própria Task 7, não é regressão". Este
+> caso permanece registrado aqui por rastreabilidade histórica do design,
+> não porque ainda reproduz — não persiga o número 0.439.
+
 ## Critérios de aceite
 
 1. Os 5 casos acima classificam conforme a coluna "Correto/Esperado", cada um

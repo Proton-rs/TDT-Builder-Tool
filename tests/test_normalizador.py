@@ -83,6 +83,13 @@ def test_n1_config_tem_prioridade():
     assert expandir_abreviacoes("DISJ", cfg) == "FOO"
 
 
+def test_sinonimo_sucedido_vira_sucesso():
+    # "BEM SUCEDIDO" (input) precisa casar com "COM SUCESSO" (descrição-padrão 79OK)
+    canonico = canonizar("Religamento (79) - Bem Sucedido", CFG)
+    assert "SUCESSO" in canonico.split()
+    assert "SUCEDIDO" not in canonico.split()
+
+
 # --- N2: separação de IDs de equipamento ----------------------------------
 
 
@@ -282,7 +289,9 @@ def test_letra_p_sem_marcador_barra_nao_e_barra():
 def test_extrai_fase_letra_unica():
     texto, ctx = extrair_contexto_estrutural("CORRENTE FASE A")
     assert ctx.fase == "A"
-    assert "A" not in texto.split()
+    # spG/Task 3: token permanece no texto (discriminador p/ os scorers);
+    # D2.1 já protege a letra do filtro de stopwords adiante.
+    assert "A" in texto.split()
 
 
 def test_extrai_fase_dupla():
@@ -303,8 +312,9 @@ def test_extrai_fase_trifasico():
 def test_extrai_fase_apos_lider_ansi_sem_palavra_fase():
     texto, ctx = extrair_contexto_estrutural("PROTECAO 50 ABC ESTAGIO 1 ATUADO")
     assert ctx.fase == "ABC"
-    assert "ABC" not in texto.split()
-    assert "50" in texto.split()  # número ANSI preservado, só a fase é removida
+    # spG/Task 3: token permanece no texto (discriminador p/ os scorers)
+    assert "ABC" in texto.split()
+    assert "50" in texto.split()  # número ANSI preservado
 
 
 def test_lider_ansi_letra_unica_nao_extrai_fase():
@@ -325,6 +335,29 @@ def test_fase_explicita_tem_prioridade_sobre_padrao_lider_ansi():
 def test_sem_fase_no_texto():
     texto, ctx = extrair_contexto_estrutural("FALHA COMUNICACAO")
     assert ctx.fase is None
+
+
+def test_n0_fase_anotada_e_token_mantido():
+    texto, ctx = extrair_contexto_estrutural("Corrente Fase A")
+    assert ctx.fase == "A"
+    assert "A" in texto.split()          # discriminador continua p/ os scorers
+
+
+def test_n0_fase_nao_remove_artigo_errado():
+    # regressão: "A" artigo antes de "FASE A" não pode ser confundido
+    texto, ctx = extrair_contexto_estrutural("CHAVE A FASE A")
+    assert ctx.fase == "A"
+    assert texto.split().count("A") == 2  # nada removido
+
+
+def test_n0_equipamento_com_ponto_final():
+    _, ctx = extrair_contexto_estrutural("Secc. Barra Aberta")
+    assert ctx.equipamento_alvo == "Seccionadora"
+
+
+def test_n0_equipamento_com_ponto_disj():
+    _, ctx = extrair_contexto_estrutural("Disj. Intertravamento Manual Bloqueado")
+    assert ctx.equipamento_alvo == "Disjuntor"
 
 
 def test_parenteses_e_pontuacao_extra_virram_espaco():

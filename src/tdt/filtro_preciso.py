@@ -8,6 +8,8 @@ Se o filtro eliminar todos os candidatos, retorna a lista original (fallback
 seguro — não decidir é melhor que decidir errado).
 
 Reusa constantes e helpers de ``motor_regras`` (nunca o chama diretamente).
+Também reusa ``pareamento_polaridade`` (``_SIGLAS_POSICAO``,
+``eh_texto_de_posicao``) para o gate de posição (Task 6, SP-G).
 """
 
 from __future__ import annotations
@@ -32,6 +34,7 @@ from tdt.motor_regras import (
     equipamento_da_sigla,
     fase_da_sigla,
 )
+from tdt.pareamento_polaridade import _SIGLAS_POSICAO, eh_texto_de_posicao
 
 
 # --- F_R1: número de proteção -----------------------------------------------
@@ -172,6 +175,23 @@ def f_r6(cand: Candidato, ctx: Contexto) -> bool:
     return True
 
 
+# --- F_posicao: sigla de posição exige palavra de posição no texto ---------
+#
+# Task 6 (SP-G, Caso 2): DJA1 decidia com score fixo 0.858 sempre que o texto
+# canônico colapsava para "DISJUNTOR <algo>" — mesmo quando <algo> não era
+# palavra de posição (ex. "INTERTRAVAMENTO", "INDEFINIDO"). Gate: candidato
+# cuja sigla é de POSIÇÃO (_SIGLAS_POSICAO) só sobrevive ao filtro se o texto
+# tiver evidência real de posição (eh_texto_de_posicao) — senão é removido
+# (cai pro fallback "não decidir" se não sobrar mais ninguém).
+
+
+def f_posicao(cand: Candidato, rec: SignalRecord) -> bool:
+    """Remove candidato de sigla de posição sem evidência de posição no texto."""
+    if cand.sigla.upper() not in _SIGLAS_POSICAO:
+        return True
+    return eh_texto_de_posicao(rec.descricoes.normalizada)
+
+
 # Registro de filtros — adicione funções aqui para crescer.
 _FILTROS = (
     f_r1,
@@ -203,6 +223,8 @@ def filtrar(
             if not filtro(cand, ctx):
                 manter = False
                 break
+        if manter and not f_posicao(cand, rec):
+            manter = False
         if manter:
             resultado.append(cand)
     return resultado if resultado else candidatos

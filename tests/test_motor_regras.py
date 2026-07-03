@@ -8,15 +8,32 @@ from tdt.contracts import (
     SignalRecord,
     TipoSinal,
 )
+from tdt.dados.lista_padrao import ListaPadraoADMS, SinalPadrao
 from tdt.motor_regras import (
     Contexto,
     aplicar,
     aplicar_rastreado,
     equipamento_da_sigla,
+    r7_estado_compativel,
     r_equipamento,
 )
 
 _CFG = Config()
+
+
+def _lp():
+    return ListaPadraoADMS(
+        discretos=(
+            SinalPadrao("SGF", "FUNCAO SGF", "Enabled", "Read",
+                        "INCLUIR@EXCLUIR___INCLUIDO@EXCLUIDO___Enabled_S_TS_SS", "Discrete"),
+            SinalPadrao("SGFT", "TRIP SGF", "RelayTrip", "Read",
+                        "null@null___NORMAL@ATUADO___RelayTrip_S_TS_SA", "Discrete"),
+            SinalPadrao("79_EXC", "79 - EXCLUIR RELIGAMENTO", "Custom", "Write",
+                        "null@EXCLUIR___null@null___ReclosingEnabled___admsINV_D_TC_SS",
+                        "Discrete"),
+        ),
+        analogicos=(),
+    )
 
 
 def _rec(desc_norm, eletrico=None):
@@ -192,3 +209,65 @@ def test_r_equipamento_neutro_sem_alvo():
     cfg = Config()
     ajuste = r_equipamento(None, cand, ctx, cfg)
     assert ajuste.delta == 0.0
+
+
+# --- R7: estado compatível (SP-G Task 7) -------------------------------------
+#
+# NOTA sobre o candidato "incompatível" usado no teste: a brief original sugeria
+# '79_EXC' (sigla só-comando, Write) como exemplo de incompatibilidade. Verificado
+# contra a LP real (docs/Pontos Padrao ADMS_v2.xlsx): o MM de 79_EXC é
+# "null@EXCLUIR___null@null___..." -- o segmento de ESTADOS (2a posição) é
+# "null@null", que classe_do_mm() classifica como None (sem par de estado --
+# é comando puro). A própria brief instrui: "If classe_mm is None: return _ZERO
+# (candidate's MM has no clear state-class, e.g. a Write-only command with no
+# read state pair)" -- ou seja, 79_EXC é o exemplo CANÔNICO de _ZERO, não de
+# incompatibilidade. Usamos 'SGF' (classe FUNCAO via INCLUIR@EXCLUIDO) como o
+# candidato realmente incompatível com o texto ATUADO (classe EVENTO) -- mesmo
+# par já usado em test_semantica_estados.test_filtro_elimina_sigla_de_estado_incompativel.
+
+
+def test_regra_estado_compativel_pontua(lp=_lp()):
+    # 'PROTECAO SGF ATUADO': estado ATUADO (EVENTO) casa com NORMAL@ATUADO de SGFT
+    rec = _rec("Proteção SGF - Atuado")
+    ajuste = r7_estado_compativel(rec, Candidato("SGFT", 0.5, "mesclado"), Contexto.de(rec, lp), _CFG)
+    assert ajuste.delta > 0
+
+
+def test_regra_estado_incompativel_penaliza(lp=_lp()):
+    # SGF (classe FUNCAO: INCLUIR/EXCLUIR) nao casa com o texto de estado ATUADO (EVENTO)
+    rec = _rec("Proteção SGF - Atuado")
+    ajuste = r7_estado_compativel(rec, Candidato("SGF", 0.5, "mesclado"), Contexto.de(rec, lp), _CFG)
+    assert ajuste.delta < 0
+
+
+def test_regra_estado_sem_classe_mm_e_neutra(lp=_lp()):
+    # 79_EXC: MM so-comando (estados = "null@null") -> classe_do_mm None -> _ZERO
+    rec = _rec("Proteção SGF - Atuado")
+    ajuste = r7_estado_compativel(
+        rec, Candidato("79_EXC", 0.5, "mesclado"), Contexto.de(rec, lp), _CFG
+    )
+    assert ajuste.delta == 0.0
+
+
+def test_regra_estado_sem_lista_padrao_e_neutra():
+    # Contexto sem lista_padrao (retrocompat, ex. bench/benchmark.py) -> no-op seguro
+    rec = _rec("Proteção SGF - Atuado")
+    ajuste = r7_estado_compativel(rec, Candidato("SGFT", 0.5, "mesclado"), Contexto.de(rec), _CFG)
+    assert ajuste.delta == 0.0
+
+
+def test_regra_estado_sem_evidencia_no_texto_e_neutra(lp=_lp()):
+    rec = _rec("DISJUNTOR ABERTO")  # classe POSICAO, nao EVENTO -- sem conflito p/ SGF
+    ajuste = r7_estado_compativel(rec, Candidato("SGF", 0.5, "mesclado"), Contexto.de(rec, lp), _CFG)
+    # POSICAO detectado, SGF e FUNCAO -> incompativel tambem penaliza (nao e "sem evidencia")
+    assert ajuste.delta < 0
+
+
+def test_aplicar_rastreado_thread_lista_padrao_para_sgft():
+    lp = _lp()
+    rec = _rec("Proteção SGF - Atuado")
+    cands = [Candidato("SGF", 0.6, "mesclado"), Candidato("SGFT", 0.5, "mesclado")]
+    out, ajustes = aplicar_rastreado(rec, cands, _CFG, lista_padrao=lp)
+    assert out[0].sigla == "SGFT"
+    motivos = " | ".join(a.motivo for a in ajustes)
+    assert "estado" in motivos

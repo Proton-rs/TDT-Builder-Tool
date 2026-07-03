@@ -21,7 +21,8 @@ import openpyxl
 
 from tdt import (
     ancoragem_sigla,
-    criador_lista_homogenea, dc_pairer, engine_tdt, expansao_candidatos, filtro_preciso,
+    criador_lista_homogenea, dc_pairer, engine_tdt, especificidade_qualificador,
+    expansao_candidatos, filtro_preciso,
     motor_regras, roteador, semantica_estados,
 )
 from tdt.motor_regras import fase_da_sigla
@@ -180,6 +181,13 @@ def _classificar_sinal(
     lista_padrao: "ListaPadraoADMS | None" = None,
     ancoras: "list | None" = None,
 ) -> SignalRecord:
+    # Ordem do funil de decisão (mapa p/ "onde entra minha nova regra?"):
+    # filtros (filtro_preciso, semantica_estados, whitelist) removem
+    # candidatos POR CAUSA -> motor_regras ajusta scores dos que sobraram ->
+    # roteador escolhe o topo -> correções pós-decisão (fase,
+    # especificidade_qualificador) podem sobrescrever a escolha do roteador,
+    # mas só dentro de um escopo estreito e específico (não re-filtram nem
+    # re-pontuam candidatos).
     config = scorers.config
     c_tfidf = scorers.tfidf.pontuar(rec, k=config.k_vizinhos)
     if embedding_vet is not None:
@@ -240,7 +248,9 @@ def _classificar_sinal(
                     justificativa="fora_whitelist_equipamento",
                 )
             fundidos = dentro
-    com_regras, ajustes = motor_regras.aplicar_rastreado(rec, fundidos, config)
+    com_regras, ajustes = motor_regras.aplicar_rastreado(
+        rec, fundidos, config, lista_padrao=lista_padrao
+    )
     diag = None
     if diagnostico:
         por: dict[str, dict[str, float]] = {}
@@ -257,6 +267,10 @@ def _classificar_sinal(
         )
     if decidido.status == "decidido":
         decidido = _com_fase(decidido)
+    if lista_padrao is not None:
+        decidido = especificidade_qualificador.preferir_irmao_qualificado(
+            decidido, lista_padrao, config
+        )
     return decidido
 
 
@@ -334,7 +348,7 @@ def _classificar_roteado(rec, disc: "_Scorers", ana: "_Scorers", diagnostico: bo
         if d.status == "decidido":
             return d, None
         if d.status == "revisao" and d.justificativa in (
-            "estado_sem_candidato", "fora_whitelist_equipamento",
+            "estado_sem_candidato", "fora_whitelist_equipamento", "qualificador_ambiguo",
         ):
             return None, ItemRevisao(
                 d, motivo=d.justificativa, candidatos_sugeridos=d.candidatos[:3]
