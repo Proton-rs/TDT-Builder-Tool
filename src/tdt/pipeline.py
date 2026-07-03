@@ -46,7 +46,7 @@ from tdt.normalizador_estrutural import corrigir
 from tdt.pareamento_polaridade import forcar_polaridade_equipamento
 from tdt.scoring import mescla
 from tdt.scoring.calibracao import aplicar_calibrador_confianca, calibrar_candidatos
-from tdt.scoring.tfidf import ScorerTFIDF
+from tdt.scoring.bm25 import ScorerBM25
 from tdt.scoring.vetorial import pontuar as pontuar_vetorial
 from tdt.scoring.vetorial import pontuar_com_embedding
 
@@ -109,7 +109,7 @@ def _construir_scorers(lp, config, encoder, categoria, cfg_efetivo) -> _Scorers:
     corpus_raw = _corpus(lp, config, categoria)
     corpus_vec = _corpus_enriquecido(lp, config, categoria)
     return _Scorers(
-        tfidf=ScorerTFIDF.construir(corpus_raw),
+        tfidf=ScorerBM25.construir(corpus_raw),
         indice=IndiceVetorial.construir(corpus_vec, encoder),
         fuzzy=FuzzyMatcher.construir(corpus_raw),
         config=cfg_efetivo,

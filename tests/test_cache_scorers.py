@@ -10,7 +10,7 @@ import numpy as np
 
 from tdt.cache_scorers import _ScorersCacheaveis, _hash_corpus, carregar_ou_construir
 from tdt.matchers.fuzzy_match import FuzzyMatcher
-from tdt.scoring.tfidf import ScorerTFIDF
+from tdt.scoring.bm25 import ScorerBM25
 
 _CORPUS = [("DJ", "DISJUNTOR"), ("SECC", "SECCIONADORA"), ("IA", "CORRENTE FASE A")]
 _VOCAB = ["DISJUNTOR", "SECCIONADORA", "CORRENTE", "FASE", "A"]
@@ -51,12 +51,12 @@ def test_hash_muda_com_modelo_embedding():
 
 
 def test_tfidf_salvar_carregar_roundtrip(tmp_path):
-    scorer = ScorerTFIDF.construir(_CORPUS)
+    scorer = ScorerBM25.construir(_CORPUS)
     path = tmp_path / "tfidf.pkl"
     scorer.salvar(path)
-    recarregado = ScorerTFIDF.carregar(path)
+    recarregado = ScorerBM25.carregar(path)
     assert recarregado._siglas == scorer._siglas
-    assert recarregado._matriz.shape == scorer._matriz.shape
+    assert recarregado._contagens.shape == scorer._contagens.shape
 
 
 def test_fuzzy_salvar_carregar_roundtrip(tmp_path):
@@ -74,7 +74,7 @@ def _construir():
     from tdt.dados.indice_vetorial import IndiceVetorial
 
     return _ScorersCacheaveis(
-        tfidf=ScorerTFIDF.construir(_CORPUS),
+        tfidf=ScorerBM25.construir(_CORPUS),
         indice=IndiceVetorial.construir(_CORPUS, _fake_encoder),
         fuzzy=FuzzyMatcher.construir(_CORPUS),
     )
@@ -124,7 +124,7 @@ def test_carregar_ou_construir_reconstroi_quando_corpus_muda(tmp_path):
         from tdt.dados.indice_vetorial import IndiceVetorial
 
         return _ScorersCacheaveis(
-            tfidf=ScorerTFIDF.construir(outro_corpus),
+            tfidf=ScorerBM25.construir(outro_corpus),
             indice=IndiceVetorial.construir(outro_corpus, _fake_encoder),
             fuzzy=FuzzyMatcher.construir(outro_corpus),
         )

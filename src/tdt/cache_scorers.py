@@ -21,7 +21,7 @@ from typing import Callable, NamedTuple
 
 from tdt.dados.indice_vetorial import IndiceVetorial
 from tdt.matchers.fuzzy_match import FuzzyMatcher
-from tdt.scoring.tfidf import ScorerTFIDF
+from tdt.scoring.bm25 import ScorerBM25
 
 _ARQ_TFIDF = "tfidf.pkl"
 _ARQ_FUZZY = "fuzzy.pkl"
@@ -49,7 +49,7 @@ def _tentar_carregar(base: Path, encoder):
     None se algo faltar ou corromper — sinaliza ao chamador para reconstruir.
     """
     try:
-        tfidf = ScorerTFIDF.carregar(base / _ARQ_TFIDF)
+        tfidf = ScorerBM25.carregar(base / _ARQ_TFIDF)
         fuzzy = FuzzyMatcher.carregar(base / _ARQ_FUZZY)
         indice = IndiceVetorial.carregar(base, encoder)
     except Exception:
