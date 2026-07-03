@@ -12,7 +12,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox, QDialog, QDialogButtonBox, QHBoxLayout, QInputDialog, QLabel,
     QLineEdit, QListWidget, QListWidgetItem, QMenu, QMessageBox, QProgressBar,
-    QPushButton, QSizePolicy, QTableView, QVBoxLayout, QWidget,
+    QPushButton, QSizePolicy, QTableView, QTabBar, QVBoxLayout, QWidget,
 )
 
 from tdt import pipeline
@@ -156,18 +156,20 @@ class TelaRevisao(QWidget):
 
         self.chk_so_revisao = QCheckBox("Mostrar apenas revisão")
         self.chk_so_revisao.toggled.connect(self._filtrar_status)
-        self.ed_filtro = QLineEdit()
-        self.ed_filtro.setPlaceholderText("Filtrar (todas as colunas)…")
-        self.ed_filtro.textChanged.connect(self._filtrar_texto)
         self.lbl_selecao = QLabel("0 selecionados")
         barra_filtro = QHBoxLayout()
         barra_filtro.addWidget(self.chk_so_revisao)
-        barra_filtro.addWidget(self.ed_filtro, 1)
+        barra_filtro.addStretch()
         barra_filtro.addWidget(self.lbl_selecao)
+
+        self.abas_sheet = QTabBar()
+        self.abas_sheet.addTab("Tudo")
+        self.abas_sheet.currentChanged.connect(self._trocar_aba_sheet)
 
         corpo = QHBoxLayout(); corpo.addWidget(cofre); corpo.addWidget(self.tabela, 1)
         raiz = QVBoxLayout(self)
         raiz.addLayout(topo)
+        raiz.addWidget(self.abas_sheet)
         raiz.addLayout(barra_filtro)
         raiz.addLayout(corpo, 1)
 
@@ -175,7 +177,7 @@ class TelaRevisao(QWidget):
         self._modelo = ModeloSinais(self._estado)
         self._proxy = ProxyRevisao(self)
         self._proxy.setSourceModel(self._modelo)
-        self._proxy.setFilterKeyColumn(-1)
+        self._popular_abas_sheet()
         self.tabela.setModel(self._proxy)
         self.tabela.setSortingEnabled(True)
         self.tabela.horizontalHeader().setSortIndicatorClearable(True)
@@ -206,8 +208,26 @@ class TelaRevisao(QWidget):
     def _filtrar_status(self, ativo: bool) -> None:
         self._proxy.setEsconderDecididos(ativo)
 
-    def _filtrar_texto(self, termo: str) -> None:
-        self._proxy.setFilterFixedString(termo)
+    def _popular_abas_sheet(self) -> None:
+        """Uma aba por sheet distinta presente nos registros + "Tudo" (primeira).
+
+        ponytail: reconstrói o QTabBar do zero a cada carregar() -- não há
+        recarga incremental de sheets nesta tela, então não vale a pena
+        diffar contra o estado anterior.
+        """
+        self.abas_sheet.blockSignals(True)
+        while self.abas_sheet.count() > 0:
+            self.abas_sheet.removeTab(0)
+        self.abas_sheet.addTab("Tudo")
+        for sheet in self._modelo.sheets_distintas():
+            self.abas_sheet.addTab(sheet)
+        self.abas_sheet.blockSignals(False)
+        self.abas_sheet.setCurrentIndex(0)
+        self._proxy.set_sheet(None)
+
+    def _trocar_aba_sheet(self, indice: int) -> None:
+        nome = None if indice <= 0 else self.abas_sheet.tabText(indice)
+        self._proxy.set_sheet(nome)
 
     def _filtrar_coluna(self, pos) -> None:
         col = self.tabela.horizontalHeader().logicalIndexAt(pos)

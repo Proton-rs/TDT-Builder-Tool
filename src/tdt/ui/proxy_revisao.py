@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import QSortFilterProxyModel
 
-from tdt.ui.modelo_tabela import ModeloSinais
+from tdt.ui.modelo_tabela import ModeloSinais, sheet_origem
 
 _COL_STATUS = ModeloSinais.COLUNAS.index("Status")
 
@@ -19,9 +19,15 @@ class ProxyRevisao(QSortFilterProxyModel):
         super().__init__(parent)
         self._esconder_decididos = False
         self._filtros_coluna: dict[int, str] = {}
+        self._sheet: str | None = None
 
     def setEsconderDecididos(self, ativo: bool) -> None:
         self._esconder_decididos = ativo
+        self.invalidateFilter()
+
+    def set_sheet(self, nome: str | None) -> None:
+        """Filtra pela sheet de origem; `None` = aba "Tudo" (sem filtro)."""
+        self._sheet = nome
         self.invalidateFilter()
 
     def setFiltroColuna(self, col: int, texto: str) -> None:
@@ -37,6 +43,10 @@ class ProxyRevisao(QSortFilterProxyModel):
     def filterAcceptsRow(self, source_row, source_parent) -> bool:
         if not super().filterAcceptsRow(source_row, source_parent):
             return False
+        if self._sheet is not None:
+            rec = self.sourceModel()._estado.registros[source_row]
+            if sheet_origem(rec) != self._sheet:
+                return False
         if self._esconder_decididos:
             idx = self.sourceModel().index(source_row, _COL_STATUS, source_parent)
             if self.sourceModel().data(idx) == "decidido":

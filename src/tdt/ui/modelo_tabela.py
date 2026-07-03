@@ -45,6 +45,15 @@ _EDITAVEIS = frozenset({
 })
 
 
+def sheet_origem(rec: SignalRecord) -> str:
+    """Sheet de origem, extraída do ``id`` estável (``f"{sheet}:{linha}"``).
+
+    Mesma derivação de `relatorio_revisao._sheet_origem` — `id` já carrega
+    essa informação (contrato existente), sem precisar propagar campo novo.
+    """
+    return rec.id.rsplit(":", 1)[0] if ":" in rec.id else ""
+
+
 def cor_faixa(score) -> QColor | None:
     if score is None:
         return None
@@ -216,6 +225,13 @@ class ModeloSinais(QAbstractTableModel):
         self.beginInsertRows(QModelIndex(), n, n)
         self._estado.registros.append(registro)
         self.endInsertRows()
+
+    def sheets_distintas(self) -> list[str]:
+        """Nomes de sheet distintos presentes nos registros, ordenados.
+
+        Usado pela tela de revisão pra montar as abas (uma por sheet + "Tudo").
+        """
+        return sorted({sheet_origem(r) for r in self._estado.registros if sheet_origem(r)})
 
     def remover_linhas(self, indices: list[int]) -> None:
         """Remove as linhas (índices da fonte, 0-based) da lista subjacente.

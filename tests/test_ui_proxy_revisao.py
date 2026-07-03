@@ -108,3 +108,25 @@ def test_filtro_coluna_vazio_remove_filtro():
     proxy.setFiltroColuna(col_desc, "")
     assert proxy.filtroColuna(col_desc) == ""
     assert proxy.rowCount() == 2
+
+
+# --- set_sheet (SP-J Task 2: abas por sheet no lugar do filtro global) ---
+
+def _modelo_com_itens(itens):
+    """itens: lista de (sigla, sheet) -> registros com id f"{sheet}:{i}"."""
+    registros = [
+        _rec(f"{sheet}:{i}", "revisao", sigla)
+        for i, (sigla, sheet) in enumerate(itens)
+    ]
+    estado = _estado_com(registros)
+    return ModeloSinais(estado)
+
+
+def test_filtro_por_sheet(qapp):
+    modelo = _modelo_com_itens([("sig1", "Discreto"), ("sig2", "Analogicos")])
+    proxy = ProxyRevisao()
+    proxy.setSourceModel(modelo)
+    proxy.set_sheet("Discreto")
+    assert proxy.rowCount() == 1
+    proxy.set_sheet(None)
+    assert proxy.rowCount() == 2

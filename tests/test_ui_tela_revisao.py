@@ -11,6 +11,16 @@ from tdt.ui.tela_revisao import TelaRevisao, decidir_acao_pareamento
 pytest.importorskip("PySide6")
 
 
+def _rec_sheet(id_com_sheet, modulo_nome, bruta, direcao="Input", indices=(1,)):
+    """Como `_rec`, mas o `id` carrega a sheet de origem (f"{sheet}:{linha}")."""
+    return SignalRecord(
+        id=id_com_sheet, modulo=Modulo(modulo_nome, "sheet_name"),
+        tipo_sinal=TipoSinal("Discrete", "SingleBit", direcao),
+        enderecamento=Enderecamento("DNP3", indices, ()),
+        descricoes=Descricoes(bruta, bruta),
+    )
+
+
 def _rec(id_, modulo_nome, bruta, direcao="Input", indices=(1,), indices_saida=()):
     return SignalRecord(
         id=id_, modulo=Modulo(modulo_nome, "sheet_name"),
@@ -281,3 +291,53 @@ def test_carregar_registra_delegate_modulo_na_coluna_modulo(qtbot):
     col = ModeloSinais.COLUNAS.index("Módulo")
     delegate = tela.tabela.itemDelegateForColumn(col)
     assert isinstance(delegate, DelegateModulo)
+
+
+# --- abas por sheet (SP-J Task 2: substitui o filtro de texto global) ---
+
+def test_abas_sheet_tem_tudo_primeiro_mais_uma_por_sheet_distinta(qtbot):
+    tela = _tela_carregada(qtbot, [
+        _rec_sheet("Discreto:0", "SE1", "A"),
+        _rec_sheet("Analogicos:0", "SE1", "B"),
+        _rec_sheet("Discreto:1", "SE1", "C"),
+    ])
+    textos = [tela.abas_sheet.tabText(i) for i in range(tela.abas_sheet.count())]
+    assert textos == ["Tudo", "Analogicos", "Discreto"]
+    assert tela.abas_sheet.currentIndex() == 0
+    assert tela._proxy.rowCount() == 3
+
+
+def test_selecionar_aba_sheet_filtra_a_tabela(qtbot):
+    tela = _tela_carregada(qtbot, [
+        _rec_sheet("Discreto:0", "SE1", "A"),
+        _rec_sheet("Analogicos:0", "SE1", "B"),
+    ])
+    idx_discreto = next(
+        i for i in range(tela.abas_sheet.count())
+        if tela.abas_sheet.tabText(i) == "Discreto"
+    )
+    tela.abas_sheet.setCurrentIndex(idx_discreto)
+    assert tela._proxy.rowCount() == 1
+    col_desc = ModeloSinais.COLUNAS.index("Descr. bruta")
+    assert tela._proxy.index(0, col_desc).data() == "A"
+
+
+def test_voltar_para_aba_tudo_remove_o_filtro_de_sheet(qtbot):
+    tela = _tela_carregada(qtbot, [
+        _rec_sheet("Discreto:0", "SE1", "A"),
+        _rec_sheet("Analogicos:0", "SE1", "B"),
+    ])
+    idx_discreto = next(
+        i for i in range(tela.abas_sheet.count())
+        if tela.abas_sheet.tabText(i) == "Discreto"
+    )
+    tela.abas_sheet.setCurrentIndex(idx_discreto)
+    assert tela._proxy.rowCount() == 1
+    tela.abas_sheet.setCurrentIndex(0)
+    assert tela._proxy.rowCount() == 2
+
+
+def test_filtro_global_de_texto_foi_removido(qtbot):
+    tela = _tela_carregada(qtbot, [_rec("1", "SE1", "A")])
+    assert not hasattr(tela, "ed_filtro")
+    assert not hasattr(tela, "_filtrar_texto")
