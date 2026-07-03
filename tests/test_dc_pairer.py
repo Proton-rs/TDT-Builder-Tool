@@ -186,6 +186,55 @@ def test_catchall_nao_casa_classes_de_estado_diferentes():
     assert [r.motivo for r in revisao] == ["pareamento_ambiguo"]
 
 
+def test_autc_orfao_e_write_legitimo():
+    # SP-I Task 2, causa D: "Rearme 86 Automatismo" (PSACA_CC:22 real) é um
+    # comando tipo pulso/reset sem status de retorno por natureza — precisa
+    # entrar na whitelist junto de CDC (config.siglas_write_legitimo).
+    comando = _rec("s:1", "AUTC", "Output", [10, 11])
+    saida, revisao = parear([comando], Config())
+    assert len(saida) == 1
+    assert saida[0].tipo_sinal.direcao == "Output"
+    assert revisao == ()
+
+
+def test_pb_orfao_e_write_legitimo():
+    # SP-I Task 2, causa D: "Seleção de Barra Preferencial" (PSACA_CC:21
+    # real) não tem status correspondente em lugar nenhum do input.
+    comando = _rec("s:1", "PB", "Output", [12, 13])
+    saida, revisao = parear([comando], Config())
+    assert len(saida) == 1
+    assert saida[0].tipo_sinal.direcao == "Output"
+    assert revisao == ()
+
+
+def test_cmd_orfao_no_modulo_psaca_e_write_legitimo():
+    # SP-I Task 2, causa D: "Comando Iluminação Pátio" (PSACA_CC:20 real)
+    # decide sigla CMD (genérica), mas nesse módulo/grupo específico não há
+    # NENHUM Input com essa sigla — write legítimo. Nota: CMD é usada em
+    # dezenas de outros módulos como Input ("Falha Comando de
+    # Desligar/Ligar"); a whitelist só morde quando o grupo
+    # (módulo, equipamento, sigla) não tem nenhum Input, então não afeta
+    # esses outros grupos (ver investigação da task: nenhum módulo fora de
+    # PSACA tem grupo CMD com Output e zero Input).
+    comando = _rec("s:1", "CMD", "Output", [14, 15])
+    saida, revisao = parear([comando], Config())
+    assert len(saida) == 1
+    assert saida[0].tipo_sinal.direcao == "Output"
+    assert revisao == ()
+
+
+def test_cmd_orfao_nao_afeta_grupo_cmd_com_input_em_outro_modulo():
+    # Confirma que whitelistar CMD não quebra o caso real onde CMD já tem
+    # Input no mesmo grupo (ex. módulo AL11: "Falha Comando de
+    # Desligar/Ligar") — esse grupo nunca cai no ramo `elif not inputs`,
+    # então segue indo para o catch-all/pareamento normal, intocado.
+    status = _rec("s:1", "CMD", "Input", [20], desc="Falha Comando de Desligar")
+    saida, revisao = parear([status], Config())
+    assert len(saida) == 1
+    assert saida[0].tipo_sinal.direcao == "Input"
+    assert revisao == ()
+
+
 def test_fundir_propaga_comando_duplo():
     from dataclasses import replace
     status = _rec("s:1", "81U1", "Input", [1539])
