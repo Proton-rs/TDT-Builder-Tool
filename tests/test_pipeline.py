@@ -161,6 +161,65 @@ def test_pipeline_classifica_falha_comunicacao(tmp_path, template_dnp3_path, lis
     assert "FCOM" in siglas  # "FALHA COMUNICACAO" -> FCOM
 
 
+def _input_multi_sheet(tmp_path):
+    """2 sheets de dados idênticas em estrutura (GTD_11, GTD_22) — usado para
+    testar filtro de seleção e rename de sheet/módulo end-to-end."""
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "GTD_11"
+    ws.append(["", "", "SUBESTAÇÃO X", "", ""])
+    ws.append(["IED", "Módulo", "Descrição do Ponto", "Tipo", "Endereço DNP3"])
+    ws.append(["Digitais", "", "", "", ""])
+    ws.append(["01F1", "LT_GTA", "FALHA COMUNICACAO", "Digital", "10"])
+    ws.append(["01F1", "LT_GTA", "DISJUNTOR", "Digital", "11"])
+    ws2 = wb.create_sheet("GTD_22")
+    ws2.append(["", "", "SUBESTAÇÃO X", "", ""])
+    ws2.append(["IED", "Módulo", "Descrição do Ponto", "Tipo", "Endereço DNP3"])
+    ws2.append(["Digitais", "", "", "", ""])
+    ws2.append(["01F1", "LT_GTB", "FALHA COMUNICACAO", "Digital", "10"])
+    ws2.append(["01F1", "LT_GTB", "DISJUNTOR", "Digital", "11"])
+    p = tmp_path / "input_multi_sheet.xlsx"
+    wb.save(p)
+    return p
+
+
+def test_pipeline_processa_apenas_sheets_selecionadas(
+    tmp_path, template_dnp3_path, lista_padrao_path,
+):
+    """Task 2 (spK): `sheets` restringe quais sheets de `rota.sheets_dados`
+    são processadas — sheet fora da lista não aparece no resultado."""
+    cfg = Config(peso_tfidf=1.0, peso_vetorial=0.0, threshold_pct=0.5, threshold_gap=0.05)
+    inp = _input_multi_sheet(tmp_path)
+    resultado, _ = executar(
+        inp, template_dnp3_path, lista_padrao_path,
+        config=cfg, encoder=_fake_encoder, subestacao="X", modo="nao-homogeneo",
+        sheets=["GTD_11"],
+    )
+    origens = {r.id.split(":")[0] for r in resultado.lista.registros}
+    assert origens == {"GTD_11"}
+    assert "GTD_22" not in origens
+
+
+def test_pipeline_aplica_aliases_ao_nome_do_modulo(
+    tmp_path, template_dnp3_path, lista_padrao_path,
+):
+    """Task 2 (spK): `aliases` (sheet original -> apelido, igual
+    `estado.aliases` da tela inicial) renomeia `modulo.nome` dos registros
+    vindos dessa sheet. Chave é o NOME DA SHEET (não o nome de módulo
+    resolvido) — mesma chave que a UI usa em `_sheet_alterada`."""
+    cfg = Config(peso_tfidf=1.0, peso_vetorial=0.0, threshold_pct=0.5, threshold_gap=0.05)
+    inp = _input_multi_sheet(tmp_path)
+    resultado, _ = executar(
+        inp, template_dnp3_path, lista_padrao_path,
+        config=cfg, encoder=_fake_encoder, subestacao="X", modo="nao-homogeneo",
+        aliases={"GTD_11": "MODULO_RENOMEADO"},
+    )
+    nomes_modulo = {r.modulo.nome for r in resultado.lista.registros}
+    assert "MODULO_RENOMEADO" in nomes_modulo
+    assert "AL11" not in nomes_modulo  # renomeado, não duplicado
+    assert "AL22" in nomes_modulo  # sheet não referenciada no alias, intacta
+
+
 def _input_sem_endereco(tmp_path):
     wb = openpyxl.Workbook()
     ws = wb.active

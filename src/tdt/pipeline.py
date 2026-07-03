@@ -448,6 +448,8 @@ def executar(
     diagnostico: bool = False,
     cancelado: "Callable[[], bool] | None" = None,
     cache_scorers_dir: "str | Path | None" = None,
+    sheets: "list[str] | None" = None,
+    aliases: "dict[str, str] | None" = None,
 ) -> tuple[ResultadoPipeline, openpyxl.Workbook]:
     aud = auditoria or Auditoria()
     lp = ListaPadraoADMS.carregar(lista_padrao_path)
@@ -470,12 +472,16 @@ def executar(
 
     wb_in = openpyxl.load_workbook(input_path, read_only=True, data_only=True)
     rota = classificar(wb_in, override=modo, config=config)
-    aud.evento("identificador", f"homogêneo={rota.homogeneo}, {len(rota.sheets_dados)} sheets", "INFO")
+    sheets_dados = rota.sheets_dados
+    if sheets is not None:
+        selecionadas = set(sheets)
+        sheets_dados = [sn for sn in sheets_dados if sn in selecionadas]
+    aud.evento("identificador", f"homogêneo={rota.homogeneo}, {len(sheets_dados)} sheets", "INFO")
 
     decididos: list[SignalRecord] = []
     revisao: list[ItemRevisao] = []
 
-    for sn in rota.sheets_dados:
+    for sn in sheets_dados:
         if cancelado is not None and cancelado():
             aud.evento("pipeline", "cancelado pelo usuário", "AVISO")
             break
@@ -489,6 +495,14 @@ def executar(
             sinais = list(estruturar(rows, mapa, sheet_name=sn, config=config, vocab=vocab,
                                      siglas_set=lp.siglas))
         sinais, conf_mod = aplicar_identidade(sinais, sn, rows, config)
+        alias_sheet = aliases.get(sn) if aliases else None
+        if alias_sheet:
+            sinais = [
+                replace(s, modulo=replace(s.modulo, nome=alias_sheet))
+                if s.modulo.origem_contexto == "sheet_name"
+                else s
+                for s in sinais
+            ]
         sinais, rev_modulo = particionar_por_confianca(sinais, conf_mod)
         ids_indefinidos: set[str] = set()
         if rev_modulo:

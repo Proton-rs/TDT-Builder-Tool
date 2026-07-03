@@ -150,3 +150,35 @@ def test_reusa_encoder_do_app_state_entre_execucoes(tmp_path, qtbot):
         w2.start()
     w2.wait()
     assert len(chamadas) == 1  # não chamou de novo
+
+
+def test_worker_repassa_sheets_e_aliases_para_executar(tmp_path, qtbot):
+    """Task 2 (spK): seleção de sheets e aliases (rename) coletados na tela
+    inicial precisam chegar em `pipeline.executar` via PipelineWorker."""
+    recebido = {}
+
+    def fake_exec(*a, sheets=None, aliases=None, **k):
+        recebido["sheets"] = sheets
+        recebido["aliases"] = aliases
+        return _resultado_vazio(), None
+
+    for nome in ("input.xlsx", "template.xlsx", "lista.xlsx"):
+        (tmp_path / nome).write_text("x")
+
+    w = PipelineWorker(
+        paths={
+            "input": str(tmp_path / "input.xlsx"), "output": "o",
+            "template": str(tmp_path / "template.xlsx"),
+            "lista_padrao": str(tmp_path / "lista.xlsx"),
+        },
+        config=Config(), modo="auto", subestacao=None,
+        encoder_factory=lambda nome: (lambda textos: None),
+        executar_fn=fake_exec,
+        sheets=["GTD_11"],
+        aliases={"GTD_11": "MODULO_RENOMEADO"},
+    )
+    with qtbot.waitSignal(w.terminado, timeout=3000):
+        w.start()
+    w.wait()
+    assert recebido["sheets"] == ["GTD_11"]
+    assert recebido["aliases"] == {"GTD_11": "MODULO_RENOMEADO"}

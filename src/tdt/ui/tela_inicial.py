@@ -64,7 +64,7 @@ class TelaInicial(QWidget):
         self.combo_sub.lineEdit().setPlaceholderText("Obrigatório — sigla da subestação")
 
         self.lista_sheets = QListWidget()
-        self.lista_sheets.itemChanged.connect(self._sheet_renomeada)
+        self.lista_sheets.itemChanged.connect(self._sheet_alterada)
 
         self.btn_executar = QPushButton("EXECUTAR"); self.btn_executar.clicked.connect(self._executar)
         self.btn_executar.setProperty("acao", "principal")
@@ -152,7 +152,7 @@ class TelaInicial(QWidget):
             it.setCheckState(Qt.Checked)
             self.lista_sheets.addItem(it)
 
-    def _sheet_renomeada(self, it: QListWidgetItem) -> None:
+    def _sheet_alterada(self, it: QListWidgetItem) -> None:
         original = it.data(Qt.UserRole)
         novo = it.text().strip()
         if novo and novo != original:
@@ -160,12 +160,34 @@ class TelaInicial(QWidget):
         elif original in self._estado.aliases:
             del self._estado.aliases[original]
 
+        if it.checkState() == Qt.Unchecked:
+            self._estado.sheets_excluidas.add(original)
+        else:
+            self._estado.sheets_excluidas.discard(original)
+
     def _coletar(self):
         self._estado.modo = _MODOS[self.grupo_modo.checkedId()][1]
         self._estado.flags["pular_revisao"] = self.chk_pular.isChecked()
         self._estado.flags["aprovar_acima_threshold"] = self.chk_aprovar.isChecked()
         texto = self.combo_sub.currentText().strip()
         self._estado.subestacao = None if not texto else texto
+
+    def _sheets_selecionadas(self) -> list[str] | None:
+        """Nomes originais das sheets marcadas na lista, na ordem exibida.
+
+        Retorna None (sem restrição) quando a lista de sheets está vazia —
+        p.ex. execução disparada sem passar por `_popular_sheets` (input
+        ainda não foi lido nessa sessão de UI) — para não quebrar o
+        comportamento pré-existente de processar tudo que a heurística de
+        conteúdo decidir.
+        """
+        if self.lista_sheets.count() == 0:
+            return None
+        return [
+            it.data(Qt.UserRole)
+            for i in range(self.lista_sheets.count())
+            if (it := self.lista_sheets.item(i)).checkState() == Qt.Checked
+        ]
 
     def _executar(self):
         self._coletar()
@@ -179,10 +201,11 @@ class TelaInicial(QWidget):
             self._fim()
             return
         self.btn_executar.setEnabled(False); self.btn_parar.setEnabled(True)
+        sheets = self._sheets_selecionadas()
         self._worker = self._worker_factory(
             paths=self._estado.paths, config=self._estado.config,
             modo=self._estado.modo, subestacao=self._estado.subestacao,
-            app_state=self._estado,
+            app_state=self._estado, sheets=sheets, aliases=dict(self._estado.aliases),
         )
         self._worker.log.connect(self.log.appendPlainText)
         self._worker.erro.connect(lambda m: self.log.appendPlainText(f"[ERRO] {m}"))

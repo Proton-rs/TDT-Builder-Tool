@@ -235,6 +235,30 @@ def test_delegate_cria_editor_com_candidatos(qtbot):
     assert "DJF" in textos
 
 
+def test_desmarcar_sheet_reflete_em_sheets_excluidas_do_estado(qtbot):
+    """Task 2 (spK): desmarcar o checkbox de uma sheet na lista deve gravar
+    a exclusão em AppState, para depois ser repassada ao pipeline."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QListWidgetItem
+
+    st = AppState()
+    tela = TelaInicial(st)
+    qtbot.addWidget(tela)
+    tela.lista_sheets.clear()
+    for nome in ("GTD_11", "GTD_22"):
+        item = QListWidgetItem(nome)
+        item.setData(Qt.UserRole, nome)
+        item.setFlags(item.flags() | Qt.ItemIsUserCheckable | Qt.ItemIsEditable)
+        item.setCheckState(Qt.Checked)
+        tela.lista_sheets.addItem(item)
+
+    item_excluido = tela.lista_sheets.item(1)
+    item_excluido.setCheckState(Qt.Unchecked)
+
+    assert "GTD_22" in st.sheets_excluidas
+    assert "GTD_11" not in st.sheets_excluidas
+
+
 def test_botoes_principais_tem_property_acao(qtbot, tmp_path):
     st = AppState()
     ti = TelaInicial(st); qtbot.addWidget(ti)
