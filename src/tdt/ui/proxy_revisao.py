@@ -7,11 +7,17 @@ o único filtro customizado.
 
 from __future__ import annotations
 
-from PySide6.QtCore import QSortFilterProxyModel
+from PySide6.QtCore import QSortFilterProxyModel, Qt
 
 from tdt.ui.modelo_tabela import ModeloSinais, sheet_origem
 
 _COL_STATUS = ModeloSinais.COLUNAS.index("Status")
+
+# ponytail: sufixo textual no header em vez de ícone custom-painted -- menor
+# diff (headerData já é sobrescrevível no proxy, sem precisar de um
+# QHeaderView subclasse) e já transmite "filtro ativo" sem depender de
+# assets/paint code novo.
+MARCADOR_FILTRO = " ▼*"
 
 
 class ProxyRevisao(QSortFilterProxyModel):
@@ -49,15 +55,31 @@ class ProxyRevisao(QSortFilterProxyModel):
         legado da Task 1/2) -- as duas fontes de filtro por coluna coexistem
         e combinam em AND dentro de `filterAcceptsRow`.
         """
+        estava_filtrada = col in self._filtros_coluna_valores
         if valores is None:
             self._filtros_coluna_valores.pop(col, None)
         else:
             self._filtros_coluna_valores[col] = set(valores)
         self.invalidateFilter()
+        if estava_filtrada != (col in self._filtros_coluna_valores):
+            # ponytail: reusa o sinal nativo headerDataChanged (em vez de
+            # inventar um sinal próprio) -- é exatamente o que QHeaderView já
+            # escuta pra repintar a seção, então o header atualiza sozinho.
+            self.headerDataChanged.emit(Qt.Horizontal, col, col)
 
     def colunas_filtradas(self) -> set[int]:
         """Colunas com filtro de valores (estilo Excel) ativo no momento."""
         return set(self._filtros_coluna_valores.keys())
+
+    def headerData(self, secao, orientacao, role=Qt.DisplayRole):
+        valor = super().headerData(secao, orientacao, role)
+        if (
+            role == Qt.DisplayRole
+            and orientacao == Qt.Horizontal
+            and secao in self._filtros_coluna_valores
+        ):
+            return f"{valor}{MARCADOR_FILTRO}"
+        return valor
 
     def valores_unicos(self, col: int) -> list[str]:
         """Valores distintos presentes em `col`, na fonte inteira (não filtrada),

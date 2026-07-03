@@ -189,3 +189,48 @@ def test_set_filtro_coluna_none_nao_aparece_em_colunas_filtradas(qapp):
     assert proxy.colunas_filtradas() == set()
     proxy.set_filtro_coluna(_COL_STATUS, {"revisao"})
     assert proxy.colunas_filtradas() == {_COL_STATUS}
+
+
+# --- indicador de filtro ativo no header (SP-J Task 4) ---
+
+def test_header_data_marca_coluna_filtrada(qapp):
+    from PySide6.QtCore import Qt
+
+    proxy = _proxy_padrao()
+    rotulo_base = proxy.headerData(_COL_STATUS, Qt.Horizontal)
+    proxy.set_filtro_coluna(_COL_STATUS, {"revisao"})
+    assert proxy.headerData(_COL_STATUS, Qt.Horizontal) == f"{rotulo_base} ▼*"
+
+
+def test_header_data_volta_ao_normal_apos_limpar_filtro(qapp):
+    from PySide6.QtCore import Qt
+
+    proxy = _proxy_padrao()
+    rotulo_base = proxy.headerData(_COL_STATUS, Qt.Horizontal)
+    proxy.set_filtro_coluna(_COL_STATUS, {"revisao"})
+    proxy.set_filtro_coluna(_COL_STATUS, None)
+    assert proxy.headerData(_COL_STATUS, Qt.Horizontal) == rotulo_base
+
+
+def test_set_filtro_coluna_emite_header_data_changed_so_quando_muda(qapp):
+    from PySide6.QtCore import Qt
+
+    proxy = _proxy_padrao()
+    emissoes = []
+    proxy.headerDataChanged.connect(
+        lambda orientacao, first, last: emissoes.append((orientacao, first, last))
+    )
+
+    proxy.set_filtro_coluna(_COL_STATUS, {"revisao"})
+    assert emissoes == [(Qt.Horizontal, _COL_STATUS, _COL_STATUS)]
+
+    # reaplicar valores diferentes na mesma coluna já filtrada não muda o
+    # conjunto de "colunas filtradas" -- não deve reemitir.
+    proxy.set_filtro_coluna(_COL_STATUS, {"decidido"})
+    assert emissoes == [(Qt.Horizontal, _COL_STATUS, _COL_STATUS)]
+
+    proxy.set_filtro_coluna(_COL_STATUS, None)
+    assert emissoes == [
+        (Qt.Horizontal, _COL_STATUS, _COL_STATUS),
+        (Qt.Horizontal, _COL_STATUS, _COL_STATUS),
+    ]
