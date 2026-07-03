@@ -41,7 +41,7 @@ from tdt.inferencia_topologia import (
     derivar_secao_por_linha, inferir_equipamento, subdividir_transformador_at_bt,
 )
 from tdt.matchers.fuzzy_match import FuzzyMatcher
-from tdt.normalizacao.normalizador import canonizar
+from tdt.normalizacao.normalizador import canonizar, normalizar
 from tdt.normalizador_estrutural import corrigir
 from tdt.pareamento_polaridade import forcar_polaridade_equipamento
 from tdt.scoring import mescla
@@ -176,10 +176,62 @@ def _com_fase(rec: SignalRecord) -> SignalRecord:
     return rec
 
 
+def _etapa_decisora(rec: SignalRecord) -> str:
+    """Deriva a etapa do pipeline que decidiu a sigla a partir do prefixo de
+    ``justificativa`` -- os módulos de decisão (roteador, resgate por
+    regras, qualificador) já escrevem um texto distinto por caminho; não
+    duplica essa informação num enum novo, só a rotula p/ auditoria."""
+    if rec.status != "decidido":
+        return ""
+    j = rec.justificativa or ""
+    if "por qualificador" in j:
+        return "qualificador_irmao"
+    if "por resgate_regras" in j:
+        return "resgate_regras"
+    if "por fuzzy" in j:
+        return "cascata_fuzzy"
+    if "por e5" in j:
+        return "cascata_e5"
+    if "por consenso" in j:
+        return "cascata_consenso"
+    if "empate_descricao_lp_duplicada" in j:
+        return "empate_descricao_lp"
+    if j.startswith("decidido") or " decidido (" in j:
+        return "quadrante"
+    return "pre_scoring"  # pareamento de polaridade / sigla pré-classificada por coluna
+
+
+def _registrar_diagnostico(
+    diag_extra: "dict[str, dict] | None",
+    rec: SignalRecord,
+    decidido: SignalRecord,
+    ajustes: "list",
+    gap: float,
+    gap_exigido: float,
+    config: Config,
+) -> None:
+    """Grava o contexto de decisão de ``rec`` em ``diag_extra`` (mapa
+    id->dict, dono é o pipeline/chamador -- não é estado global, só um
+    acumulador local passado explicitamente, no mesmo espírito de
+    ``Auditoria``). No-op quando ``diag_extra`` é None (chamadores que não
+    pedem auditoria estendida, ex. testes legados)."""
+    if diag_extra is None:
+        return
+    entrada = diag_extra.setdefault(rec.id, {})  # preserva "endereco_bruto" já gravado
+    entrada.update({
+        "desc_normalizada": normalizar(rec.descricoes.bruta, config),
+        "regras_aplicadas": "; ".join(a.motivo for a in ajustes) if ajustes else "",
+        "gap": gap,
+        "gap_exigido": gap_exigido,
+        "etapa_decisora": _etapa_decisora(decidido),
+    })
+
+
 def _classificar_sinal(
     rec, scorers: "_Scorers", diagnostico: bool = False, embedding_vet=None,
     lista_padrao: "ListaPadraoADMS | None" = None,
     ancoras: "list | None" = None,
+    diag_extra: "dict[str, dict] | None" = None,
 ) -> SignalRecord:
     # Ordem do funil de decisão (mapa p/ "onde entra minha nova regra?"):
     # filtros (filtro_preciso, semantica_estados, whitelist) removem
@@ -284,6 +336,9 @@ def _classificar_sinal(
         decidido = especificidade_qualificador.preferir_irmao_qualificado(
             decidido, lista_padrao, config
         )
+    _registrar_diagnostico(
+        diag_extra, rec, decidido, ajustes, _gap(decidido), config.threshold_gap, config,
+    )
     return decidido
 
 
@@ -325,7 +380,8 @@ _DOMINIOS_POR_CATEGORIA: dict[str, frozenset[str]] = {
 
 
 def _classificar_roteado(rec, disc: "_Scorers", ana: "_Scorers", diagnostico: bool,
-                         embedding_vet=None, lista_padrao: "ListaPadraoADMS | None" = None):
+                         embedding_vet=None, lista_padrao: "ListaPadraoADMS | None" = None,
+                         diag_extra: "dict[str, dict] | None" = None):
     """Devolve (decidido_ou_None, item_revisao_ou_None).
 
     Confiável: usa o bundle da própria categoria.
@@ -357,7 +413,7 @@ def _classificar_roteado(rec, disc: "_Scorers", ana: "_Scorers", diagnostico: bo
         )
         _multiplas = ancoragem_sigla.tem_multiplas_familias(_ancoras)
         d = _classificar_sinal(rec, bundle, diagnostico=diagnostico, embedding_vet=embedding_vet,
-                               lista_padrao=lista_padrao, ancoras=_ancoras)
+                               lista_padrao=lista_padrao, ancoras=_ancoras, diag_extra=diag_extra)
         if d.status == "decidido":
             return d, None
         if d.status == "revisao" and d.justificativa in (
@@ -493,6 +549,10 @@ def executar(
 
     decididos: list[SignalRecord] = []
     revisao: list[ItemRevisao] = []
+    # id -> dict de contexto de decisão p/ auditoria estendida (SP-J Task 1).
+    # Acumulador local do pipeline (não é estado global -- vive só durante
+    # esta chamada de `executar`, devolvido em `ResultadoPipeline.diagnostico`).
+    diag_extra: dict[str, dict] = {}
 
     for sn in sheets_dados:
         if cancelado is not None and cancelado():
@@ -539,6 +599,14 @@ def executar(
         # dc_pairer, que arbitra sem-comando -> TDT / comando ambíguo ->
         # pareamento_ambiguo (Spec C, supersede o gate equipamento_ambiguo).
         sinais = inferir_equipamento(sinais, config)
+        # Endereço bruto, capturado ANTES do dc_pairer (que reatribui
+        # `indices` a partir de `indices_saida` ao fundir pares D+C -- ver
+        # `dc_pairer.py:69`) -- p/ a auditoria mostrar o endereço como lido,
+        # não o resultado do pareamento.
+        for r in sinais:
+            diag_extra.setdefault(r.id, {})["endereco_bruto"] = (
+                ";".join(str(i) for i in r.enderecamento.indices)
+            )
         total = len(sinais)
         aud.evento("identificador", f"Sheet {sn}: {total} sinais lidos", "INFO")
         # Batch encode das descrições da sheet inteira — evita uma chamada ao
@@ -566,7 +634,7 @@ def executar(
                 aud.evento("pipeline", f"{rec.id}: sem endereço — classificando sem decidir", "AVISO")
                 decidido_tmp, item_tmp = _classificar_roteado(
                     rec, disc, ana, diagnostico, embedding_vet=embedding_vet,
-                    lista_padrao=lp,
+                    lista_padrao=lp, diag_extra=diag_extra,
                 )
                 if decidido_tmp is not None:
                     rec_avaliado = decidido_tmp
@@ -580,7 +648,7 @@ def executar(
                 continue
             decidido, item = _classificar_roteado(
                 rec, disc, ana, diagnostico, embedding_vet=embedding_vet,
-                lista_padrao=lp,
+                lista_padrao=lp, diag_extra=diag_extra,
             )
             if decidido is not None:
                 if (decidido.sigla_sinal or "").upper() in config.siglas_revisao_projeto:
@@ -618,4 +686,7 @@ def executar(
         f"decididos={len(lista.registros)} revisão={len(revisao)}",
         "INFO",
     )
-    return ResultadoPipeline(lista=lista, revisao=tuple(revisao)), wb_out
+    return (
+        ResultadoPipeline(lista=lista, revisao=tuple(revisao), diagnostico=diag_extra),
+        wb_out,
+    )

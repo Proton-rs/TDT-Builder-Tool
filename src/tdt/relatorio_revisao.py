@@ -11,6 +11,7 @@ import openpyxl
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
 from tdt.contracts import ItemRevisao, SignalRecord
+from tdt.semantica_estados import detectar_estado
 
 _CODIGO_RE = re.compile(r"^[A-Z0-9_/-]+$")
 
@@ -41,6 +42,14 @@ CABECALHO = [
     "Candidato 3", "Score tfidf 3", "Score vetorial 3", "Score fuzzy 3",
 ]
 
+_COLUNAS_ESTENDIDAS = [
+    "Sheet Origem", "Desc Normalizada", "Desc Canônica", "Equip Alvo (N0)",
+    "Nome Equip", "Barra", "Fase", "Estado Semântico", "Regras Aplicadas",
+    "Gap", "Gap Exigido", "Etapa Decisora", "Endereço Bruto",
+]
+_N_COLUNAS_BASE = len(CABECALHO)  # candidatos/scores -- coluna fixa antes das colunas estendidas
+CABECALHO = CABECALHO + _COLUNAS_ESTENDIDAS
+
 
 def _scores_metodo(rec: SignalRecord, sigla: str | None) -> tuple[str, str, str]:
     if rec.diagnostico is None or sigla is None:
@@ -51,12 +60,53 @@ def _scores_metodo(rec: SignalRecord, sigla: str | None) -> tuple[str, str, str]
     )
 
 
+def _sheet_origem(rec: SignalRecord) -> str:
+    """Sheet de origem, extraída do ``id`` estável (``f"{sheet}:{linha}"``)."""
+    return rec.id.rsplit(":", 1)[0] if ":" in rec.id else ""
+
+
+def _estado_semantico(rec: SignalRecord) -> str:
+    est = detectar_estado(rec.descricoes.normalizada)
+    if est is None:
+        return ""
+    return f"{est.classe}/{est.polaridade}" if est.polaridade else est.classe
+
+
+def _colunas_estendidas(rec: SignalRecord, diag: dict | None) -> list:
+    diag = diag or {}
+    e = rec.eletrico
+    gap = diag.get("gap")
+    gap_exigido = diag.get("gap_exigido")
+    return [
+        _sheet_origem(rec),
+        diag.get("desc_normalizada", ""),
+        rec.descricoes.normalizada,  # "Desc Canônica": forma pós canonizar() (N1..N6)
+        e.equipamento_alvo or "",
+        e.nome_equipamento or "",
+        e.barra or "",
+        e.fase or "",
+        _estado_semantico(rec),
+        diag.get("regras_aplicadas", ""),
+        f"{gap:.3f}" if gap is not None else "",
+        f"{gap_exigido:.3f}" if gap_exigido is not None else "",
+        diag.get("etapa_decisora", ""),
+        diag.get("endereco_bruto", ""),
+    ]
+
+
 def gerar_relatorio_revisao(
     registros: list[SignalRecord],
     revisao: tuple[ItemRevisao, ...],
     destino: str | Path,
+    diagnostico: "dict[str, dict] | None" = None,
 ) -> Path:
+    """``diagnostico``: dict opcional ``id -> {chaves}`` com contexto de decisão
+    que não mora no ``SignalRecord`` (regras aplicadas, gap/gap exigido, etapa
+    decisora, endereço bruto pré-pareamento, descrição pós-N1). Montado pelo
+    pipeline (ver ``tdt.pipeline.executar``); ausente ou sem entrada para um
+    id -> colunas correspondentes ficam vazias (nunca fabricadas)."""
     motivo_por_id = {it.registro.id: it.motivo for it in revisao}
+    diagnostico = diagnostico or {}
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Auditoria"
@@ -75,7 +125,8 @@ def gerar_relatorio_revisao(
         for c in rec.candidatos[:3]:
             linha.append(c.sigla)
             linha.extend(_scores_metodo(rec, c.sigla))
-        linha += [""] * (len(CABECALHO) - len(linha))
+        linha += [""] * (_N_COLUNAS_BASE - len(linha))
+        linha.extend(_colunas_estendidas(rec, diagnostico.get(rec.id)))
         ws.append(linha)
     _formatar_cabecalho(ws)
     _ajustar_largura_colunas(ws)

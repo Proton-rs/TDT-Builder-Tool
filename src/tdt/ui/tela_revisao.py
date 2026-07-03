@@ -344,7 +344,8 @@ class TelaRevisao(QWidget):
             out_path = Path(output) / "TDT.xlsx"
             wb.save(str(out_path))
             revisao = self._estado.resultado.revisao if self._estado.resultado else ()
-            gerar_relatorio_revisao(self._estado.registros, revisao, output)
+            diag = self._estado.resultado.diagnostico if self._estado.resultado else {}
+            gerar_relatorio_revisao(self._estado.registros, revisao, output, diagnostico=diag)
             QMessageBox.information(
                 self, "Sucesso",
                 f"TDT gerado: {out_path}\nAuditoria: {Path(output) / 'Auditoria_Revisao.xlsx'}",

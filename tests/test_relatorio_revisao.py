@@ -1,21 +1,98 @@
 import openpyxl
 
 from tdt.contracts import (
-    Candidato, Descricoes, Diagnostico, Enderecamento, ItemRevisao, Modulo,
-    SignalRecord, TipoSinal,
+    Candidato, Descricoes, Diagnostico, Eletrico, Enderecamento, ItemRevisao,
+    Modulo, SignalRecord, TipoSinal,
 )
-from tdt.relatorio_revisao import descricao_para_exibicao, gerar_relatorio_revisao
+from tdt.relatorio_revisao import (
+    CABECALHO, descricao_para_exibicao, gerar_relatorio_revisao,
+)
 
 
-def _rec(id_, sigla=None, candidatos=(), diagnostico=None, status="decidido"):
+def _rec(id_, sigla=None, candidatos=(), diagnostico=None, status="decidido", eletrico=None):
     return SignalRecord(
         id=id_, modulo=Modulo("M", "sheet_name"),
         tipo_sinal=TipoSinal("Discrete", "SingleBit", "Input"),
         enderecamento=Enderecamento("DNP3", (10,)),
         descricoes=Descricoes("Disjuntor Aberto", "disjuntor aberto"),
         sigla_sinal=sigla, candidatos=candidatos, status=status,
-        diagnostico=diagnostico,
+        diagnostico=diagnostico, eletrico=eletrico or Eletrico(),
     )
+
+
+def _col(ws, nome_coluna: str, linha: int = 2):
+    idx = CABECALHO.index(nome_coluna) + 1
+    return ws.cell(linha, idx).value
+
+
+def test_colunas_estendidas_presentes_no_cabecalho():
+    esperado = [
+        "Sheet Origem", "Desc Normalizada", "Desc Canônica", "Equip Alvo (N0)",
+        "Nome Equip", "Barra", "Fase", "Estado Semântico", "Regras Aplicadas",
+        "Gap", "Gap Exigido", "Etapa Decisora", "Endereço Bruto",
+    ]
+    for col in esperado:
+        assert col in CABECALHO, f"coluna ausente: {col}"
+
+
+def test_registro_decidido_popula_colunas_de_contexto_e_decisao(tmp_path):
+    cands = (Candidato("DJF1", 0.91, "mesclado"), Candidato("SECC", 0.40, "mesclado"))
+    rec = _rec(
+        "SUB1:5", sigla="DJF1", candidatos=cands,
+        eletrico=Eletrico(fase="A", equipamento_alvo="Disjuntor",
+                          nome_equipamento="52-10", barra="Principal"),
+    )
+    diagnostico = {
+        "SUB1:5": {
+            "regras_aplicadas": "r3_fase: +0.10 (fase compatível)",
+            "gap": 0.51,
+            "gap_exigido": 0.08,
+            "etapa_decisora": "quadrante",
+            "endereco_bruto": "10",
+        }
+    }
+
+    caminho = gerar_relatorio_revisao([rec], (), tmp_path, diagnostico=diagnostico)
+
+    wb = openpyxl.load_workbook(caminho)
+    ws = wb["Auditoria"]
+    assert _col(ws, "Sheet Origem") == "SUB1"
+    assert _col(ws, "Desc Canônica") == "disjuntor aberto"
+    assert _col(ws, "Equip Alvo (N0)") == "Disjuntor"
+    assert _col(ws, "Nome Equip") == "52-10"
+    assert _col(ws, "Barra") == "Principal"
+    assert _col(ws, "Fase") == "A"
+    assert _col(ws, "Regras Aplicadas") == "r3_fase: +0.10 (fase compatível)"
+    assert _col(ws, "Gap") == "0.510"
+    assert _col(ws, "Gap Exigido") == "0.080"
+    assert _col(ws, "Etapa Decisora") == "quadrante"
+    assert _col(ws, "Endereço Bruto") == "10"
+
+
+def test_registro_em_revisao_sem_diagnostico_nao_quebra_e_usa_placeholder(tmp_path):
+    rec = _rec("SUB2:9", sigla=None, candidatos=(), status="revisao")
+    revisao = (ItemRevisao(rec, motivo="score_baixo"),)
+
+    caminho = gerar_relatorio_revisao([rec], revisao, tmp_path, diagnostico={})
+
+    wb = openpyxl.load_workbook(caminho)
+    ws = wb["Auditoria"]
+    assert _col(ws, "Sheet Origem") == "SUB2"
+    # sem diagnostico para este id -> colunas de decisão vazias, não fabricadas
+    assert _col(ws, "Etapa Decisora") in (None, "")
+    assert _col(ws, "Gap") in (None, "")
+    assert _col(ws, "Regras Aplicadas") in (None, "")
+
+
+def test_gerar_relatorio_sem_diagnostico_mantem_retrocompat(tmp_path):
+    """Chamador antigo (sem o parâmetro novo) continua funcionando -- UI legada."""
+    rec = _rec("SUB3:1", sigla="DJF1", candidatos=(Candidato("DJF1", 0.9, "mesclado"),))
+
+    caminho = gerar_relatorio_revisao([rec], (), tmp_path)
+
+    wb = openpyxl.load_workbook(caminho)
+    ws = wb["Auditoria"]
+    assert ws.cell(2, 1).value == "SUB3:1"
 
 
 def test_gera_planilha_com_uma_linha_por_sinal(tmp_path):
