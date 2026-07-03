@@ -259,7 +259,9 @@ def _classificar_sinal(
                 por.setdefault(c.sigla, {})[fonte] = c.score
         diag = Diagnostico(scores_por_metodo=por)
     rec = replace(rec, diagnostico=diag) if diag is not None else rec
-    decidido = roteador.rotear(replace(rec, candidatos=tuple(com_regras)), config)
+    decidido = roteador.rotear(
+        replace(rec, candidatos=tuple(com_regras)), config, lista_padrao=lista_padrao
+    )
     if ajustes and decidido.status == "decidido":
         motivos = "; ".join(a.motivo for a in ajustes)
         decidido = replace(

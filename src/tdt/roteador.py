@@ -31,14 +31,64 @@ from dataclasses import replace
 
 from tdt.config import Config
 from tdt.contracts import Candidato, SignalRecord
+from tdt.dados.lista_padrao import ListaPadraoADMS
+from tdt.normalizacao.normalizador import canonizar
 
 # Limiares de "altíssimo" p/ a cascata — um único sinal tão forte que decide
 # sozinho, sem precisar de consenso.
 _FUZZY_ALTISSIMO = 0.95
 _E5_ALTISSIMO = 0.95
 
+# Gap <= este limiar é tratado como empate estrutural (mesmo critério usado
+# no diagnóstico SP-H Task 1 p/ classificar "gap-zero").
+_GAP_ZERO_LIMIAR = 0.005
 
-def _quadrante(rec: SignalRecord, config: Config) -> SignalRecord:
+
+def _resolver_empate_descricao_lp(
+    rec: SignalRecord,
+    candidatos: list[Candidato],
+    gap: float,
+    config: Config,
+    lista_padrao: ListaPadraoADMS | None,
+) -> SignalRecord | None:
+    """Quando os 2 melhores candidatos empatam (gap≈0) E suas siglas mapeiam
+    para a MESMA descrição-padrão na LP, o empate é estrutural — nenhum
+    texto discrimina entre eles, nem para o scorer nem para um revisor
+    humano. Decide de forma determinística (sigla alfabeticamente menor) em
+    vez de mandar para revisão. Devolve None se não se aplica (LP ausente,
+    sigla sem cadastro, ou descrições diferentes — empate genuíno).
+    """
+    if lista_padrao is None or gap > _GAP_ZERO_LIMIAR or len(candidatos) < 2:
+        return None
+
+    c1, c2 = candidatos[0], candidatos[1]
+    sp1 = lista_padrao.por_sigla(c1.sigla)
+    sp2 = lista_padrao.por_sigla(c2.sigla)
+    if sp1 is None or sp2 is None:
+        return None
+
+    d1 = canonizar(sp1.descricao, config)
+    d2 = canonizar(sp2.descricao, config)
+    if not d1 or d1 != d2:
+        return None
+
+    vencedora = min(c1.sigla, c2.sigla)
+    return replace(
+        rec,
+        sigla_sinal=vencedora,
+        status="decidido",
+        justificativa=(
+            f"empate_descricao_lp_duplicada: {c1.sigla}/{c2.sigla}, "
+            f"escolhida {vencedora} por ordem alfabética"
+        ),
+    )
+
+
+def _quadrante(
+    rec: SignalRecord,
+    config: Config,
+    lista_padrao: ListaPadraoADMS | None = None,
+) -> SignalRecord:
     """Decisão legada por quadrante gap × percentual sobre ``rec.candidatos``."""
     candidatos = sorted(rec.candidatos, key=lambda c: c.score, reverse=True)
     if not candidatos:
@@ -59,6 +109,11 @@ def _quadrante(rec: SignalRecord, config: Config) -> SignalRecord:
             status="decidido",
             justificativa=f"{topo.sigla} decidido (%={topo.score:.2f}, gap={gap:.2f})",
         )
+
+    resolvido = _resolver_empate_descricao_lp(rec, candidatos, gap, config, lista_padrao)
+    if resolvido is not None:
+        return resolvido
+
     return replace(
         rec,
         status="revisao",
@@ -161,15 +216,22 @@ def rotear(
     rec: SignalRecord,
     config: Config,
     votos: dict[str, list[Candidato]] | None = None,
+    lista_padrao: ListaPadraoADMS | None = None,
 ) -> SignalRecord:
     """Roteia o sinal. ``votos`` (opcional) = candidatos calibrados por método.
 
     Com ``votos``, aplica a cascata (fuzzy > e5 > consenso) com gap dinâmico;
     cai no quadrante mesclado se nada decidir. Sem ``votos``, só o quadrante
     (retrocompat).
+
+    ``lista_padrao`` (opcional): quando o quadrante mesclado não decide por
+    empate estrutural (gap≈0) entre os 2 melhores candidatos, e a LP tiver a
+    MESMA descrição-padrão cadastrada para as duas siglas (bug de dados da
+    LP, não um empate genuíno), decide deterministicamente em vez de mandar
+    para revisão — ver ``_resolver_empate_descricao_lp``.
     """
     if votos:
         decidido = _decidir_por_votos(rec, config, votos)
         if decidido is not None:
             return decidido
-    return _quadrante(rec, config)
+    return _quadrante(rec, config, lista_padrao)

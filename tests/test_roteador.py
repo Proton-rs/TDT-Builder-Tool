@@ -9,6 +9,7 @@ from tdt.contracts import (
     SignalRecord,
     TipoSinal,
 )
+from tdt.dados.lista_padrao import ListaPadraoADMS, SinalPadrao
 from tdt.roteador import rotear
 
 CFG = Config()  # threshold_pct=0.70, threshold_gap=0.15
@@ -131,3 +132,55 @@ def test_cascata_e5_altissimo_decide_por_semantica():
     r = rotear(_rec([Candidato("DJ", 0.70, "mesclado")]), CFG, votos=votos)
     assert r.status == "decidido"
     assert "e5" in r.justificativa.lower()
+
+
+# --- empate por descrição LP duplicada (SP-H Task 2) ---
+#
+# Causa raiz confirmada: a LP tem pares de siglas DIFERENTES com a mesma
+# descrição-padrão (texto idêntico) -- ex. 81IE1/81E1. Como o scoring
+# compara contra a descrição da LP, esses pares SEMPRE empatam (gap=0)
+# para qualquer sinal de entrada -- um humano revisor também não teria
+# como discriminar só pelo texto/metadados da LP. O roteador deve
+# resolver isso deterministicamente (sigla alfabeticamente menor) em vez
+# de mandar para revisão, mas só quando a descrição-padrão bate IGUAL
+# (não é heurística de similaridade).
+
+
+def _lp(pares: list[tuple[str, str]]) -> ListaPadraoADMS:
+    """Constrói uma LP mínima: cada par (sigla, descricao)."""
+    discretos = tuple(
+        SinalPadrao(
+            sigla=sigla, descricao=descricao, signal_type="SingleBit",
+            direction="Input", mm="MM1", categoria="Discrete",
+        )
+        for sigla, descricao in pares
+    )
+    return ListaPadraoADMS(discretos=discretos, analogicos=())
+
+
+def test_empate_descricao_lp_duplicada_decide_por_ordem_alfabetica():
+    # 81IE1 e 81E1 têm a MESMA descrição-padrão na LP -> empate estrutural,
+    # nunca discriminável por texto. Roteador decide pela sigla
+    # alfabeticamente menor (81E1 < 81IE1) em vez de ir para revisão.
+    lp = _lp([
+        ("81IE1", "81 - TRIP SUB/SOBRE FREQUENCIA E1"),
+        ("81E1", "81 - TRIP SUB/SOBRE FREQUENCIA E1"),
+    ])
+    rec = _rec([Candidato("81IE1", 0.60, "mesclado"), Candidato("81E1", 0.60, "mesclado")])
+    r = rotear(rec, CFG, lista_padrao=lp)
+    assert r.status == "decidido"
+    assert r.sigla_sinal == "81E1"
+    assert "empate_descricao_lp_duplicada" in r.justificativa
+
+
+def test_empate_genuino_descricoes_diferentes_continua_revisao():
+    # 51N2 e 51NL têm descrições DIFERENTES na LP -- empate genuíno, não é
+    # bug de LP. Deve continuar indo para revisão como hoje (não regride).
+    lp = _lp([
+        ("51N2", "51 - SOBRECORRENTE TEMPORIZADA NEUTRO E2"),
+        ("51NL", "51 - SOBRECORRENTE TEMPORIZADA LOCAL"),
+    ])
+    rec = _rec([Candidato("51N2", 0.60, "mesclado"), Candidato("51NL", 0.60, "mesclado")])
+    r = rotear(rec, CFG, lista_padrao=lp)
+    assert r.status == "revisao"
+    assert r.sigla_sinal is None
