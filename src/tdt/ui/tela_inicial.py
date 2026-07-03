@@ -26,6 +26,19 @@ _MODOS = [("Automático (detecta pelo header)", "auto"),
           ("Não homogêneo", "nao-homogeneo")]
 
 
+def pode_executar(sigla_se: str, input_ok: bool) -> bool:
+    """Valida se a execução pode prosseguir.
+
+    Args:
+        sigla_se: sigla da subestação (será stripped antes da validação)
+        input_ok: boolean que indica se os dados de entrada estão válidos
+
+    Returns:
+        True se pode executar (sigla não vazia e input_ok=True), False caso contrário
+    """
+    return bool(sigla_se.strip()) and input_ok
+
+
 class TelaInicial(QWidget):
     abrir_config = Signal()
     executou = Signal()
@@ -39,6 +52,7 @@ class TelaInicial(QWidget):
         self.ed_input = QLineEdit()
         self.ed_input.setReadOnly(True)
         self.ed_input.setPlaceholderText("Nenhum arquivo de entrada selecionado")
+        self.ed_input.textChanged.connect(self._atualizar_estado_botao)
         btn_in = QPushButton("Input…"); btn_in.clicked.connect(self._escolher_input)
 
         self.ed_output = QLineEdit()
@@ -62,12 +76,14 @@ class TelaInicial(QWidget):
 
         self.combo_sub = QComboBox(); self.combo_sub.setEditable(True)
         self.combo_sub.lineEdit().setPlaceholderText("Obrigatório — sigla da subestação")
+        self.combo_sub.lineEdit().textChanged.connect(self._atualizar_estado_botao)
 
         self.lista_sheets = QListWidget()
         self.lista_sheets.itemChanged.connect(self._sheet_alterada)
 
         self.btn_executar = QPushButton("EXECUTAR"); self.btn_executar.clicked.connect(self._executar)
         self.btn_executar.setProperty("acao", "principal")
+        self.btn_executar.setToolTip("Informe a sigla da SE")
         self.btn_parar = QPushButton("PARAR"); self.btn_parar.clicked.connect(self._parar)
         self.btn_parar.setEnabled(False)
         btn_cfg = QPushButton("⚙"); btn_cfg.clicked.connect(self.abrir_config.emit)
@@ -116,6 +132,21 @@ class TelaInicial(QWidget):
         p = self._estado.paths
         self.ed_input.setText(p.get("input", ""))
         self.ed_output.setText(p.get("output", ""))
+        self._atualizar_estado_botao()
+
+    def _input_valido(self) -> bool:
+        """Verifica se os arquivos de entrada estão configurados."""
+        p = self._estado.paths
+        faltando = [k for k in ("input", "template", "lista_padrao")
+                    if not p.get(k) or not Path(p[k]).exists()]
+        return len(faltando) == 0
+
+    def _atualizar_estado_botao(self) -> None:
+        """Atualiza o estado do botão Executar baseado em validações."""
+        sigla = self.combo_sub.currentText()
+        input_ok = self._input_valido()
+        habilitado = pode_executar(sigla, input_ok)
+        self.btn_executar.setEnabled(habilitado)
 
     def _escolher_input(self):
         atual = self._estado.paths.get("input", "") or DEFAULT_LISTA
@@ -191,6 +222,15 @@ class TelaInicial(QWidget):
 
     def _executar(self):
         self._coletar()
+
+        # Defense in depth: validar sigla antes de continuar
+        sigla = self.combo_sub.currentText()
+        if not pode_executar(sigla, True):
+            QMessageBox.warning(self, "Sigla da SE obrigatória",
+                                "Informe uma sigla válida para a subestação.")
+            self._fim()
+            return
+
         p = self._estado.paths
         faltando = [k for k in ("input", "template", "lista_padrao")
                     if not p.get(k) or not Path(p[k]).exists()]
