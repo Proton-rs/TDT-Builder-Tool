@@ -49,20 +49,59 @@ pode ser promovido aqui se tiver token exclusivo casando no texto.
 
 Investigado e construído um cenário sintético que reproduz exatamente isso
 (``tests/test_especificidade_qualificador.py::test_irmao_promovido_apesar_de_filtro_estado_hard_documented``)
-— o mecanismo É alcançável em tese. Porém uma varredura exaustiva da lista
-padrão real (``docs/Pontos Padrao ADMS_v2.xlsx``, 26 famílias ANSI, 12 delas
-com classes de MM mistas entre irmãos) não encontrou NENHUM caso onde o
-token distintivo de um irmão conflite com a própria classe de estado do MM
-desse irmão — testado tanto com a descrição completa do irmão quanto com só
-os tokens distintivos como texto. Isso não é coincidência: o vocabulário que
-distingue um irmão (ex. "BLOQUEADO", "FALTA", "BLOQUEIO") tende a SER o
-mesmo vocabulário que evidencia a classe de estado do MM dele (EVENTO) —
-ambos vêm da mesma fonte (a descrição padrão do próprio irmão). Dado isso,
-o risco é aceito como estreito na prática (guarda bare-root + exclusividade
-de token já é apertada) e não justifica complicar a busca com uma
-interseção que arriscaria reintroduzir o bug original do Task 5. Se a lista
-padrão mudar e uma família introduzir essa colisão, o teste de regressão
-falha e força reavaliação consciente.
+— o mecanismo É alcançável em tese, e uma varredura contra a lista padrão
+REAL (``docs/Pontos Padrao ADMS_v2.xlsx``) confirma que a hipótese de que
+"vocabulário distintivo tende a coincidir com a classe do MM" NÃO é uma
+garantia geral: existem DUAS exceções conhecidas, com naturezas diferentes.
+
+1. Família ANSI-51, irmão ``51NL`` ("SOBRECORRENTE TEMPORIZADA LOCAL", MM
+   classe EVENTO) tem como token exclusivo "LOCAL", que
+   ``semantica_estados.detectar_estado`` classifica como LOCAL_REMOTO — uma
+   classe DIFERENTE da classe MM do próprio ``51NL``. O conflito é real, mas
+   INALCANÇÁVEL hoje por um motivo estrutural, não por sorte: a família 51
+   não tem nenhuma sigla igual à sua própria raiz bare ("51") na lista
+   padrão — só existem irmãos qualificados (``51NL`` e outros). A guarda
+   ``base == numero_lider(base)`` (linha ~92 acima) só deixa este módulo
+   disparar quando o decidido É a raiz bare da família; sem um "51" bare
+   decidível, o roteador nunca decide "51" para a família 51, então este
+   módulo nunca é acionado para ela.
+
+2. Família ANSI-21, irmão ``21D`` ("DISPARO LOCALIZADOR DE FALTA", MM classe
+   EVENTO) tem "LOCALIZADOR" como um dos tokens exclusivos, e
+   ``semantica_estados.detectar_estado("LOCALIZADOR")`` também retorna
+   LOCAL_REMOTO — só que aqui, ao contrário da 51, a família TEM raiz bare
+   decidível (``"21" — FUNCAO DISTANCIA`` existe na lista padrão), então
+   este é um caso que uma garantia baseada só em "tem raiz bare?" NÃO
+   excluiria estruturalmente. A causa raiz é diferente da família 51: é um
+   bug de léxico pré-existente em ``semantica_estados._LEXICO`` — o prefixo
+   ``"LOCAL"`` casa acidentalmente com "LOCALIZADOR" (localizador de FALTA,
+   nada a ver com local/remoto), tratado como acompanhamento em separado
+   (achado da revisão final de branch SP-G, fix round 2). Hoje isso é
+   um risco LATENTE, não ativo: contra o texto REAL do sinal ("DISPARO
+   LOCALIZADOR DE FALTA" completo), ``detectar_estado`` retorna ``None``
+   (ambíguo — "DISPARO"/"FALTA" também casam como EVENTO, empatando com o
+   falso LOCAL_REMOTO de "LOCALIZADOR"), e texto ambíguo é tratado como
+   "sem evidência" por ``compativel``/``filtrar_por_estado`` — ou seja,
+   ``21D`` NÃO é hoje rejeitado por ``filtrar_por_estado`` para esse texto
+   específico. Mas uma variação de texto real sem as palavras que
+   desambiguam (ex. "21 - Funcao Localizador", sem "DISPARO"/"FALTA")
+   reativaria o falso LOCAL_REMOTO isolado e causaria uma rejeição
+   incorreta de ``21D`` por ``filtrar_por_estado`` — esse risco só fecha de
+   verdade com o fix do léxico em ``semantica_estados.py`` (fora de escopo
+   deste módulo).
+
+A garantia que de fato vale — e que é verificada automaticamente por
+``tests/test_especificidade_qualificador.py::test_scan_lp_real_sem_conflito_token_classe_mm_em_familia_com_raiz_bare``
+contra a lista padrão real — é mais estreita do que "zero conflitos
+existem": *nenhuma família ANSI com raiz bare DECIDÍVEL, EXCETO a 21 (achado
+2, risco latente rastreado separadamente), tem um irmão cujo token exclusivo
+conflite com a classe de estado do MM desse próprio irmão*. A família 51
+fica fora do escopo por construção (nunca é alcançada, não por exclusão
+manual); a família 21 é excluída explicitamente, por nome, com a razão
+documentada acima. Se a lista padrão mudar e uma TERCEIRA família COM raiz
+bare decidível introduzir essa colisão, o teste de regressão falha e força
+reavaliação consciente — o escopo aceito hoje é exatamente estas duas
+exceções, não mais que isso.
 """
 from __future__ import annotations
 
@@ -73,6 +112,44 @@ from tdt.config import Config
 from tdt.contracts import Candidato, SignalRecord
 from tdt.motor_regras import _numero_lider
 from tdt.normalizacao.normalizador import canonizar
+
+
+def tokens_distintivos_por_familia(
+    todos, base: str, lider_base: str, config: Config
+) -> dict[str, frozenset[str]]:
+    """Para cada irmão da família de ``base`` (mesmo ``_numero_lider``, exceto
+    a própria ``base``), calcula seu conjunto de tokens distintivos: presentes
+    na descrição do irmão, ausentes da descrição da base E exclusivos desse
+    irmão dentro da família (não repetidos em nenhum outro irmão do grupo).
+
+    Extraído de ``preferir_irmao_qualificado`` para ser reutilizado pelo teste
+    de varredura da lista padrão real (``tests/test_especificidade_qualificador.py``)
+    sem duplicar a lógica de exclusividade de token.
+    """
+    desc_base = next(
+        (s.descricao for s in todos if s.sigla.upper() == base), ""
+    )
+    tokens_base = frozenset(canonizar(desc_base, config).split()) if desc_base else frozenset()
+
+    irmaos: list[tuple[str, frozenset[str]]] = []
+    for s in todos:
+        sig = s.sigla.upper()
+        if sig == base or _numero_lider(sig) != lider_base or not s.descricao:
+            continue
+        irmaos.append((s.sigla, frozenset(canonizar(s.descricao, config).split())))
+
+    # Token só conta como qualificador se for exclusivo de UM irmão dentro da
+    # família (não aparece na base nem em outro irmão) — vocabulário comum a
+    # vários irmãos (ex. "SINCRONISMO" na família 25) não decide nada.
+    contagem: Counter[str] = Counter()
+    for _, toks in irmaos:
+        for t in toks - tokens_base:
+            contagem[t] += 1
+
+    return {
+        sig: frozenset(t for t in (toks - tokens_base) if contagem[t] == 1)
+        for sig, toks in irmaos
+    }
 
 
 def preferir_irmao_qualificado(
@@ -101,29 +178,10 @@ def preferir_irmao_qualificado(
     # "Risco avaliado e aceito" na docstring do módulo: exigir presença
     # prévia em candidatos reintroduziria o bug que este módulo corrige).
     todos = (*lp.discretos, *lp.analogicos)
-    desc_base = next(
-        (s.descricao for s in todos if s.sigla.upper() == base), ""
-    )
-    tokens_base = frozenset(canonizar(desc_base, config).split()) if desc_base else frozenset()
-
-    irmaos: list[tuple[str, frozenset[str]]] = []
-    for s in todos:
-        sig = s.sigla.upper()
-        if sig == base or _numero_lider(sig) != lider_base or not s.descricao:
-            continue
-        irmaos.append((s.sigla, frozenset(canonizar(s.descricao, config).split())))
-
-    # Token só conta como qualificador se for exclusivo de UM irmão dentro da
-    # família (não aparece na base nem em outro irmão) — vocabulário comum a
-    # vários irmãos (ex. "SINCRONISMO" na família 25) não decide nada.
-    contagem: Counter[str] = Counter()
-    for _, toks in irmaos:
-        for t in toks - tokens_base:
-            contagem[t] += 1
+    distintivos_por_irmao = tokens_distintivos_por_familia(todos, base, lider_base, config)
 
     casando: list[str] = []
-    for sig, toks in irmaos:
-        distintivos = frozenset(t for t in (toks - tokens_base) if contagem[t] == 1)
+    for sig, distintivos in distintivos_por_irmao.items():
         if distintivos and (distintivos & texto):
             casando.append(sig)
 

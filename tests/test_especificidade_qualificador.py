@@ -9,9 +9,13 @@ from tdt.config import Config
 from tdt.contracts import (
     Candidato, Descricoes, Enderecamento, Modulo, SignalRecord, TipoSinal,
 )
-from tdt.especificidade_qualificador import preferir_irmao_qualificado
+from tdt.dados.lista_padrao import ListaPadraoADMS
+from tdt.especificidade_qualificador import (
+    preferir_irmao_qualificado, tokens_distintivos_por_familia,
+)
+from tdt.motor_regras import _numero_lider
 from tdt.normalizacao.normalizador import canonizar
-from tdt.semantica_estados import filtrar_por_estado
+from tdt.semantica_estados import classe_do_mm, detectar_estado, filtrar_por_estado
 
 
 @dataclass(frozen=True)
@@ -165,16 +169,46 @@ def test_irmao_promovido_apesar_de_filtro_estado_hard_documented():
     distintivo aparece num texto cuja classe detectada é EVENTO) para provar
     que o mecanismo é ALCANÇÁVEL em tese.
 
-    Investigação na lista padrão REAL (docs/Pontos Padrao ADMS_v2.xlsx, 26
-    famílias ANSI, 12 com classes de MM mistas entre irmãos) não encontrou
-    NENHUM caso onde isso ocorre de fato — o vocabulário distintivo de um
-    irmão tende a ser o mesmo vocabulário que evidencia a classe de estado
-    do MM dele (mesma fonte: a descrição padrão do próprio irmão). Por isso
-    o risco foi aceito como estreito na prática (ver docstring do módulo).
+    Investigação na lista padrão REAL (docs/Pontos Padrao ADMS_v2.xlsx)
+    encontrou DUAS exceções reais, com naturezas diferentes (ver docstring
+    do módulo para o detalhamento completo):
 
-    Se algum dia a lista padrão real introduzir essa colisão, ou se este
-    teste passar a falhar porque o comportamento mudou, isso deve forçar
-    uma reavaliação consciente — não um "conserto silencioso".
+    1. Família ANSI-51, irmão ``51NL`` ("SOBRECORRENTE TEMPORIZADA LOCAL",
+       MM classe EVENTO) tem como token exclusivo "LOCAL", que
+       ``semantica_estados.detectar_estado`` classifica como LOCAL_REMOTO —
+       classe diferente da classe MM do próprio ``51NL``. O conflito É real,
+       mas INALCANÇÁVEL hoje: a família 51 não tem nenhuma sigla igual à sua
+       própria raiz bare ("51") na lista padrão, e a guarda
+       ``base == numero_lider(base)`` só deixa este módulo disparar quando o
+       decidido É a raiz bare da família — sem um "51" bare decidível, o
+       roteador nunca decide "51" para essa família, e este módulo nunca é
+       acionado para ela.
+
+    2. Família ANSI-21, irmão ``21D`` ("DISPARO LOCALIZADOR DE FALTA", MM
+       classe EVENTO) tem "LOCALIZADOR" como token exclusivo, também
+       classificado como LOCAL_REMOTO por ``detectar_estado`` — mas aqui a
+       família TEM raiz bare decidível ("21" existe na lista). A causa é um
+       bug de léxico pré-existente em ``semantica_estados._LEXICO`` (prefixo
+       "LOCAL" casa com "LOCALIZADOR" por acidente; rastreado como
+       acompanhamento separado). É um risco LATENTE, não ativo hoje: contra
+       o texto REAL completo do sinal, ``detectar_estado`` retorna ``None``
+       (ambíguo, pois "DISPARO"/"FALTA" também casam como EVENTO e empatam
+       com o falso LOCAL_REMOTO), então ``filtrar_por_estado`` não rejeita
+       ``21D`` para ESSE texto específico — mas um texto real sem essas
+       palavras de desambiguação reativaria o problema.
+
+    A garantia real (ver docstring do módulo e
+    ``test_scan_lp_real_sem_conflito_token_classe_mm_em_familia_com_raiz_bare``)
+    é mais estreita do que "zero conflitos existem": nenhuma família COM
+    raiz bare decidível, EXCETO a 21 (risco latente rastreado à parte), tem
+    um irmão com esse tipo de conflito. A família 51 fica fora do escopo por
+    construção (nunca é alcançada); a família 21 é excluída explicitamente,
+    por nome, com a razão documentada.
+
+    Se algum dia uma TERCEIRA família COM raiz bare decidível introduzir
+    essa colisão, ou se este teste passar a falhar porque o comportamento
+    mudou, isso deve forçar uma reavaliação consciente — não um "conserto
+    silencioso".
     """
     cfg = _config()
     lp = _LP([
@@ -208,3 +242,96 @@ def test_irmao_promovido_apesar_de_filtro_estado_hard_documented():
     out = preferir_irmao_qualificado(rec, lp, cfg)
     assert out.sigla_sinal == "79EXC"
     assert out.status == "decidido"
+
+
+# Exceções conhecidas e documentadas (docstring do módulo, "revisão final de
+# branch SP-G, fix round 2") ao escopo do scan abaixo — DUAS, não mais que
+# isso. Se o scan encontrar uma TERCEIRA família fora desta lista, o teste
+# deve falhar (não silenciar): força reavaliação consciente em vez de
+# reabrir o risco aceito silenciosamente.
+_FAMILIAS_COM_EXCECAO_CONHECIDA = frozenset({
+    # "21": tem raiz bare decidível ("21" existe na lista padrão), então
+    # ENTRA no loop abaixo — mas seu irmão 21D ("DISPARO LOCALIZADOR DE
+    # FALTA", MM classe EVENTO) tem "LOCALIZADOR" como token exclusivo, e
+    # semantica_estados.detectar_estado("LOCALIZADOR") retorna LOCAL_REMOTO
+    # por um bug de léxico pré-existente (prefixo "LOCAL" casa por acidente
+    # com "LOCALIZADOR" = localizador de falta, nada a ver com local/
+    # remoto). Risco LATENTE, não ativo hoje (o texto real completo do
+    # sinal é ambíguo e não dispara o filtro duro) — rastreado como
+    # acompanhamento separado do fix do léxico em semantica_estados.py.
+    "21",
+})
+
+
+def test_scan_lp_real_sem_conflito_token_classe_mm_em_familia_com_raiz_bare(
+    lista_padrao_path,
+):
+    """Scan comitado (achado 2, revisão final de branch SP-G) que substitui a
+    varredura ad-hoc/não-comitada citada na docstring do módulo por uma
+    verificação automática, re-executável sempre que a lista padrão mudar.
+
+    Pina a garantia TRUE e ESTREITA (não "zero conflitos existem" — essa
+    era falsa): para toda família ANSI que tenha uma raiz bare DECIDÍVEL
+    (uma sigla igual a ``_numero_lider(sigla)`` presente na própria lista
+    padrão — é essa raiz que ``preferir_irmao_qualificado`` pode decidir e
+    então re-arbitrar), EXCETO as famílias em
+    ``_FAMILIAS_COM_EXCECAO_CONHECIDA`` (hoje só a "21", ver comentário
+    acima), nenhum irmão tem um token exclusivo cuja classe de estado
+    (``semantica_estados.detectar_estado``) conflite com a classe de estado
+    do MM do próprio irmão (``semantica_estados.classe_do_mm``).
+
+    Este teste NÃO cobre a família 51 (``51NL`` etc.) — e não deveria: a 51
+    não tem sigla bare "51" na lista padrão, então nunca entra no loop de
+    famílias-com-raiz-bare abaixo. Essa exclusão é estrutural (consequência
+    de como a família é identificada), diferente da exclusão nomeada da
+    família 21 (que TEM raiz bare, mas é excluída explicitamente por um
+    risco latente conhecido e rastreado à parte).
+    """
+    lp = ListaPadraoADMS.carregar(lista_padrao_path)
+    cfg = Config()
+    todos = (*lp.discretos, *lp.analogicos)
+
+    siglas_upper = {s.sigla.upper() for s in todos}
+    lideres_com_raiz_bare = {
+        lider for sig in siglas_upper if (lider := _numero_lider(sig)) == sig
+    }
+
+    conflitos: list[tuple[str, str, str, str]] = []
+    familias_verificadas = 0
+    for lider_base in sorted(lideres_com_raiz_bare - _FAMILIAS_COM_EXCECAO_CONHECIDA):
+        distintivos_por_irmao = tokens_distintivos_por_familia(
+            todos, lider_base, lider_base, cfg
+        )
+        if not distintivos_por_irmao:
+            continue
+        familias_verificadas += 1
+        for sig, distintivos in distintivos_por_irmao.items():
+            irmao = next(s for s in todos if s.sigla.upper() == sig)
+            classe_mm = classe_do_mm(irmao.mm)
+            if classe_mm is None:
+                continue
+            for token in distintivos:
+                estado_token = detectar_estado(token)
+                if estado_token is not None and estado_token.classe != classe_mm:
+                    conflitos.append((lider_base, sig, token, estado_token.classe))
+
+    # Sanidade: a família 51 (sem raiz bare "51" na lista) não deve nunca
+    # aparecer entre as raízes bare — prova que sua exclusão é estrutural,
+    # não dependente da lista de exceções nomeadas acima.
+    assert "51" not in lideres_com_raiz_bare
+
+    # Sanidade: a família 21 (exceção nomeada) DEVE ter raiz bare decidível
+    # — senão a entrada em _FAMILIAS_COM_EXCECAO_CONHECIDA está obsoleta
+    # (ex.: lista padrão mudou e "21" bare sumiu) e deveria ser removida.
+    assert "21" in lideres_com_raiz_bare
+
+    assert familias_verificadas > 0, (
+        "nenhuma família com raiz bare decidível encontrada — verifique se "
+        "a lista padrão real carregou corretamente"
+    )
+    assert conflitos == [], (
+        "conflito real entre token distintivo e classe MM do próprio irmão "
+        f"numa família COM raiz bare decidível e SEM exceção conhecida "
+        f"documentada (alcançável hoje, achado NOVO — não silenciar, "
+        f"investigar e documentar): {conflitos}"
+    )
