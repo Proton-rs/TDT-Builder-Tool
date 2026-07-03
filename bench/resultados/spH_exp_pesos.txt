@@ -1,0 +1,19 @@
+# exp_pesos 2026-07-03 15:23
+pesos vigentes na Config: tfidf=0.7 vetorial=0.25 fuzzy=0.05
+
+ground-truth: 1539 pares | roteação: pct>=0.45 gap>=0.08
+
+variante                  acc@1  rec@3  decid  prec@dec
+grid(0.7, 0.25, 0.05)       69%    80%    88%       76%
+grid(0.3, 0.5, 0.2)         68%    79%    87%       74%
+grid(0.2, 0.6, 0.2)         65%    78%    93%       69%
+grid(0.2, 0.5, 0.3)         68%    79%    87%       74%
+grid(0.1, 0.7, 0.2)         65%    75%    94%       68%
+rrf(tfidf,vet,fuzzy)        58%    79%     0%        0%
+bm25(sozinho)               69%    77%    73%       84%
+bm25+vet+fuzzy              70%    79%    83%       81%
+char3-5(sozinho)            64%    74%    53%       81%
+char3-5+vet+fuzzy           65%    78%    89%       71%
+
+baseline (atual): acc@1=69.07% rec@3=79.99% decid=87.78% prec@dec=76.24%
+melhor por (prec@dec, acc@1): bm25(sozinho) -> prec=83.71% acc@1=69.33%
