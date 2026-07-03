@@ -42,6 +42,11 @@ def test_detecta_local_remoto():
     assert detectar_estado("CHAVE 43LR POS REMOTO").classe == LOCAL_REMOTO
 
 
+def test_localizador_nao_e_local_remoto():
+    # "LOCALIZADOR" (21D, fault locator) não é o estado local/remoto
+    assert detectar_estado("21 FUNCAO LOCALIZADOR") is None
+
+
 def test_indefinido_vence():
     assert detectar_estado("52 INDEFINIDO").classe == INDEFINIDO
 

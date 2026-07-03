@@ -38,15 +38,23 @@ _LEXICO: tuple[tuple[str, str, str | None], ...] = (
     ("INCLUI", FUNCAO, None), ("EXCLUI", FUNCAO, None),
     ("ATIVA", ATIVACAO, None), ("DESATIVA", ATIVACAO, None),
     ("HABILITA", ATIVACAO, None), ("DESABILITA", ATIVACAO, None),
-    ("LOCAL", LOCAL_REMOTO, None), ("REMOT", LOCAL_REMOTO, None),
+    ("REMOT", LOCAL_REMOTO, None),
     ("ATUAD", EVENTO, None), ("FALHA", EVENTO, None),
     ("DEFEITO", EVENTO, None), ("FALTA", EVENTO, None),
     ("BLOQUE", EVENTO, None), ("LIBERA", EVENTO, None),
     ("INDEFINID", INDEFINIDO, None),
 )
 
+# "LOCAL" é palavra completa (não radical) — prefixo colide com LOCALIZADOR
+# (ANSI 21D, classe real EVENTO). Token exato em vez de startswith.
+_TOKENS_EXATOS: dict[str, tuple[str, str | None]] = {
+    "LOCAL": (LOCAL_REMOTO, None),
+}
+
 
 def _classificar_token(tok: str) -> tuple[str, str | None] | None:
+    if tok in _TOKENS_EXATOS:
+        return _TOKENS_EXATOS[tok]
     for prefixo, classe, pol in _LEXICO:
         if tok.startswith(prefixo):
             return classe, pol
