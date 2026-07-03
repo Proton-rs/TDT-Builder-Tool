@@ -20,6 +20,7 @@ class ProxyRevisao(QSortFilterProxyModel):
         self._esconder_decididos = False
         self._filtros_coluna: dict[int, str] = {}
         self._sheet: str | None = None
+        self._filtros_coluna_valores: dict[int, set[str]] = {}
 
     def setEsconderDecididos(self, ativo: bool) -> None:
         self._esconder_decididos = ativo
@@ -40,6 +41,38 @@ class ProxyRevisao(QSortFilterProxyModel):
     def filtroColuna(self, col: int) -> str:
         return self._filtros_coluna.get(col, "")
 
+    def set_filtro_coluna(self, col: int, valores: set[str] | None) -> None:
+        """Filtro estilo Excel: aceita a linha se o valor da célula em `col`
+        estiver em `valores`. `None` remove o filtro dessa coluna.
+
+        Independente de `setFiltroColuna` (busca "contém" de texto livre,
+        legado da Task 1/2) -- as duas fontes de filtro por coluna coexistem
+        e combinam em AND dentro de `filterAcceptsRow`.
+        """
+        if valores is None:
+            self._filtros_coluna_valores.pop(col, None)
+        else:
+            self._filtros_coluna_valores[col] = set(valores)
+        self.invalidateFilter()
+
+    def colunas_filtradas(self) -> set[int]:
+        """Colunas com filtro de valores (estilo Excel) ativo no momento."""
+        return set(self._filtros_coluna_valores.keys())
+
+    def valores_unicos(self, col: int) -> list[str]:
+        """Valores distintos presentes em `col`, na fonte inteira (não filtrada),
+        ordenados. Uma passada O(n) sobre o modelo fonte -- chamada só quando o
+        popup de filtro é aberto, não a cada tecla digitada na busca do popup.
+        """
+        modelo = self.sourceModel()
+        if modelo is None:
+            return []
+        vistos = set()
+        for row in range(modelo.rowCount()):
+            idx = modelo.index(row, col)
+            vistos.add(str(modelo.data(idx) or ""))
+        return sorted(vistos)
+
     def filterAcceptsRow(self, source_row, source_parent) -> bool:
         if not super().filterAcceptsRow(source_row, source_parent):
             return False
@@ -55,5 +88,10 @@ class ProxyRevisao(QSortFilterProxyModel):
             idx = self.sourceModel().index(source_row, col, source_parent)
             valor = str(self.sourceModel().data(idx) or "").upper()
             if termo not in valor:
+                return False
+        for col, valores in self._filtros_coluna_valores.items():
+            idx = self.sourceModel().index(source_row, col, source_parent)
+            valor = str(self.sourceModel().data(idx) or "")
+            if valor not in valores:
                 return False
         return True

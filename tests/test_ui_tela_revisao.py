@@ -1,4 +1,5 @@
 from PySide6.QtCore import QItemSelectionModel, QPoint
+from PySide6.QtWidgets import QDialog
 
 import pytest
 
@@ -6,7 +7,7 @@ from tdt.contracts import Descricoes, Enderecamento, Modulo, SignalRecord, TipoS
 from tdt.ui.delegate_sinal import DelegateCombo, DelegateModulo
 from tdt.ui.estado import AppState
 from tdt.ui.modelo_tabela import ModeloSinais
-from tdt.ui.tela_revisao import TelaRevisao, decidir_acao_pareamento
+from tdt.ui.tela_revisao import FiltroColunaDialog, TelaRevisao, decidir_acao_pareamento
 
 pytest.importorskip("PySide6")
 
@@ -341,3 +342,92 @@ def test_filtro_global_de_texto_foi_removido(qtbot):
     tela = _tela_carregada(qtbot, [_rec("1", "SE1", "A")])
     assert not hasattr(tela, "ed_filtro")
     assert not hasattr(tela, "_filtrar_texto")
+
+
+# --- popup estilo Excel por coluna (SP-J Task 3) ---
+
+def test_duplo_clique_no_header_abre_popup_excel(qtbot, monkeypatch):
+    tela = _tela_carregada(qtbot, [
+        _rec("1", "SE1", "DISJUNTOR"),
+        _rec("2", "SE2", "SECCIONADORA"),
+    ])
+    col_desc = ModeloSinais.COLUNAS.index("Descr. bruta")
+
+    chamado = {}
+
+    class _DialogFalso:
+        def __init__(self, *a, **k):
+            chamado["criado"] = True
+
+        def exec(self):
+            return QDialog.Accepted
+
+        def valores_selecionados(self):
+            return {"DISJUNTOR"}
+
+    monkeypatch.setattr("tdt.ui.tela_revisao.FiltroColunaDialog", _DialogFalso)
+    tela.tabela.horizontalHeader().sectionDoubleClicked.emit(col_desc)
+    assert chamado.get("criado") is True
+    assert tela._proxy.colunas_filtradas() == {col_desc}
+    assert tela._proxy.rowCount() == 1
+
+
+def test_popup_excel_cancelado_nao_altera_filtro(qtbot, monkeypatch):
+    tela = _tela_carregada(qtbot, [
+        _rec("1", "SE1", "DISJUNTOR"),
+        _rec("2", "SE2", "SECCIONADORA"),
+    ])
+    col_desc = ModeloSinais.COLUNAS.index("Descr. bruta")
+
+    class _DialogCancelado:
+        def __init__(self, *a, **k):
+            pass
+
+        def exec(self):
+            return QDialog.Rejected
+
+    monkeypatch.setattr("tdt.ui.tela_revisao.FiltroColunaDialog", _DialogCancelado)
+    tela._abrir_filtro_coluna_excel(col_desc)
+    assert tela._proxy.colunas_filtradas() == set()
+    assert tela._proxy.rowCount() == 2
+
+
+def test_popup_excel_limpar_remove_filtro_da_coluna(qtbot, monkeypatch):
+    tela = _tela_carregada(qtbot, [
+        _rec("1", "SE1", "DISJUNTOR"),
+        _rec("2", "SE2", "SECCIONADORA"),
+    ])
+    col_desc = ModeloSinais.COLUNAS.index("Descr. bruta")
+    tela._proxy.set_filtro_coluna(col_desc, {"DISJUNTOR"})
+    assert tela._proxy.rowCount() == 1
+
+    class _DialogLimpar:
+        def __init__(self, *a, **k):
+            pass
+
+        def exec(self):
+            return QDialog.Accepted
+
+        def valores_selecionados(self):
+            return None
+
+    monkeypatch.setattr("tdt.ui.tela_revisao.FiltroColunaDialog", _DialogLimpar)
+    tela._abrir_filtro_coluna_excel(col_desc)
+    assert tela._proxy.colunas_filtradas() == set()
+    assert tela._proxy.rowCount() == 2
+
+
+def test_construir_popup_excel_real_lista_valores_distintos_da_coluna(qtbot):
+    tela = _tela_carregada(qtbot, [
+        _rec("1", "SE1", "DISJUNTOR"),
+        _rec("2", "SE2", "SECCIONADORA"),
+        _rec("3", "SE1", "DISJUNTOR"),
+    ])
+    col_desc = ModeloSinais.COLUNAS.index("Descr. bruta")
+    dialog = FiltroColunaDialog(
+        "Descr. bruta", tela._proxy.valores_unicos(col_desc), None, tela,
+    )
+    qtbot.addWidget(dialog)
+    textos = {dialog.lista.item(i).text() for i in range(dialog.lista.count())}
+    assert textos == {"DISJUNTOR", "SECCIONADORA"}
+    assert dialog.valores_selecionados() is None  # tudo marcado por padrão = sem filtro
