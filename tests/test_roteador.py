@@ -184,3 +184,21 @@ def test_empate_genuino_descricoes_diferentes_continua_revisao():
     r = rotear(rec, CFG, lista_padrao=lp)
     assert r.status == "revisao"
     assert r.sigla_sinal is None
+
+
+def test_empate_descricao_lp_duplicada_mas_score_baixo_continua_revisao():
+    # Mesmo par 81IE1/81E1 com descrição-padrão IDÊNTICA, mas os candidatos
+    # empatam num score BAIXO (0.10 << threshold_pct=0.45) -- nenhum dos dois
+    # atinge o piso de confiança mínimo exigido pelo caminho normal
+    # (`pct_ok`). Empate estrutural na LP não deve bypassar essa checagem:
+    # sem confiança mínima, mesmo tendo a MESMA descrição-padrão, o sinal
+    # deve continuar em revisão (achado da revisão de código: faltava o
+    # guard de `pct_ok` nesse caminho).
+    lp = _lp([
+        ("81IE1", "81 - TRIP SUB/SOBRE FREQUENCIA E1"),
+        ("81E1", "81 - TRIP SUB/SOBRE FREQUENCIA E1"),
+    ])
+    rec = _rec([Candidato("81IE1", 0.10, "mesclado"), Candidato("81E1", 0.10, "mesclado")])
+    r = rotear(rec, CFG, lista_padrao=lp)
+    assert r.status == "revisao"
+    assert r.sigla_sinal is None

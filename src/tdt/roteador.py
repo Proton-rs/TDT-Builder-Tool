@@ -48,6 +48,7 @@ def _resolver_empate_descricao_lp(
     rec: SignalRecord,
     candidatos: list[Candidato],
     gap: float,
+    pct_ok: bool,
     config: Config,
     lista_padrao: ListaPadraoADMS | None,
 ) -> SignalRecord | None:
@@ -56,9 +57,18 @@ def _resolver_empate_descricao_lp(
     texto discrimina entre eles, nem para o scorer nem para um revisor
     humano. Decide de forma determinística (sigla alfabeticamente menor) em
     vez de mandar para revisão. Devolve None se não se aplica (LP ausente,
-    sigla sem cadastro, ou descrições diferentes — empate genuíno).
+    sigla sem cadastro, descrições diferentes — empate genuíno, ou o
+    candidato top não atinge o mesmo piso de confiança (``pct_ok``) exigido
+    pelo caminho normal de decisão — sem isso, dois candidatos empatados em
+    score muito baixo seriam decididos só por coincidirem na LP, o que não é
+    confiança suficiente).
     """
-    if lista_padrao is None or gap > _GAP_ZERO_LIMIAR or len(candidatos) < 2:
+    if (
+        lista_padrao is None
+        or not pct_ok
+        or gap > _GAP_ZERO_LIMIAR
+        or len(candidatos) < 2
+    ):
         return None
 
     c1, c2 = candidatos[0], candidatos[1]
@@ -110,7 +120,9 @@ def _quadrante(
             justificativa=f"{topo.sigla} decidido (%={topo.score:.2f}, gap={gap:.2f})",
         )
 
-    resolvido = _resolver_empate_descricao_lp(rec, candidatos, gap, config, lista_padrao)
+    resolvido = _resolver_empate_descricao_lp(
+        rec, candidatos, gap, pct_ok, config, lista_padrao
+    )
     if resolvido is not None:
         return resolvido
 
@@ -228,7 +240,10 @@ def rotear(
     empate estrutural (gap≈0) entre os 2 melhores candidatos, e a LP tiver a
     MESMA descrição-padrão cadastrada para as duas siglas (bug de dados da
     LP, não um empate genuíno), decide deterministicamente em vez de mandar
-    para revisão — ver ``_resolver_empate_descricao_lp``.
+    para revisão — ver ``_resolver_empate_descricao_lp``. Só se aplica
+    quando o candidato top também atinge ``config.threshold_pct`` (mesmo
+    ``pct_ok`` do caminho normal) — dois candidatos empatados em score baixo
+    não são decididos só por coincidirem na LP.
     """
     if votos:
         decidido = _decidir_por_votos(rec, config, votos)
