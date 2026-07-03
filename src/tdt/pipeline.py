@@ -251,6 +251,16 @@ def _classificar_sinal(
     com_regras, ajustes = motor_regras.aplicar_rastreado(
         rec, fundidos, config, lista_padrao=lista_padrao
     )
+    # Mapa sigla->delta total das regras, para o resgate na zona cinzenta do
+    # roteador (SP-H Task 3). `aplicar_rastreado` devolve só a lista plana de
+    # AjusteRegra (delta+motivo, sem sigla) para a justificativa -- o delta
+    # por sigla é recomputado aqui comparando o score antes/depois das
+    # regras (casado por sigla; `aplicar_rastreado` só re-pontua e reordena
+    # candidatos existentes, não renomeia siglas nem duplica).
+    scores_antes = {c.sigla: c.score for c in fundidos}
+    ajustes_por_sigla: dict[str, float] = {
+        c.sigla: c.score - scores_antes.get(c.sigla, c.score) for c in com_regras
+    }
     diag = None
     if diagnostico:
         por: dict[str, dict[str, float]] = {}
@@ -260,7 +270,8 @@ def _classificar_sinal(
         diag = Diagnostico(scores_por_metodo=por)
     rec = replace(rec, diagnostico=diag) if diag is not None else rec
     decidido = roteador.rotear(
-        replace(rec, candidatos=tuple(com_regras)), config, lista_padrao=lista_padrao
+        replace(rec, candidatos=tuple(com_regras)), config,
+        lista_padrao=lista_padrao, ajustes=ajustes_por_sigla,
     )
     if ajustes and decidido.status == "decidido":
         motivos = "; ".join(a.motivo for a in ajustes)

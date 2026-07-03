@@ -202,3 +202,40 @@ def test_empate_descricao_lp_duplicada_mas_score_baixo_continua_revisao():
     r = rotear(rec, CFG, lista_padrao=lp)
     assert r.status == "revisao"
     assert r.sigla_sinal is None
+
+
+# --- resgate por regras na zona cinzenta (SP-H Task 3) ---
+#
+# Zona cinzenta: pct_ok (candidato top passa do threshold_pct) mas gap
+# insuficiente (< threshold_gap) -- hoje vai para revisão mesmo quando o
+# motor de regras de domínio (numero de protecao, fase, opostos, etc.) já
+# apontou exclusivamente para o topo (ajuste positivo) e não para o
+# segundo colocado (ajuste zero ou negativo). ``ajustes`` é o mapa
+# sigla->delta total aplicado pelas regras (calculado no pipeline a partir
+# de ``motor_regras.aplicar_rastreado``, que devolve uma lista plana de
+# ``AjusteRegra`` sem sigla -- o pipeline agrega por sigla antes de montar
+# esse mapa).
+
+_CANDS_ZONA_CINZENTA = [Candidato("SGFT", 0.62, "mesclado"), Candidato("SGT2", 0.58, "mesclado")]
+# pct_ok: 0.62 >= threshold_pct(0.45); gap=0.04 < threshold_gap(0.08) -> gap_ok False
+
+
+def test_resgate_por_regras_decide():
+    rec = _rec(_CANDS_ZONA_CINZENTA)
+    out = rotear(rec, CFG, ajustes={"SGFT": 0.15, "SGT2": 0.0})
+    assert out.status == "decidido" and out.sigla_sinal == "SGFT"
+    assert "resgate_regras" in out.justificativa
+
+
+def test_sem_regra_exclusiva_vai_revisao():
+    rec = _rec(_CANDS_ZONA_CINZENTA)
+    out = rotear(rec, CFG, ajustes={"SGFT": 0.15, "SGT2": 0.15})
+    assert out.status == "revisao"
+    assert out.sigla_sinal is None
+
+
+def test_resgate_desligado_por_config():
+    cfg = replace(CFG, resgate_por_regras=False)
+    rec = _rec(_CANDS_ZONA_CINZENTA)
+    out = rotear(rec, cfg, ajustes={"SGFT": 0.15})
+    assert out.status == "revisao"

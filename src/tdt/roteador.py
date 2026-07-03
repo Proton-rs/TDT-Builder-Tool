@@ -94,10 +94,45 @@ def _resolver_empate_descricao_lp(
     )
 
 
+def _resolver_resgate_por_regras(
+    rec: SignalRecord,
+    candidatos: list[Candidato],
+    gap: float,
+    config: Config,
+    ajustes: dict[str, float] | None,
+) -> SignalRecord | None:
+    """Zona cinzenta (pct_ok mas gap insuficiente): se o motor de regras de
+    domínio já apontou EXCLUSIVAMENTE para o candidato topo (ajuste
+    positivo no topo, zero ou negativo no segundo colocado), decide em vez
+    de mandar para revisão -- a regra fez o trabalho de discriminação que o
+    gap textual não conseguiu. Devolve None se não se aplica (sem
+    ``ajustes``, menos de 2 candidatos, ou o segundo colocado também tem
+    ajuste positivo -- regra não foi exclusiva, permanece ambíguo).
+    """
+    if not ajustes or len(candidatos) < 2:
+        return None
+
+    topo, segundo = candidatos[0], candidatos[1]
+    aj_topo = ajustes.get(topo.sigla, 0.0)
+    aj_seg = ajustes.get(segundo.sigla, 0.0)
+    if aj_topo > 0 and aj_seg <= 0:
+        return replace(
+            rec,
+            sigla_sinal=topo.sigla,
+            status="decidido",
+            justificativa=(
+                f"{topo.sigla} por resgate_regras "
+                f"(%={topo.score:.2f}, gap={gap:.2f}, regra=+{aj_topo:.2f})"
+            ),
+        )
+    return None
+
+
 def _quadrante(
     rec: SignalRecord,
     config: Config,
     lista_padrao: ListaPadraoADMS | None = None,
+    ajustes: dict[str, float] | None = None,
 ) -> SignalRecord:
     """Decisão legada por quadrante gap × percentual sobre ``rec.candidatos``."""
     candidatos = sorted(rec.candidatos, key=lambda c: c.score, reverse=True)
@@ -125,6 +160,11 @@ def _quadrante(
     )
     if resolvido is not None:
         return resolvido
+
+    if pct_ok and not gap_ok and config.resgate_por_regras:
+        resolvido = _resolver_resgate_por_regras(rec, candidatos, gap, config, ajustes)
+        if resolvido is not None:
+            return resolvido
 
     return replace(
         rec,
@@ -229,6 +269,7 @@ def rotear(
     config: Config,
     votos: dict[str, list[Candidato]] | None = None,
     lista_padrao: ListaPadraoADMS | None = None,
+    ajustes: dict[str, float] | None = None,
 ) -> SignalRecord:
     """Roteia o sinal. ``votos`` (opcional) = candidatos calibrados por método.
 
@@ -244,9 +285,17 @@ def rotear(
     quando o candidato top também atinge ``config.threshold_pct`` (mesmo
     ``pct_ok`` do caminho normal) — dois candidatos empatados em score baixo
     não são decididos só por coincidirem na LP.
+
+    ``ajustes`` (opcional): mapa sigla->delta total aplicado pelo motor de
+    regras de domínio (``motor_regras.aplicar_rastreado``, agregado por
+    sigla). Na zona cinzenta (``pct_ok`` mas gap insuficiente), se o topo
+    tiver ajuste positivo exclusivo (segundo colocado com ajuste <= 0),
+    decide em vez de mandar para revisão — ver
+    ``_resolver_resgate_por_regras``. Gated por ``config.resgate_por_regras``
+    (default ``True``).
     """
     if votos:
         decidido = _decidir_por_votos(rec, config, votos)
         if decidido is not None:
             return decidido
-    return _quadrante(rec, config, lista_padrao)
+    return _quadrante(rec, config, lista_padrao, ajustes)
