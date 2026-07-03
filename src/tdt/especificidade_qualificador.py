@@ -35,6 +35,34 @@ descrição da base E exclusivo desse irmão dentro da família (não repetido e
 nenhuma outra descrição do grupo) — evita que vocabulário compartilhado por
 vários irmãos (ex.: "SINCRONISMO" na família 25) seja tratado como
 qualificador de um único irmão.
+
+Risco avaliado e aceito (revisão final de branch SP-G, achado 1): a busca de
+irmão roda sobre ``(*lp.discretos, *lp.analogicos)`` — a lista padrão
+INTEIRA — não sobre ``rec.candidatos`` (sobreviventes pós-``filtro_preciso``/
+``filtro_especificidade``/``semantica_estados.filtrar_por_estado``/whitelist
+de equipamento). Isso é proposital: a correção existe justamente porque o
+irmão certo (ex. ``79OK``) pode não entrar no top-K por score bruto de texto
+— exigir presença prévia em ``rec.candidatos`` reintroduziria o bug que este
+módulo corrige. Consequência teórica: um irmão eliminado por
+``filtrar_por_estado`` por CAUSA (conflito de classe de estado do MM) ainda
+pode ser promovido aqui se tiver token exclusivo casando no texto.
+
+Investigado e construído um cenário sintético que reproduz exatamente isso
+(``tests/test_especificidade_qualificador.py::test_irmao_promovido_apesar_de_filtro_estado_hard_documented``)
+— o mecanismo É alcançável em tese. Porém uma varredura exaustiva da lista
+padrão real (``docs/Pontos Padrao ADMS_v2.xlsx``, 26 famílias ANSI, 12 delas
+com classes de MM mistas entre irmãos) não encontrou NENHUM caso onde o
+token distintivo de um irmão conflite com a própria classe de estado do MM
+desse irmão — testado tanto com a descrição completa do irmão quanto com só
+os tokens distintivos como texto. Isso não é coincidência: o vocabulário que
+distingue um irmão (ex. "BLOQUEADO", "FALTA", "BLOQUEIO") tende a SER o
+mesmo vocabulário que evidencia a classe de estado do MM dele (EVENTO) —
+ambos vêm da mesma fonte (a descrição padrão do próprio irmão). Dado isso,
+o risco é aceito como estreito na prática (guarda bare-root + exclusividade
+de token já é apertada) e não justifica complicar a busca com uma
+interseção que arriscaria reintroduzir o bug original do Task 5. Se a lista
+padrão mudar e uma família introduzir essa colisão, o teste de regressão
+falha e força reavaliação consciente.
 """
 from __future__ import annotations
 
@@ -42,7 +70,7 @@ from collections import Counter
 from dataclasses import replace
 
 from tdt.config import Config
-from tdt.contracts import SignalRecord
+from tdt.contracts import Candidato, SignalRecord
 from tdt.motor_regras import _numero_lider
 from tdt.normalizacao.normalizador import canonizar
 
@@ -69,6 +97,9 @@ def preferir_irmao_qualificado(
 
     texto = frozenset(rec.descricoes.normalizada.upper().split())
 
+    # Busca na lista padrão INTEIRA, não em rec.candidatos (proposital — ver
+    # "Risco avaliado e aceito" na docstring do módulo: exigir presença
+    # prévia em candidatos reintroduziria o bug que este módulo corrige).
     todos = (*lp.discretos, *lp.analogicos)
     desc_base = next(
         (s.descricao for s in todos if s.sigla.upper() == base), ""
@@ -101,7 +132,18 @@ def preferir_irmao_qualificado(
         justificativa = f"{irmao} por qualificador (base {rec.sigla_sinal})"
         if rec.justificativa:
             justificativa = f"{rec.justificativa} | {justificativa}"
-        return replace(rec, sigla_sinal=irmao, justificativa=justificativa)
+        # candidatos[0] deve refletir a sigla DECIDIDA, não a base descartada
+        # — senão a auditoria mostra o score de "79" ao lado do rótulo
+        # "79OK", confundindo quem revisa o relatório. Preserva o score do
+        # antigo topo (a confiança da decisão não mudou, só a sigla) e marca
+        # a origem como "qualificador" para rastreabilidade.
+        score_antigo = rec.candidatos[0].score if rec.candidatos else 0.0
+        candidato_promovido = Candidato(irmao, score_antigo, "qualificador")
+        novos_candidatos = (candidato_promovido, *rec.candidatos)
+        return replace(
+            rec, sigla_sinal=irmao, justificativa=justificativa,
+            candidatos=novos_candidatos,
+        )
 
     if len(casando) > 1:
         # justificativa é o motivo literal ("qualificador_ambiguo"), no mesmo

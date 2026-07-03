@@ -181,6 +181,13 @@ def _classificar_sinal(
     lista_padrao: "ListaPadraoADMS | None" = None,
     ancoras: "list | None" = None,
 ) -> SignalRecord:
+    # Ordem do funil de decisão (mapa p/ "onde entra minha nova regra?"):
+    # filtros (filtro_preciso, semantica_estados, whitelist) removem
+    # candidatos POR CAUSA -> motor_regras ajusta scores dos que sobraram ->
+    # roteador escolhe o topo -> correções pós-decisão (fase,
+    # especificidade_qualificador) podem sobrescrever a escolha do roteador,
+    # mas só dentro de um escopo estreito e específico (não re-filtram nem
+    # re-pontuam candidatos).
     config = scorers.config
     c_tfidf = scorers.tfidf.pontuar(rec, k=config.k_vizinhos)
     if embedding_vet is not None:
