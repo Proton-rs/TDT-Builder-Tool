@@ -4,9 +4,26 @@ Documento gerado automaticamente por `bench/minerar_lp_conhecimento.py` a partir
 
 Agrupamento por família reusa `tdt.motor_regras._numero_lider` (prefixo ANSI de 2 dígitos, ex.: `67N` -> `67`). Siglas sem prefixo ANSI numérico são agrupadas por prefixo alfabético de 2 letras (`ALPHA_xx`); o restante cai em **Outras / Não classificadas** — nenhuma sigla é descartada.
 
-Este é o **esqueleto** (Task 1 do plano SP-L): dados minerados diretamente da LP, sem curadoria de conteúdo além de formatação. Tasks 2/3 adicionam semântica de domínio, exemplos e cross-references.
+Este é o **esqueleto** (Task 1 do plano SP-L): dados minerados diretamente da LP, sem curadoria de conteúdo além de formatação. Task 2 (este commit) adiciona nomenclatura real observada em TDT de campo + regras de domínio já provadas em specs do projeto. Task 3 adiciona cross-references adicionais.
 
 ---
+
+## Regras do projeto (provadas em specs anteriores)
+
+Regras de domínio abaixo são **decisões travadas** — confirmadas em produção/diagnóstico real e citadas aqui só como resumo com ponteiro para a spec de origem (o compilado não copia o design por extenso, ver princípio do plano SP-L). Aplicam-se transversalmente a várias famílias; onde uma regra é específica de uma família ela também é referenciada na seção correspondente.
+
+1. **Fusão D+C: comando = output = mesmo sinal físico, status = input** — comando e status do mesmo equipamento/função fundem num único ponto `ReadWrite` (`INCOORDS` do status + `OUTCOORDS` do comando). Confirmado no TDT real: 243 pontos `ReadWrite` (ver `Direction` acima). Fonte: [`2026-06-30-spA-pareamento-fusao-dc-design.md`](superpowers/specs/2026-06-30-spA-pareamento-fusao-dc-design.md).
+2. **Sigla que persiste na fusão é a da Lista Padrão (a do status), nunca o verbo de comando** — `LIGAR`/`DESLIGAR`/`ABRIR`/`FECHAR`/`CMD`/`INCLUIR`/`EXCLUIR` nunca sobrevivem como sigla decidida; o comando herda a sigla padrão do status do mesmo `(módulo, equipamento)`. Fonte: [`2026-06-30-spA-pareamento-fusao-dc-design.md`](superpowers/specs/2026-06-30-spA-pareamento-fusao-dc-design.md).
+3. **Não existe comando para sinal analógico** — a fusão D+C é exclusivamente discreto+discreto; medições (`IA`, `VAB`, `P`, `Q`, ...) nunca têm par de comando. Fonte: [`2026-06-30-spA-pareamento-fusao-dc-design.md`](superpowers/specs/2026-06-30-spA-pareamento-fusao-dc-design.md).
+4. **Sigla de coluna dedicada (lista já padronizada) tem prioridade sobre scoring por descrição** — quando o input não-homogêneo traz uma coluna própria de sigla (não uma "descrição" a interpretar), e a sigla é válida na Lista Padrão, o sinal é pré-classificado sem passar pelo scoring textual; validação cruzada contra o NOME padronizado (`{SE}_{MODULO}_{EQUIP}_{SIGLA}`) detecta inconsistência (`nome_sigla_inconsistente`). Evita o anti-padrão de tentar casar a sigla já certa contra a descrição genérica de outra família. Fonte: `docs/superpowers/specs/2026-06-30-sp-sigla-nao-homogeneo-design.md` e plano irmão `docs/superpowers/plans/2026-06-30-sp-sigla-nao-homogeneo.md` (à data deste commit, ainda não integrados neste branch — existem como trabalho em andamento no worktree principal do repo; motivadores: `docs/SAN2_LISTA_PADRONIZADA_PARA_TESTE.xlsx`).
+5. **DJF1/DJA1: par ligado/desligado do mesmo disjuntor converge para a sigla de posição, mesmo com descrição genérica** — a Lista Padrão descreve `DJF1` apenas como "DISJUNTOR NF" (sem termo de estado); quando o input não-homogêneo traz duas linhas separadas (`Desligado`/`Ligado`) do mesmo equipamento, elas não devem ser tratadas como sinais distintos — pareiam pela sigla de posição do equipamento (`Disjuntor` → `DJF1`) antes do scoring de texto, como rede de segurança independente da qualidade da descrição padrão. Fonte: [`2026-06-24-sp10-djf1-pareamento-polaridade-design.md`](superpowers/specs/2026-06-24-sp10-djf1-pareamento-polaridade-design.md).
+6. **Semântica de estados restringe candidatos (filtro duro)** — o par de estados detectado no texto de entrada (ex. `NORMAL@ATUADO`, `INCLUIDO@EXCLUIDO`, `ABERTO@FECHADO`/`DESLIGADO@LIGADO`, `DESATIVADO@ATIVADO`, `REMOTO@LOCAL`) deve ser compatível com o par de estados do Message Mapping da sigla candidata (coluna "Estados / MM" desta doc) — candidato incompatível é eliminado antes do scoring final. Sem estado detectado, o filtro não age. Fonte: [`2026-07-01-semantica-estados-multicoord-design.md`](superpowers/specs/2026-07-01-semantica-estados-multicoord-design.md).
+7. **Fusão de par posição → `MultiCoord`, nunca "DoubleBit" ingênuo** — dois pontos (status aberto + status fechado) do mesmo equipamento de posição fundem em `MultiCoord` (endereço duplo consecutivo), não em `DoubleBit`; `DoubleBit` só quando o próprio input já traz endereço duplo numa linha (nativo) ou para comando CDC (aumentar/diminuir). Confirmado no TDT real: 44 `MultiCoord` vs. apenas 2 `DoubleBit` (CDC). Fonte: [`2026-07-01-semantica-estados-multicoord-design.md`](superpowers/specs/2026-07-01-semantica-estados-multicoord-design.md).
+8. **Todo comando tem, por regra, um discreto de status correspondente** — comando sem par de status vira revisão (`comando_sem_discreto`), exceto exceções whitelistadas (`config.siglas_write_legitimo`, ver regra 9). Fonte: [`2026-07-01-semantica-estados-multicoord-design.md`](superpowers/specs/2026-07-01-semantica-estados-multicoord-design.md) (D5) e [`2026-07-02-spH-camada-decisao-design.md`](superpowers/specs/2026-07-02-spH-camada-decisao-design.md).
+9. **Whitelist de siglas "write legítimo" (sem discreto de status por natureza)** — `config.siglas_write_legitimo` (`src/tdt/config.py`) cresceu de `{"CDC"}` para `{"CDC", "AUTC", "PB", "CMD"}` nesta sessão (SP-I Task 2): `CDC` é comutador (aumentar/diminuir, sem input); `AUTC` (rearme de automatismo/reset), `PB` (seleção de barra preferencial) e `CMD` (comando de iluminação/automatismo sem retorno modelado) são comandos tipo pulso confirmados, nos dados reais (`PSACA_CC:20/21/22`), sem NENHUM status correspondente em lugar nenhum do input de origem. Fonte: [`2026-07-02-spI-relatorio-outputs.md`](superpowers/specs/2026-07-02-spI-relatorio-outputs.md).
+10. **Whitelist de siglas por equipamento (`config.siglas_por_equipamento`)** — quando o equipamento-alvo é identificado (ex. `Seccionadora`), os candidatos de sigla são restritos à whitelist medida em dado real (`Export_base_Full`, 2103 sinais com equipamento `89-*`/`29-*`): `SECF, DSEC, SECC, 43LR, SECG, SECB, SECT, CCCO, CCFL, CCMO, FSEC, OI, LIBM, CCCM, CCAL, BSEC, MANI, MDCM, FLFC, BBFC, BBAB, FLAB, FALH, PROT, CCLO, VMTC, BBA2, SOBC, BATA, MINC` (30 siglas no frozenset atual de `src/tdt/config.py`; a spec de origem menciona uma semente de 34 medidos — o código convergiu para 30). Evita decisão de sigla de outra classe de equipamento mesmo quando o texto casa por similaridade. Fonte: [`2026-07-01-semantica-estados-multicoord-design.md`](superpowers/specs/2026-07-01-semantica-estados-multicoord-design.md) (D6), whitelist em `src/tdt/config.py`.
+11. **`LIBM` (Libera Manobra) decide normalmente mas é rebaixado a revisão por decisão de projeto** — casa a sigla certa, mas o real GTD descartou esse sinal na prática (a base tem 36 ocorrências); `config.siglas_revisao_projeto` gateia essa política, não é um erro de matching. Fonte: [`2026-07-01-semantica-estados-multicoord-design.md`](superpowers/specs/2026-07-01-semantica-estados-multicoord-design.md).
+
 
 ## Família ANSI 20
 
@@ -60,6 +77,13 @@ _25 sigla(s)._
 | 21Z4 | 21 - TRIP ZONA 4 | RelayTrip | Discrete | Read | Transit;NORMAL;ATUADO;Error |  |  |  |
 | 21Z5 | 21 - TRIP ZONA 5 | RelayTrip | Discrete | Read | Transit;NORMAL;ATUADO;Error |  |  |  |
 | 21_T | 21 - TRIP DISTANCIA | RelayTrip | Discrete | Read | Transit;NORMAL;ATUADO;Error |  |  |  |
+
+### Nomenclaturas reais observadas (ANSI 21)
+
+Cruzado com `docs/TDT/exportTDT_UTR_GTD_1_20260626.xlsx` (`DNP3_DiscreteSignals`, sheet real de UTR). Descrições de campo estão em branco nesse export (nomenclatura real vem só do Signal Name padronizado `{SE}_{MODULO}_{EQUIP}_{SIGLA}`); a evidência de campo é estrutural: cardinalidade e datatype por sinal, não texto.
+
+- Só as zonas de fase aparecem no dado real: `GTD_LTGTA_LTGTA_P_21`, `..._21Z1`, `..._21Z2`, `..._21Z3`, `..._21Z4` — **4 zonas por módulo de linha** (`21Z1..21Z4`), sempre `Read`/`SingleBit`, uma ocorrência por lado de relé (`_P`/`_A`, principal/alternado — 2 relés por linha nesta subestação). `21Z5` e as variantes de terra (`21N*`) da LP não aparecem nesta TDT real — famílias presentes na LP mas sem instância nesta amostra.
+- `21` (função habilitada, `Enabled`/`ReadWrite`) existe 1x por módulo de linha, par com a função — confirma o padrão de "sigla-função" (`INCLUIDO;EXCLUIDO`) descrito na LP.
 
 ## Família ANSI 24
 
@@ -126,6 +150,13 @@ _16 sigla(s)._
 | 27TP | 27 - SUBTENSAO TP | Custom | Discrete | Read | Transit;NORMAL;ATUADO;Error |  |  |  |
 | 27_T | 27 - TRIP SUBTENSAO | Custom | Discrete | Read | Transit;NORMAL;ATUADO;Error |  |  |  |
 
+### Nomenclaturas reais observadas (ANSI 27)
+
+Cruzado com `docs/TDT/exportTDT_UTR_GTD_1_20260626.xlsx` (`DNP3_DiscreteSignals`). `Description` vem em branco em todo o export (0/1641 linhas); a nomenclatura real observável é o `Signal Alias` + `Signal Name` padronizado + estrutura (cardinalidade/datatype/direção).
+
+- Só 4 siglas aparecem: `27` (função, `27 FUNCAO`, `ReadWrite`/`Read`, 1x por módulo, mesmo padrão "sigla-função" `INCLUIDO;EXCLUIDO` da regra 6), `27CD` (`27 - BLOQUEIO SUBTENSAO CDC`), `27E1`/`27E2` (`27 - SUBTENSAO E1`/`E2`, estágios). As demais 12 siglas da LP (`27AB`, `27AC`, `27BC`, `27BL`, `27BR`, `27CA`, `27CC`, `27LT`, `27TP`, `27_T`) não aparecem nesta amostra — famílias presentes na LP sem instância real aqui.
+- Aliases reais confirmam a semântica "estágio" (`E1`/`E2`) já documentada na descrição padrão — não há divergência de nomenclatura entre LP e TDT real para as siglas que aparecem.
+
 ## Família ANSI 32
 
 _1 sigla(s)._
@@ -183,6 +214,11 @@ _17 sigla(s)._
 | 50_1 | 50 - SOBRECORRENTE INSTANTANEA E1 | RelayTrip | Discrete | Read | Transit;NORMAL;ATUADO;Error |  |  |  |
 | 50_2 | 50 - SOBRECORRENTE INSTANTANEA E2 | RelayTrip | Discrete | Read | Transit;NORMAL;ATUADO;Error |  |  |  |
 
+### Nomenclaturas reais observadas (ANSI 50)
+
+Cruzado com `docs/TDT/exportTDT_UTR_GTD_1_20260626.xlsx`. Das 17 siglas da LP, só 5 têm instância real, mas com volume alto (151 linhas discretas no total): `50F1`/`50F2` (`50F 1`/`50F 2`, 31 cada — estágios de fase), `50N1`/`50N2` (`50N 1`/`50N 2`, 31 cada — estágios de neutro), `50CD` (`50 - SOBRECORRENTE CDC`, 2). As variantes por fase nominal (`50FA/FB/FC/50CA/50FN/50N/50N3/50_1/50_2/50BF`) não aparecem nesta amostra.
+- **Gap real, não mapeamento incorreto**: `50EF` aparece 25x no TDT real (`50EF - END FAULT`, falha de terminal de linha) mas **não existe em nenhuma linha de `docs/Pontos Padrao ADMS_v2.xlsx`** (confirmado por busca direta na sheet `DiscreteSignals`) — não é erro de mineração do Task 1, a sigla simplesmente não está na Lista Padrão. Sinal a considerar para adicionar à LP se `50EF` for recorrente em outras subestações.
+
 ## Família ANSI 51
 
 _15 sigla(s)._
@@ -204,6 +240,11 @@ _15 sigla(s)._
 | 51N2 | 51 - SOBRECORRENTE TEMPORIZADA NEUTRO E2 | RelayTrip | Discrete | Read | Transit;NORMAL;ATUADO;Error |  |  |  |
 | 51NL | 51 - SOBRECORRENTE TEMPORIZADA LOCAL | RelayTrip | Discrete | Read | Transit;NORMAL;ATUADO;Error |  |  |  |
 | 51V | 51 - SOBRECORRENTE TEMPORIZADA POR TENSAO | RelayTrip | Discrete | Read | Transit;NORMAL;ATUADO;Error |  |  |  |
+
+### Nomenclaturas reais observadas (ANSI 51)
+
+Cruzado com `docs/TDT/exportTDT_UTR_GTD_1_20260626.xlsx`. Só 3 das 15 siglas da LP têm instância real, mas de alto volume: `51F` (`51F`, 31 — sobrecorrente temporizada fase), `51N1` (`51N 1`, 31 — estágio 1 de neutro), `51N` (`51N`, 12, único `ReadWrite` do grupo — confirma o padrão "sigla-função" `Enabled`/`INCLUIDO;EXCLUIDO` já coberto pela regra 6, coerente com a LP que também lista `51N` como `Enabled`/`ReadWrite`).
+- `51NL` (citada na regra 51NL/local do commit `7f4e732`, fix de invariante documentado) e as variantes por fase nominal não aparecem nesta amostra — LP cobre mais granularidade do que este TDT específico usa.
 
 ## Família ANSI 56
 
@@ -231,6 +272,11 @@ _12 sigla(s)._
 | 59I | 59 - SOBRETENSAO INSTANTANEA | RelayTrip | Discrete | Read | Transit;NORMAL;ATUADO;Error |  |  |  |
 | 59N | 59 - SOBRETENSAO NEUTRO | RelayTrip | Discrete | Read | Transit;NORMAL;ATUADO;Error |  |  |  |
 | 59_T | 59 - TRIP SOBRETENSAO | RelayTrip | Discrete | Read | Transit;NORMAL;ATUADO;Error |  |  |  |
+
+### Nomenclaturas reais observadas (ANSI 59)
+
+Cruzado com `docs/TDT/exportTDT_UTR_GTD_1_20260626.xlsx`. 4 das 12 siglas da LP aparecem: `59` (função, `59 - FUNCAO SOBRETENSAO`, `ReadWrite`/`Read` — mesmo padrão-função da regra 6), `59CD` (`59 - BLOQUEIO CDC SOBRETENSAO`), `59E1`/`59E2` (`59 E1`/`E2`, estágios de fase). `59A`, `59E3-E5`, `59I`, `59N`, `59_T` não aparecem nesta amostra.
+- **Gap real, mesmo padrão do ANSI 50**: `59N1`/`59N2` aparecem no TDT real (`59 NEUTRO ESTAGIO 1`/`2`, 4x cada) mas **não existem em `docs/Pontos Padrao ADMS_v2.xlsx`** (só `59N` está na LP, sem estágios numerados) — mais um sinal de que a LP às vezes generaliza onde o campo distingue por estágio.
 
 ## Família ANSI 61
 
@@ -305,6 +351,12 @@ _30 sigla(s)._
 | 67_2 | 67 - DIRECIONAL SOBRECORRENTE E2 | RelayTrip | Discrete | Read | Transit;NORMAL;ATUADO;Error |  |  |  |
 | 67_T | 67 - TRIP DIRECIONAL SOBRECORRENTE | RelayTrip | Discrete | Read | Transit;NORMAL;ATUADO;Error |  |  |  |
 
+### Nomenclaturas reais observadas (ANSI 67)
+
+Cruzado com `docs/TDT/exportTDT_UTR_GTD_1_20260626.xlsx`. Família com maior volume real do documento (163 linhas discretas, 15 siglas distintas): `67` (função, 1x por módulo de linha, `Read`), `67F1`/`67F2` (estágios de fase, 22 cada), `67FT` (fase temporizado, 22), `67N1`/`67N2` (estágios de neutro, 22 cada), `67NT` (neutro temporizado, 22), e as variantes direto/reverso `67FD/FR/FTD/FTR` + `67ND/NR/NTD/NTR` (1 cada — só 1 relé na amostra usa essa granularidade direcional).
+- Nomenclatura de campo (`67 - DIRECIONAL SOBRECORRENTE FASE E1` etc.) é praticamente idêntica à descrição padrão da LP — família de proteção direcional bem coberta e sem gaps de nomenclatura nesta amostra.
+- Presença de 2 relés por linha (sufixo `_P`/`_A`, principal/alternado — ver ANSI 21) se repete aqui: mesma sigla `67F1` aparece nos dois relés da mesma linha, dobrando a cardinalidade esperada por módulo.
+
 ## Família ANSI 71
 
 _12 sigla(s)._
@@ -349,6 +401,11 @@ _9 sigla(s)._
 | 79_EXC | 79 - EXCLUIR RELIGAMENTO | Custom | Discrete | Write | Transit;;;Error |  |  |  |
 | 79_INC | 79 - INCLUIR RELIGAMENTO | Custom | Discrete | Write | Transit;;;Error |  |  |  |
 
+### Nomenclaturas reais observadas (ANSI 79)
+
+Cruzado com `docs/TDT/exportTDT_UTR_GTD_1_20260626.xlsx`. 4 das 9 siglas da LP aparecem, com bom volume (69 linhas): `79` (função religamento, `ReadWrite`, alias `79`, 15x), `79LO` (`79 BLOQUEADO`, 18), `79OK` (`79 OK`, 18), `79RE` (`79 RESET`, 18 — atenção: no real, o alias de `79RE` é "RESET", enquanto a descrição padrão da LP para `79RE` é "79 - RELIGAMENTO PRONTO" — nomes de campo abreviados divergem do texto completo da LP, mas a sigla em si bate). `79TF`, `79_1`, `79_EXC`, `79_INC` não aparecem nesta amostra.
+- Caso relevante para a regra 7 (Fusão): `79_EXC`/`79_INC` (comando incluir/excluir religamento) da LP não aparecem no real como Write órfão — sugere que, nesta amostra, a função `79` inteira já cobre o papel de habilita/desabilita via `ReadWrite` (mesmo padrão-função `INCLUIDO;EXCLUIDO` da regra 6), sem precisar dos comandos dedicados.
+
 ## Família ANSI 81
 
 _20 sigla(s)._
@@ -376,6 +433,12 @@ _20 sigla(s)._
 | 81U5 | AJUSTE PARA 81 E5 | Custom | Discrete | Read | Transit;DESABILITADO;HABILITADO;Error |  |  |  |
 | 81_T | 81 - TRIP SUB/SOBRE FREQUENCIA | RelayTrip | Discrete | Read | Transit;NORMAL;ATUADO;Error |  |  |  |
 
+### Nomenclaturas reais observadas (ANSI 81)
+
+Cruzado com `docs/TDT/exportTDT_UTR_GTD_1_20260626.xlsx`. Segunda maior família por volume real (208 linhas discretas): `81` (função, `ReadWrite`, 14x — mesmo TDT usado como referência na regra 1 do dc_pairer, `81U1 out=1504`), `81E1`-`81E5` (estágios, 23/23/14/14/14 — decrescente porque nem todo relé tem 5 estágios), `81BLOQ` (`81 BLOQUEIO DINAMICO`, 18), `81U1`-`81U5` (`AJUSTE PARA 81 ESTAGIO N`, `ReadWrite`, 14 cada — comandos de ajuste de estágio, coerentes com `81AJST` da LP), `81O1` (`81 - TRIP SOBRE FREQUENCIA E1`, 10), `81SO`/`81SU` (sobre/sub frequência, 4 cada).
+- **Gap real**: `81IE1`/`81IE2` (na LP, "TRIP SUB/SOBRE FREQUENCIA E1/E2") e `81O2` não aparecem nesta amostra. Em contrapartida `81O1` aparece no real mas com alias diferente da contraparte esperada `81E1` — sugere que `81O1`/`81O2` (sobrefrequência) e `81E1`-`81E5` (estágios genéricos) coexistem como famílias de nomenclatura distintas dentro do próprio ANSI 81, não intercambiáveis.
+- `81U1`-`81U5` no real são `ReadWrite` (ajuste é comandável), enquanto a LP os lista como `Custom`/`Read` (`Transit;DESABILITADO;HABILITADO;Error`) — divergência de `Direction` a observar se a fusão D+C (regra 1) está classificando esses ajustes corretamente.
+
 ## Família ANSI 85
 
 _1 sigla(s)._
@@ -397,6 +460,11 @@ _7 sigla(s)._
 | 86C | 86 - BLOQUEIO CDC | Custom | Discrete | Read | Transit;NORMAL;ATUADO;Error |  |  |  |
 | 86CC | FALTA VCC CIRCUITO RELE 86 | Custom | Discrete | Read | Transit;NORMAL;FALTA;Error |  |  |  |
 | 86FL | 86 - FALHA CIRCUITO RELE | Custom | Discrete | Read | Transit;NORMAL;FALHA;Error |  |  |  |
+
+### Nomenclaturas reais observadas (ANSI 86)
+
+Cruzado com `docs/TDT/exportTDT_UTR_GTD_1_20260626.xlsx`. Só 2 das 7 siglas da LP aparecem, baixo volume: `86` (`86 BLOQUEIO`, `Read`, 6x — note que no real não há a variante `ReadWrite` que a LP também lista) e `86BF` (`86BF`, `ReadWrite`, 3x — bloqueio por falha de disjuntor, coerente com "86 - BLOQUEIO DEFEITO DISJUNTOR" da LP e o único caso `ReadWrite` real da família). `86C`, `86CC`, `86FL` não aparecem nesta amostra.
+- Família de baixo volume real (9 linhas) mas coerente 1:1 com a LP nas siglas que aparecem — sem achados de divergência.
 
 ## Família ANSI 87
 
@@ -807,6 +875,10 @@ _5 sigla(s)._
 | DJF1 | DISJUNTOR NF | SwitchStatus | Discrete | ReadWrite | Transit;DESLIGADO;LIGADO;Error |  |  |  |
 | DJIE | POSICAO DISJUNTOR EXTRAIVEL | Custom | Discrete | Read | Transit;EXTRAIDO;INSERIDO;Error |  |  |  |
 
+### Nomenclaturas reais observadas (DJ* — posição de disjuntor)
+
+Cruzado com `docs/TDT/exportTDT_UTR_GTD_1_20260626.xlsx`. `DJF1` tem forte presença real: 24 linhas discretas, sempre `ReadWrite`/`MultiCoord`, Message Mapping `DESLIGAR@LIGAR___DESLIGADO@LIGADO___SwitchStatus_D_TC_SE` — confirma exatamente a regra 5 (pareamento por sigla de posição) e a regra 7 (fusão em `MultiCoord`, nunca `DoubleBit`). `DJA1` **não aparece nenhuma vez** nesta amostra (0 ocorrências) — a LP modela disjuntor NA (normalmente aberto) mas esta subestação real só tem disjuntores NF (normalmente fechado); gap por ausência de equipamento na amostra, não por falha de mineração. `DJIE` também não aparece.
+
 ## Sigla DM*
 
 _1 sigla(s)._
@@ -1088,6 +1160,10 @@ _2 sigla(s)._
 | IA | CORRENTE FASE A | Valor Medido | Analog |  |  | Corrente | A |  |
 | IACC | CORRENTE CURTO CIRCUITO FASE A | Gravador de Falha | Analog |  |  | Corrente | A |  |
 
+### Nomenclaturas reais observadas (IA/IB/IC — corrente de fase)
+
+Cruzado com `docs/TDT/exportTDT_UTR_GTD_1_20260626.xlsx` (sheet `DNP3_AnalogSignals`). `IA`, `IB`, `IC` são as siglas analógicas de maior volume real do documento: 25 ocorrências cada, sempre `Measurement Type=Current`, unidade `A` — 1:1 com a descrição padrão da LP. Confirma a regra 3 (não existe comando para sinal analógico): nenhuma das 75 linhas tem `Direction`/`Output Coordinates` preenchidos, são puramente `Read`. `IACC`/`IBCC`/`ICCC` (corrente de curto-circuito, gravador de falha) não aparecem nesta amostra.
+
 ## Sigla IB*
 
 _2 sigla(s)._
@@ -1096,6 +1172,8 @@ _2 sigla(s)._
 |---|---|---|---|---|---|---|---|---|
 | IB | CORRENTE FASE B | Valor Medido | Analog |  |  | Corrente | A |  |
 | IBCC | CORRENTE CURTO CIRCUITO FASE B | Gravador de Falha | Analog |  |  | Corrente | A |  |
+
+Ver nomenclaturas reais em "Sigla IA*" acima (IA/IB/IC medidas em conjunto na mesma varredura do export).
 
 ## Sigla IC*
 
@@ -1106,6 +1184,8 @@ _3 sigla(s)._
 | IC | CORRENTE FASE C | Valor Medido | Analog |  |  | Corrente | A |  |
 | ICC | RESET CORRENTE DE CURTO CIRCUITO | Custom | Discrete | Write | Transit;;;Error |  |  |  |
 | ICCC | CORRENTE CURTO CIRCUITO FASE C | Gravador de Falha | Analog |  |  | Corrente | A |  |
+
+Ver nomenclaturas reais em "Sigla IA*" acima. `ICC` (Discrete, comando write de reset) não aparece nesta amostra.
 
 ## Sigla IN*
 
@@ -1119,6 +1199,10 @@ _6 sigla(s)._
 | INDI | 90 - POSICAO INDIVIDUAL | Custom | Discrete | ReadWrite | Transit;DESATIVADO;ATIVADO;Error |  |  |  |
 | INDI | 90 - POSICAO INDIVIDUAL | Custom | Discrete | Read | Transit;DESATIVADO;ATIVADO;Error |  |  |  |
 | INTR | 20 63 87 - PROTECOES INTRINSECAS | RelayTrip | Discrete | Read | Transit;NORMAL;ATUADO;Error |  |  |  |
+
+### Nomenclaturas reais observadas (IN*)
+
+Cruzado com o mesmo export. `IN` (corrente de neutro "pura") **não aparece** nesta amostra (0 ocorrências) — só a variante `IN61` (corrente de desequilíbrio ligada à função 61) tem instância real, 4x, `Current`/`A`. Gap por ausência de equipamento/config específica nesta subestação, coerente com o baixo volume de ANSI 61 observado (6 siglas na LP, sem instância real do relé 61 em si nesta amostra — só o subproduto de corrente).
 
 ## Sigla IO*
 
@@ -1323,7 +1407,9 @@ _3 sigla(s)._
 | P51F | PICK UP 51F | Custom | Discrete | Read | Transit;NORMAL;ATUADO;Error |  |  |  |
 | P51N | PICK UP 51N | Custom | Discrete | Read | Transit;NORMAL;ATUADO;Error |  |  |  |
 
-## Sigla PA*
+### Nomenclaturas reais observadas (P — potência ativa)
+
+Cruzado com `docs/TDT/exportTDT_UTR_GTD_1_20260626.xlsx`. `P` tem 21 ocorrências reais, `Measurement Type=ActivePower`, mas com unidade **inconsistente por equipamento**: `MW` na maioria, `kW` em pelo menos um módulo — a LP padroniza só `MW` (ver tabela acima). Vale checar se o motor normaliza a unidade na hora de casar ou se herda a que vier do input real. `P51F`/`P51N` (pickup de sobrecorrente, Discrete) não aparecem nesta amostra.
 
 _2 sigla(s)._
 
@@ -1514,6 +1600,11 @@ _15 sigla(s)._
 | SECT | SECCIONADORA TRANSFERENCIA | SwitchStatus | Discrete | ReadWrite | Transit;ABERTO;FECHADO;Error |  |  |  |
 | SEXT | SENSOR PRESENCA EXTERNO | Custom | Discrete | Read | Transit;NORMAL;ATUADO;Error |  |  |  |
 
+### Nomenclaturas reais observadas (SEC* — seccionadora)
+
+Cruzado com `docs/TDT/exportTDT_UTR_GTD_1_20260626.xlsx`. Das 6 posições de seccionadora da LP, 4 aparecem: `SECF` (SECCIONADORA FONTE, 6x, `ReadWrite`/`MultiCoord`, MM `ABRIR@FECHAR___ABERTO@FECHADO`), `SECB` (BYPASS, 6x), `SECC` (CARGA, 4x, mesmo padrão `MultiCoord`), `SECG` (TERRA, 2x — mas com MM diferente: `null@null___ABERTO@FECHADO___SwitchStatus_D_TS_SO_terra`, sufixo `_terra` específico e sem par de comando `ABRIR@FECHAR`, i.e. seccionadora de terra aparenta ser só status, sem comando modelado nesta amostra). `SECI`/`SECL`/`SECT` não aparecem (0 ocorrências) — interbarras/interlinhas/transferência não existem nesta subestação real.
+- Confirma a regra 7 (fusão → `MultiCoord`) e é a base direta da whitelist da regra 10: `SECF`/`SECC`/`SECB` aqui batem com as siglas de posição da whitelist `config.siglas_por_equipamento["Seccionadora"]`; `DSEC` (defeito) e `43LR` (chave local/remoto) da mesma whitelist também têm presença real forte (16 e 24 ocorrências, `SingleBit`/`Read`).
+
 ## Sigla SF*
 
 _5 sigla(s)._
@@ -1677,6 +1768,10 @@ _8 sigla(s)._
 | VABX | TENSAO FASE AB - LADO CARGA | Valor Medido | Analog |  |  | Tensão | kV |  |
 | VA_B | TENSAO BARRA FASE A | Valor Medido | Analog |  |  | Tensão | kV |  |
 | VA_L | TENSAO LINHA FASE A | Valor Medido | Analog |  |  | Tensão | kV |  |
+
+### Nomenclaturas reais observadas (VA/VB/VC — tensão)
+
+Cruzado com `docs/TDT/exportTDT_UTR_GTD_1_20260626.xlsx`. Achado notável: as tensões **fase-neutro** (`VA`, `VB`, `VC`) quase não aparecem — só `VB` tem 1 ocorrência real (`kV`); `VA`/`VC` têm **0**. Já as tensões **fase-fase** aparecem fortemente: `VAB` (28x, `kV` e `V` misturados), `VBC`/`VCA` (7x cada, só `kV`). Ou seja, nesta subestação a medição real é majoritariamente line-to-line, não line-to-neutral — mesmo padrão possivelmente recorrente em outras GTDs (a rede de distribuição/subtransmissão tende a medir tensão de linha). `VABI`/`VABX`/`VA_B`/`VA_L` (variantes por lado/localização) não aparecem nesta amostra.
 
 ## Sigla VB*
 
