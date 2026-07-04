@@ -38,8 +38,16 @@ class ScorerTFIDF:
     def pontuar(self, rec: SignalRecord, k: int = 5) -> list[Candidato]:
         q = self._vectorizer.transform([rec.descricoes.normalizada])
         sims = cosine_similarity(q, self._matriz)[0]
-        ordem = sims.argsort()[::-1][:k]
-        return [Candidato(self._siglas[i], float(sims[i]), "tfidf") for i in ordem]
+        # Lista padrão tem sigla com múltiplas linhas de descrição (variantes
+        # NA/NF, sinônimos) -- sem isso, a mesma sigla apareceria 2x no topo
+        # (uma por linha) e `mescla.mesclar` soma por sigla, contando a mesma
+        # sigla em dobro e distorcendo a fusão. Mantém só o melhor score por sigla.
+        melhor: dict[str, float] = {}
+        for i, sigla in enumerate(self._siglas):
+            if float(sims[i]) > melhor.get(sigla, float("-inf")):
+                melhor[sigla] = float(sims[i])
+        ordenados = sorted(melhor.items(), key=lambda kv: kv[1], reverse=True)[:k]
+        return [Candidato(sigla, score, "tfidf") for sigla, score in ordenados]
 
     def salvar(self, path: str | Path) -> None:
         """Serializa vetorizador + matriz fitados (cache em disco)."""

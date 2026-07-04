@@ -33,3 +33,14 @@ def test_ordena_desc_e_limita_k():
     assert len(cands) == 2
     assert cands[0].sigla == "SECC"
     assert [c.score for c in cands] == sorted([c.score for c in cands], reverse=True)
+
+
+def test_nao_repete_sigla_com_multiplas_linhas_de_descricao():
+    # Lista padrão real tem sigla com >1 linha (variantes NA/NF) -- sem
+    # dedup, a mesma sigla apareceria 2x no topo e a fusão (mescla.mesclar,
+    # que soma por sigla) contaria o score em dobro.
+    sinais = _SINAIS + [("DJ", "DISJUNTOR ABERTO OPERACAO")]
+    scorer = ScorerTFIDF.construir(sinais)
+    cands = scorer.pontuar(_rec("DISJUNTOR FORA OPERACAO"), k=5)
+    siglas = [c.sigla for c in cands]
+    assert siglas.count("DJ") == 1
