@@ -79,10 +79,11 @@ de coluna — hoje não é usado com esse propósito.
 | 5 | "Entrada Binária" (terminal físico do IED, reinicia por bloco Analógicos/Comandos/Digitais) concorrendo com "DNP3.0" (endereço real de protocolo, contínuo dentro do bloco Digitais) | `GPR21`, `GPR31`, `GPR33`, `GPR34`, `GPR35`, `GPR36` (SE Guaporé): coluna 3 "Entrada Binária" escolhida (score 0.84-0.87) em vez da coluna 11 "DNP3.0" (a real) | **GPR** | **NÃO — CASO REAL CONFIRMADO** (ver seção final) |
 | 6 | Header verdadeiro não detectado (linha de dado tratada como header) em sheets de relé de linha via concentrador COS (protocolo IEC 60870-5-103) | `LTPCH21`/`LTKNP21`/`LTCAS21`/`LTARV21` (GPR): `_header_por_densidade` aponta linha 7 (dado) em vez da linha 4 (header real); coluna "DNP3.0" nesses relés contém códigos texto (`IDF`/`OR`), não endereço numérico — ambíguo se há endereço DNP3 numérico "verdadeiro" nessas sheets específicas (podem depender de tradução no concentrador COS, fora do escopo deste levantamento) | GPR | **Observação secundária, não contabilizada no veredito** — ground truth incerto para este subconjunto; ver limitações abaixo |
 | 7 | "Coluna2..Coluna14" vazias / lixo de planilha (`Coluna2`...) | `AL21` (GAU) linha de header tem ~14 colunas "ColunaN" vazias à direita | GAU | Não afeta escolha (score 0, nunca concorre) |
+| 8 | Contador de linha ("Linha") **perfeitamente** monotônico e 100% inteiro sheet-wide (sem reinício, sem gap) — vence mesmo quando a coluna real também tem score alto | Todas as 25 sheets de dados (`LOGICOS`, `SNMP`, `SPS`, `TR1`, `2414 TR1`, `TR2`, `2414 TR2`, `AL FWB11`..`AL FWB25`, `IB P1-T1`, `IB P2-T2`, `IB P1-P2`, `BC1`, `BC2`, `BARRA P1`, `BARRA P2`, `A8000`): coluna 0 "Linha" (score sempre =1.0 de facto por ser sequência pura) vs coluna 17/18 "UTR COS Index" (score 0.655-1.0, a real) | **FWB** | **NÃO — CASO REAL CONFIRMADO** (Caso C, ver seção final) — mesma família do padrão 4, mas a coluna real aqui NUNCA supera o contador de linha, mesmo com score competitivo, porque o contador é monotônico perfeito (não reinicia) |
 
 ## Veredito final: há casos reais de endereço errado no output atual do pipeline?
 
-**SIM — 2 padrões distintos confirmados, cada um afetando múltiplas
+**SIM — 3 padrões distintos confirmados, cada um afetando múltiplas
 sheets/sinais reais.**
 
 ### Caso A — sheet `S4_LOG` (arquivos `docs/input_nao_homogeneo_4_GAU.xlsx` e
@@ -140,6 +141,71 @@ tem o valor numérico correto ali. O mesmo padrão estrutural (mesmo layout de
 cabeçalho) se repete idêntico em `GPR31`, `GPR33`, `GPR34`, `GPR35`, `GPR36`
 — 6 sheets no total, cada uma com dezenas de sinais de proteção afetados.
 
+### Caso C — 25 sheets de `docs/input_nao_homogeneo_2_FWB.xlsx` (SE FWB, todas
+as sheets de dados do arquivo: `LOGICOS`, `SNMP`, `SPS`, `TR1`, `2414 TR1`,
+`TR2`, `2414 TR2`, `AL FWB11`..`AL FWB25`, `IB P1-T1`, `IB P2-T2`, `IB P1-P2`,
+`BC1`, `BC2`, `BARRA P1`, `BARRA P2`, `A8000`)
+
+Mesmo padrão estrutural do Caso A (contador de linha vence a coluna de
+endereço real), mas em arquivo diferente e com escopo bem maior: **todas as
+25 sheets não-vazias** do arquivo. `analisar()` escolhe a coluna 0
+("Linha", contador de linha puro: 1, 2, 3...) em vez da coluna 17/18 ("UTR
+COS Index", o endereço DNP3/protocolo real). Log (`bench/resultados/
+diag_enderecos.log`, linhas 112-211): em nenhuma das 25 sheets a coluna
+"Linha" perde — mesmo quando "UTR COS Index" tem `score` alto (até 1.0,
+`mono=1.0`), o contador de linha vence porque tem `frac_int=1.0` e também
+`mono=1.0` (sequência 1,2,3... é estritamente crescente sheet-wide, tanto
+quanto — ou mais estável que — a coluna real).
+
+**Verificação independente contra o ground truth** (`docs/TDT/
+exportTDT_UTR_FWB_1_20260626.xlsx`, sheets `DNP3_AnalogSignals`/
+`DNP3_DiscreteSignals`, coluna "Input Coordinates"), cruzando por
+descrição/nome de sinal em 3 sheets:
+
+- `AL FWB12`: linha 1 "Corrente Fase A" → "UTR COS Index"=21; linha 2
+  "Corrente Fase B"→22; linha 3 "Corrente Fase C"→23. Ground truth:
+  `FWB_AL12_52-12_IA` coord=21, `..._IB` coord=22, `..._IC` coord=23 —
+  **bate exatamente**.
+- `AL FWB13`: "Corrente Fase A"→41, "Corrente Fase B"→42, "Corrente Fase
+  C"→43, "Corrente Neutro"→44, "Tensão Barra Fase AB"→45, "...BC"→46.
+  Ground truth: `FWB_AL13_52-13_IA`=41, `_IB`=42, `_IC`=43, `_IN`=44,
+  `_VAB`=45, `_VBC`=46 — **bate exatamente**, todos os 6 sinais
+  conferidos.
+- `SNMP`: linha 1 "SW1 - Falha Porta 01"→2100, linha 2 "...02"→2101, linha
+  3 "...03"→2102 — sequência coerente com a faixa 2100+ observada em
+  outras sheets do mesmo arquivo (ex. `A8000` faixa=[420,2364]); a coluna
+  "Linha" para as mesmas 3 células vale 1, 2, 3 — claramente um contador,
+  não um endereço de protocolo.
+
+Rodando `estruturar()` com o mapa real produzido pelo pipeline (mesmo
+caminho não-homogêneo que Caso A/B):
+
+```
+AL FWB12:1  desc='Corrente Fase A' ADDR=(1,)   # real seria 21 (UTR COS Index)
+AL FWB12:2  desc='Corrente Fase B' ADDR=(2,)   # real seria 22
+AL FWB12:3  desc='Corrente Fase C' ADDR=(3,)   # real seria 23
+```
+
+Todo sinal das 25 sheets recebe como endereço um número de linha/posição
+sequencial, não o endereço DNP3 real — mesmo efeito do Caso A (S4_LOG),
+porém em superfície muito maior (25 sheets vs. 1) e em arquivo distinto
+(FWB, não GAU/RGE).
+
+**Implicação para o design da correção (Task 2):** o Caso A e o Caso C são
+a mesma classe de falha, não dois bugs independentes — um contador de
+linha puramente sequencial (1,2,3...) é **monotônico perfeito
+sheet-wide** (`mono=1.0`) e frequentemente **100% inteiro**
+(`frac_int=1.0`), então ele bate ou supera o score de qualquer coluna de
+endereço real que não seja ela mesma estritamente crescente do início ao
+fim da sheet (a coluna real cai quando reinicia por bloco, tem gaps, ou
+não é perfeitamente sequencial). A correção da Task 2 não pode ser um
+patch pontual para "Linha" ou para uma sheet específica — precisa de um
+critério que penalize (ou desempate contra) uma coluna cujo padrão é
+"contador de posição" (ex.: sequência 1..N sem gaps, idêntica ao índice de
+linha da própria tabela) e/ou favoreça sinais de "endereço de protocolo
+real" (nome de header, faixa de valores fora de [1, nº de linhas], ou
+proximidade a rótulos como "DNP3"/"Index"/"Endereço").
+
 ### Casos investigados e descartados (NÃO são bugs)
 
 - `AL21`/`03F1 TR1 PP`/`03F2 TR1 PA` (GAU/RGE): "UTR COS Index" vs "IED
@@ -168,6 +234,13 @@ cabeçalho) se repete idêntico em `GPR31`, `GPR33`, `GPR34`, `GPR35`, `GPR36`
   dados brutos da própria planilha de entrada (cardinalidade, faixa,
   continuidade dentro de blocos, e o rótulo do cabeçalho real quando
   localizável), não por comparação com uma saída SCADA já confirmada.
+- A inspeção manual linha-a-linha (a etapa que efetivamente pega bugs como
+  o Caso A/B/C, distinta de só ler o `score` do log) não foi aplicada de
+  forma uniforme a todas as sheets levantadas na Fase 1 original — o Caso C
+  (FWB, 25 sheets) já estava nos dados do log desde a primeira rodada, mas
+  só foi confirmado como caso real numa passada de revisão posterior. Não
+  há garantia de que não restem outros casos não observados pela mesma
+  razão nas sheets já classificadas como "sem bug" acima.
 - `docs/RGE GAU 2026 - Lista de Pontos v09.xlsx` tem um `<extLst>` em
   `xl/styles.xml` que o openpyxl 3.1.5 (Python 3.14) não desserializa
   (`PatternFill.__init__() got an unexpected keyword argument 'extLst'` —
@@ -182,10 +255,17 @@ cabeçalho) se repete idêntico em `GPR31`, `GPR33`, `GPR34`, `GPR35`, `GPR36`
 ## Commit
 
 `test(spM): catalogo de ruido de enderecos em todas as listas`
+`docs(spM): adiciona caso C (FWB) ao catalogo de ruido de enderecos`
 
 ## Próximo passo
 
 Conforme o Global Constraint da SP-M: como HÁ casos reais confirmados
-(Caso A e Caso B), a Fase 1 **não encerra** a SP — a Task 2 (correção) seria
-o próximo passo, tratada como tarefa separada com sua própria revisão (fora
-do escopo desta Task 1, que é só levantamento).
+(Caso A, Caso B e Caso C), a Fase 1 **não encerra** a SP — a Task 2
+(correção) seria o próximo passo, tratada como tarefa separada com sua
+própria revisão (fora do escopo desta Task 1, que é só levantamento). O
+Caso C reforça que a correção não deve ser um patch pontual por sheet/
+arquivo: precisa endereçar a classe geral "contador de posição
+sheet-wide vence coluna de endereço real quando esta não é 100%
+monotônica do início ao fim" (ver nota de implicação de design no Caso C
+acima), sob pena de resolver A/B/C e deixar a mesma falha estrutural
+aberta para a próxima lista real que aparecer.
