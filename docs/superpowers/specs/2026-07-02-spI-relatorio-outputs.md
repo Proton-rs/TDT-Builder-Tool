@@ -323,3 +323,57 @@ nunca chegam ao `dc_pairer` permanecem **fora de escopo desta SP**
 upstream) e foram registradas como follow-up.
 
 **SP-I concluída**: 3/3 tasks (diagnóstico, fix causas C/D, validação).
+
+## Follow-up — causas A/B investigadas (não é bug do `dc_pairer`/D2)
+
+Investigação solicitada: causas A (60 casos, `81U1..81U5`) e B (2 casos,
+`87BL`) são (1) LP sem sigla dedicada bem rankeada, ou (2) gate semântico
+SP-E D2 conservador demais? Rodado `tdt.pipeline.executar(...,
+diagnostico=True)` na LISTA 1 - GTD para capturar os candidatos reais
+(pré-D2) e os scores por método (`tfidf`/`vetorial`/`fuzzy`) de cada sigla
+envolvida. Resposta: **nenhuma das duas** — é (3), ranking/scoring upstream
+(mesma categoria já registrada como fora de escopo).
+
+**Causa A (`GTD_11:76`, "Proteção 81 Sub-Frequência E1 - Habilitada",
+`estado_sem_candidato`):** a sigla `81U1` (LP: `AJUSTE PARA 81 E1`,
+MM `DESABILITADO@HABILITADO`, classe ATIVACAO — a correta) **nunca aparece
+nos candidatos finais** que chegam ao gate D2; o gate recebe só `DR81
+(0.288)`, `81IE1 (0.62)`, `81E1 (0.62)` (todos `fonte=mesclado`, i.e.
+scorados diretamente, não expandidos por família) e zera os 3 por serem
+classe EVENTO (TRIP/DEFEITO) incompatível com ATIVACAO — o D2 está correto
+dado o que recebe. O comando irmão (`GTD_11:22`, "...Habilitar/Desabilitar
+(81-U1)") decide `81U1` com `tfidf=1.0` só porque o texto **cita a sigla
+literalmente** (`"81-U1"`); a linha de status não cita nenhuma sigla, só
+descreve o estado ("Habilitada"), e a descrição da LP para `81U1`
+("AJUSTE PARA 81 E1") não compartilha vocabulário suficiente com "Proteção
+Sub-Frequência ... Habilitada" para pontuar alto em TF-IDF/fuzzy — logo
+`81U1` nunca chega a ser candidato viável para o lado Input. Isso é
+upstream do `dc_pairer` e do D2 (candidato nem existe na lista que os dois
+recebem).
+
+**Causa B (`TR1_P:146/147`, "Diferencial (87) Bloqueado"/"Atuado",
+`score_baixo`):** aqui `87BL` (LP: `87 - DIFERENCIAL BLOQUEIO`, MM
+`NORMAL@ATUADO`) **aparece nos candidatos**, mas com score baixo (`tfidf
+0.068` na linha ":146", `0.489` na ":147") — muito atrás de `87_T` ("87 -
+TRIP DIFERENCIAL", `tfidf=1.0`) e de ~20 siglas genéricas da família `87*`
+adicionadas por `expansao_candidatos.expandir` (score `0.813`/`0.89`,
+`fonte=expandido`, herdado de `87_T` como pai). Confirmado que **não é
+questão de classe semântica**: `87BL`, `87_T` e todos os `87*` expandidos
+têm o MESMO MM (`NORMAL@ATUADO`, classe EVENTO) — o D2 nem discrimina entre
+eles, porque são todos semanticamente compatíveis. A causa é 100%
+scoring/ranking (TF-IDF favorece `87_T` por semelhança textual mais forte
++ inundação de candidatos genéricos por expansão de família), decidido
+ANTES do `dc_pairer` (`score_baixo` no roteador).
+
+**Conclusão:** causas A e B confirmam — com evidência real, não só
+hipótese — a mesma categoria já registrada acima ("perda pré-pairer por
+filtro/score", causas #1 e #2 do resumo): scorer (TF-IDF/fuzzy/vetorial) +
+expansão de família por prefixo, não o `dc_pairer` nem o gate D2. Fix
+aqui seria (a) enriquecer a descrição/sinônimos da LP para `81U*` e `87BL`
+com o vocabulário real de campo ("Sub-Frequência", "Bloqueado"), e/ou (b)
+penalizar candidatos `fonte=expandido` no desempate de `score_baixo` — as
+duas são mudanças de **scorer/dados da LP**, não do `dc_pairer`/`filtro_
+preciso`/`semantica_estados`. Continuam **fora do escopo desta SP**
+(pertencem a SP-G/SP-H); nenhuma alteração de código feita nesta
+investigação — nenhuma hipótese de bug no `dc_pairer` ou no D2 se
+confirmou.
