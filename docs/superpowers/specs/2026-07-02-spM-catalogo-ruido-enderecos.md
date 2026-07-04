@@ -80,14 +80,21 @@ de coluna — hoje não é usado com esse propósito.
 | 6 | Header verdadeiro não detectado (linha de dado tratada como header) em sheets de relé de linha via concentrador COS (protocolo IEC 60870-5-103) | `LTPCH21`/`LTKNP21`/`LTCAS21`/`LTARV21` (GPR): `_header_por_densidade` aponta linha 7 (dado) em vez da linha 4 (header real); coluna "DNP3.0" nesses relés contém códigos texto (`IDF`/`OR`), não endereço numérico — ambíguo se há endereço DNP3 numérico "verdadeiro" nessas sheets específicas (podem depender de tradução no concentrador COS, fora do escopo deste levantamento) | GPR | **Observação secundária, não contabilizada no veredito** — ground truth incerto para este subconjunto; ver limitações abaixo |
 | 7 | "Coluna2..Coluna14" vazias / lixo de planilha (`Coluna2`...) | `AL21` (GAU) linha de header tem ~14 colunas "ColunaN" vazias à direita | GAU | Não afeta escolha (score 0, nunca concorre) |
 | 8 | Contador de linha ("Linha") **perfeitamente** monotônico e 100% inteiro sheet-wide (sem reinício, sem gap) — vence mesmo quando a coluna real também tem score alto | Todas as 25 sheets de dados (`LOGICOS`, `SNMP`, `SPS`, `TR1`, `2414 TR1`, `TR2`, `2414 TR2`, `AL FWB11`..`AL FWB25`, `IB P1-T1`, `IB P2-T2`, `IB P1-P2`, `BC1`, `BC2`, `BARRA P1`, `BARRA P2`, `A8000`): coluna 0 "Linha" (score sempre =1.0 de facto por ser sequência pura) vs coluna 17/18 "UTR COS Index" (score 0.655-1.0, a real) | **FWB** | **NÃO — CASO REAL CONFIRMADO** (Caso C, ver seção final) — mesma família do padrão 4, mas a coluna real aqui NUNCA supera o contador de linha, mesmo com score competitivo, porque o contador é monotônico perfeito (não reinicia) |
+| 9 | Contador de linha ("Linha") monotônico dentro do bloco visível, mas a coluna real ("UTR COS Index") tem cardinalidade muito baixa (`n=8`) e reinicia dentro da própria sheet (mistura linhas de cabeçalho de bloco/"-" com um sub-bloco de comandos 1..7) | `CALCULADOS` (`docs/RGE GAU 2026 - Lista de Pontos v09.xlsx`): coluna 0 "Linha" (score=1.0, sequência 1,2,3...12 quase sem gap) vs coluna 17 "UTR COS Index" (score=0.675, `frac_int=0.73 mono=0.86 faixa=[1,7] n=8`) | **RGE GAU 2026** | **NÃO — CASO REAL CONFIRMADO** (dobrado em Caso A, ver seção final) — mesma classe do padrão 4/Caso A: contador de posição vence porque a coluna real reinicia (bloco de "Pontos Calculados" tem só 8 valores numéricos válidos, o resto é `-`/vazio) |
 
 ## Veredito final: há casos reais de endereço errado no output atual do pipeline?
 
-**SIM — 3 padrões distintos confirmados, cada um afetando múltiplas
-sheets/sinais reais.**
+**SIM — 3 padrões distintos confirmados (Caso A, Caso B, Caso C), cada um
+afetando múltiplas sheets/sinais reais. Uma varredura sistemática do log
+(ver seção "Varredura sistemática" abaixo) confirmou que o escopo está
+fechado: 28 sheets no total têm um contador de posição vencendo um
+concorrente com cara de endereço real; 27 já eram Caso A/C, 1 nova
+(`CALCULADOS`) foi dobrada em Caso A nesta revisão; nenhuma sheet adicional
+não documentada foi encontrada.**
 
 ### Caso A — sheet `S4_LOG` (arquivos `docs/input_nao_homogeneo_4_GAU.xlsx` e
-`docs/RGE GAU 2026 - Lista de Pontos v09.xlsx`, mesma sheet nos dois)
+`docs/RGE GAU 2026 - Lista de Pontos v09.xlsx`, mesma sheet nos dois) **e**
+sheet `CALCULADOS` (`docs/RGE GAU 2026 - Lista de Pontos v09.xlsx`)
 
 `analisar()` escolhe a coluna **"Linha"** (posição/contador, reinicia por
 bloco — só 88 valores distintos em 1144 linhas) como coluna de endereço DNP3,
@@ -110,6 +117,42 @@ técnico do conversor de protocolo (S4), não uma lista de pontos no formato
 esperado pelo pipeline; ainda assim ela passa pelo filtro `_eh_sheet_dados`
 e não está em `config.sheets_excluidas`, então é processada e teria saída
 poluída se essa sheet chegasse a produção.)
+
+**Mesma classe de falha, achada pela varredura sistemática da Task 1
+(revisão), em sheet e arquivo diferentes: `CALCULADOS`
+(`docs/RGE GAU 2026 - Lista de Pontos v09.xlsx`, log linhas 426-427).**
+`analisar()` escolhe a coluna 0 **"Linha"** (score=1.0, sequência 1,2,...,12
+quase sem gap ao longo da sheet) em vez da coluna 17 **"UTR COS Index"**
+(score=0.675, `frac_int=0.73 mono=0.86 faixa=[1,7] n=8`). Verificação nos
+dados brutos (`docs/RGE GAU 2026 - Lista de Pontos v09.xlsx`, sheet
+`CALCULADOS`, linhas 3-16):
+
+```
+Linha=1   UTR COS Index=None   (linha de bloco "Pontos Calculados", sem sinal)
+Linha=2   UTR COS Index='-'    (placeholder, tipo='A' — ainda sem valor DNP3)
+Linha=3   UTR COS Index='-'
+Linha=4   UTR COS Index='-'
+Linha=5   UTR COS Index=None   desc='COMANDO CENTRAL DE ALARMES' (cabeçalho de bloco)
+Linha=6   UTR COS Index=1      desc='CA_Comando Sirene'
+Linha=6   UTR COS Index=1      desc='CA_SENSOR_DEFEITO'   # reinicia dentro da mesma sheet
+Linha=7   UTR COS Index=2      desc='CA_Sensor de Fumaça'
+Linha=8   UTR COS Index=3      desc='CA_central Armada'
+Linha=9   UTR COS Index=4      desc='CA_Sensor Invasão Externa'
+Linha=10  UTR COS Index=5      desc='CA_Sensor Invasão Interna'
+Linha=11  UTR COS Index=6      desc='CA Sirene Disparada'
+Linha=12  UTR COS Index=7      desc='CA VCC_Presente'
+```
+
+"Linha" é o contador de posição/exibição da planilha (cresce quase sem
+interrupção, 1..12); "UTR COS Index" é o endereço real do protocolo, mas
+tem só 8 valores numéricos válidos na sheet inteira (o resto é `-`/vazio de
+linhas de cabeçalho/placeholder) e reinicia a contagem (1,2,3...) dentro do
+próprio bloco "Pontos Calculados" — exatamente o mesmo mecanismo de falha
+do `S4_LOG`: um contador de linha que aparenta ser "mais monotônico e mais
+denso" vence uma coluna de endereço real que é genuína, porém esparsa/
+reiniciante. Rodando `estruturar()`, os 7 sinais do bloco de comandos desta
+sheet receberiam ADDR=(6,), (6,), (7,), (8,), (9,), (10,), (11,), (12,) —
+números de linha, não os endereços DNP3 reais 1,1,2,3,4,5,6,7.
 
 ### Caso B — sheets de relé `GPR21`/`GPR31`/`GPR33`/`GPR34`/`GPR35`/`GPR36`
 (`docs/input_nao_homogeneo_3_GPR.xlsx`, SE Guaporé)
@@ -206,6 +249,72 @@ linha da própria tabela) e/ou favoreça sinais de "endereço de protocolo
 real" (nome de header, faixa de valores fora de [1, nº de linhas], ou
 proximidade a rótulos como "DNP3"/"Index"/"Endereço").
 
+## Varredura sistemática (revisão pós-Caso-C): fechando o escopo do Caso A/C
+
+Duas rodadas de revisão manual encontraram, cada uma, mais **uma** ocorrência
+do mesmo padrão (contador de linha vencendo endereço real) que a passada
+anterior não tinha surfaced no catálogo — primeiro `S4_LOG`/GPR na Fase 1
+original, depois as 25 sheets de FWB, depois `CALCULADOS`. Isso indica que a
+leitura manual do log não é confiável para provar exaustividade. Para fechar
+esta questão de vez, foi escrito um script de parsing determinístico do log
+(`bench/scan_ruido_enderecos.py`, reusável, não reimplementa a heurística de
+detecção — só faz parsing estrutural do output já gerado por
+`bench/diag_enderecos.py`).
+
+**Critério da varredura:** flag toda sheet onde (1) a coluna **escolhida**
+como `col_indice` tem rótulo batendo um termo de "contador de posição"
+(`linha`, `line`, `seq`, `row`, `item`, `n°`/`num`, comparação
+case-insensitive e sem acento) **e** (2) existe pelo menos uma coluna
+**concorrente** logada (>=50% inteiros) cujo rótulo bate um termo de
+"endereço de protocolo real" (`dnp3`, `index`, `endereco`, `addr`, `entrada
+binaria`, `utr cos`, `bit`, `word`, `registrador`, `coordinate`, `endpt`,
+`n3`/`n4`).
+
+**Resultado (rodado sobre as 462 linhas do log atual, 141 sheets
+processadas no total pelas 7 listas reais):**
+
+```
+Total de sheets flagadas: 28
+
+docs/input_nao_homogeneo_2_FWB.xlsx
+  LOGICOS, SNMP, SPS, TR1, 2414 TR1, TR2, 2414 TR2,
+  AL FWB11..AL FWB15, AL FWB21..AL FWB25,
+  IB P1-T1, IB P2-T2, IB P1-P2, BC1, BC2, BARRA P1, BARRA P2, A8000
+  (25 sheets — todas já documentadas como Caso C)
+
+docs/input_nao_homogeneo_4_GAU.xlsx
+  S4_LOG  (já documentada como Caso A)
+
+docs/RGE GAU 2026 - Lista de Pontos v09.xlsx
+  CALCULADOS  (NOVA — não estava no catálogo antes desta revisão)
+  S4_LOG      (já documentada como Caso A, segunda cópia do arquivo)
+```
+
+**Checagem de completude adicional:** um `grep` bruto de todo rótulo já
+escolhido como `col_indice` em qualquer sheet do log (`col_indice=... label='...'`)
+mostra apenas **um** rótulo que bate o padrão "contador de posição" em toda a
+base: `LINHA` (28 ocorrências). Não há nenhuma sheet no log onde `col_indice`
+tenha rótulo `SEQ`, `ITEM`, `N°`, `ROW` ou similar — ou seja, o universo de
+"contador de posição escolhido como endereço" já está 100% coberto pelas
+28 ocorrências de `LINHA` acima, e todas as 28 foram flagadas pela varredura
+(nenhuma sheet com `LINHA` escolhida ficou de fora por não ter concorrente
+"parecido com endereço real" — em todas as 28, "UTR COS Index" ou
+"EndPt(N4)"/"N3" apareceu como concorrente no log).
+
+**Veredito da varredura sistemática:** das 28 sheets flagadas, **27 já
+estavam documentadas** (25 FWB = Caso C, 2×S4_LOG [GAU e RGE] = Caso A) e
+**1 é nova**: `CALCULADOS` (RGE GAU 2026), confirmada como bug genuíno (ver
+verificação de dados brutos no Caso A acima) e agora dobrada em Caso A.
+**Nenhuma outra sheet não documentada foi encontrada.** O padrão "Entrada
+Binária" vs "DNP3.0" (Caso B, GPR) é uma classe de falha diferente — não é
+um contador de posição, é o terminal físico do IED (reinicia por bloco mas
+não é uma sequência 1..N pura) vencendo por proximidade de score, não por
+"parecer" um contador — por isso não aparece nesta varredura (que busca
+especificamente rótulos tipo "linha/seq/item"), o que é o comportamento
+esperado, não uma lacuna: Caso B já está documentado separadamente e seu
+critério de busca é outro (coberto pela Task 1 original, não pelo escopo
+desta varredura adicional).
+
 ### Casos investigados e descartados (NÃO são bugs)
 
 - `AL21`/`03F1 TR1 PP`/`03F2 TR1 PA` (GAU/RGE): "UTR COS Index" vs "IED
@@ -238,9 +347,18 @@ proximidade a rótulos como "DNP3"/"Index"/"Endereço").
   o Caso A/B/C, distinta de só ler o `score` do log) não foi aplicada de
   forma uniforme a todas as sheets levantadas na Fase 1 original — o Caso C
   (FWB, 25 sheets) já estava nos dados do log desde a primeira rodada, mas
-  só foi confirmado como caso real numa passada de revisão posterior. Não
-  há garantia de que não restem outros casos não observados pela mesma
-  razão nas sheets já classificadas como "sem bug" acima.
+  só foi confirmado como caso real numa passada de revisão posterior, e o
+  mesmo se repetiu com `CALCULADOS` (achado só na segunda revisão). **Esta
+  lacuna foi fechada** para o padrão específico "contador de posição vence
+  endereço real" pela varredura sistemática (`bench/scan_ruido_enderecos.py`,
+  ver seção "Varredura sistemática" acima), que processa 100% das sheets do
+  log de forma determinística em vez de depender de leitura manual —
+  resultado: 28/28 ocorrências do padrão já cobertas pelo catálogo (Caso
+  A/C). Para os OUTROS padrões (Caso B e os "descartados"), a verificação
+  segue sendo por inspeção direta dos dados brutos (não há uma varredura
+  automatizada equivalente para "IED Index"/"Entrada Binária" etc. — se uma
+  lista nova aparecer, recomenda-se rodar uma varredura análoga para esses
+  padrões antes de declarar "sem bug").
 - `docs/RGE GAU 2026 - Lista de Pontos v09.xlsx` tem um `<extLst>` em
   `xl/styles.xml` que o openpyxl 3.1.5 (Python 3.14) não desserializa
   (`PatternFill.__init__() got an unexpected keyword argument 'extLst'` —
@@ -256,16 +374,21 @@ proximidade a rótulos como "DNP3"/"Index"/"Endereço").
 
 `test(spM): catalogo de ruido de enderecos em todas as listas`
 `docs(spM): adiciona caso C (FWB) ao catalogo de ruido de enderecos`
+`docs(spM): varredura sistematica confirma escopo completo do catalogo`
 
 ## Próximo passo
 
 Conforme o Global Constraint da SP-M: como HÁ casos reais confirmados
-(Caso A, Caso B e Caso C), a Fase 1 **não encerra** a SP — a Task 2
-(correção) seria o próximo passo, tratada como tarefa separada com sua
-própria revisão (fora do escopo desta Task 1, que é só levantamento). O
-Caso C reforça que a correção não deve ser um patch pontual por sheet/
-arquivo: precisa endereçar a classe geral "contador de posição
-sheet-wide vence coluna de endereço real quando esta não é 100%
-monotônica do início ao fim" (ver nota de implicação de design no Caso C
-acima), sob pena de resolver A/B/C e deixar a mesma falha estrutural
-aberta para a próxima lista real que aparecer.
+(Caso A, Caso B e Caso C — Caso A agora cobrindo também `CALCULADOS`), a
+Fase 1 **não encerra** a SP — a Task 2 (correção) seria o próximo passo,
+tratada como tarefa separada com sua própria revisão (fora do escopo desta
+Task 1, que é só levantamento). O Caso C reforça que a correção não deve
+ser um patch pontual por sheet/arquivo: precisa endereçar a classe geral
+"contador de posição sheet-wide vence coluna de endereço real quando esta
+não é 100% monotônica do início ao fim" (ver nota de implicação de design
+no Caso C acima), sob pena de resolver A/B/C e deixar a mesma falha
+estrutural aberta para a próxima lista real que aparecer. A varredura
+sistemática confirma que, para ESTE padrão específico, o escopo do
+levantamento está fechado (28/28 ocorrências documentadas) — a correção da
+Task 2 pode ser projetada com confiança de que não há mais instâncias
+escondidas do mesmo padrão nas 7 listas reais analisadas.
