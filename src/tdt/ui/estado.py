@@ -21,6 +21,7 @@ class AppState:
     subestacao: str | None = None
     flags: dict = field(default_factory=lambda: {"pular_revisao": False, "aprovar_acima_threshold": True})
     aliases: dict[str, str] = field(default_factory=dict)  # sheet original → apelido
+    sheets_excluidas: set[str] = field(default_factory=set)  # sheets (nome original) desmarcadas na tela inicial
     resultado: ResultadoPipeline | None = None
     registros: list[SignalRecord] = field(default_factory=list)
     lista_padrao: ListaPadraoADMS | None = None

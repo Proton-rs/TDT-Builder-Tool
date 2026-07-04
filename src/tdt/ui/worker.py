@@ -26,7 +26,7 @@ class PipelineWorker(QThread):
 
     def __init__(self, paths, config: Config, modo, subestacao,
                  encoder_factory=criar_encoder, executar_fn=pipeline.executar,
-                 app_state=None):
+                 app_state=None, sheets=None, aliases=None):
         super().__init__()
         self._paths = paths
         self._config = config
@@ -35,6 +35,8 @@ class PipelineWorker(QThread):
         self._encoder_factory = encoder_factory
         self._executar_fn = executar_fn
         self._app_state = app_state
+        self._sheets = sheets
+        self._aliases = aliases
         self._parar = threading.Event()
 
     def parar(self) -> None:
@@ -69,6 +71,7 @@ class PipelineWorker(QThread):
                 subestacao=self._subestacao, auditoria=aud,
                 diagnostico=True, cancelado=self._cancelado,
                 cache_scorers_dir=Path("cache") / "scorers",
+                sheets=self._sheets, aliases=self._aliases,
             )
             self.terminado.emit(resultado)
         except Exception:

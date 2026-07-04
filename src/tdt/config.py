@@ -227,6 +227,13 @@ class Config:
     siglas_write_legitimo: frozenset[str] = frozenset({"CDC"})
     # D3: siglas fundíveis além das SwitchStatus da lista padrão.
     siglas_fundiveis_extra: frozenset[str] = frozenset()
+    # Resgate por regras na zona cinzenta (SP-H Task 3): quando pct_ok mas
+    # gap insuficiente, e o motor de regras de domínio já apontou
+    # exclusivamente para o candidato topo (ajuste positivo no topo, zero
+    # ou negativo no segundo), decide em vez de mandar para revisão -- ver
+    # ``roteador._resolver_resgate_por_regras``. Default ligado; permite
+    # desligar para comparar taxa de decisão/corretude sem o mecanismo.
+    resgate_por_regras: bool = True
     # D6: whitelist de siglas por equipamento_alvo (semente = medição no
     # Export Base Full 27fev2026, sinais com equip 89-*/29-* no nome; 2103
     # sinais). Estender por medição quando aparecer sigla nova real.

@@ -1,0 +1,161 @@
+total revisoes score_baixo: 398
+sem candidato 2 (gap indefinido, excluido do histograma): 10
+
+gap<=0.005 (considerado gap-zero): 93
+  mesma_sigla (c1.sigla == c2.sigla, estruturalmente impossivel -- ver docstring): 0
+  mesma_descricao_lp (siglas distintas, descricao LP identica -- bug de LP): 36
+  empate_genuino (siglas e descricoes distintas -- nao e bug de LP): 57
+  fracao atribuivel a duplicacao de LP (mesma_sigla + mesma_descricao_lp) / gap-zero total: 38.7%
+
+histograma gap (score c1 - score c2), arredondado a 3 casas:
+  gap=+0.000: 88
+  gap=+0.003: 2
+  gap=+0.004: 1
+  gap=+0.005: 2
+  gap=+0.006: 2
+  gap=+0.007: 2
+  gap=+0.010: 1
+  gap=+0.011: 2
+  gap=+0.012: 2
+  gap=+0.013: 1
+  gap=+0.015: 4
+  gap=+0.016: 2
+  gap=+0.017: 6
+  gap=+0.019: 1
+  gap=+0.020: 17
+  gap=+0.022: 1
+  gap=+0.023: 5
+  gap=+0.024: 24
+  gap=+0.025: 24
+  gap=+0.026: 2
+  gap=+0.033: 3
+  gap=+0.035: 6
+  gap=+0.036: 1
+  gap=+0.037: 9
+  gap=+0.038: 12
+  gap=+0.039: 21
+  gap=+0.043: 19
+  gap=+0.044: 14
+  gap=+0.045: 23
+  gap=+0.051: 3
+  gap=+0.052: 2
+  gap=+0.056: 17
+  gap=+0.059: 2
+  gap=+0.060: 2
+  gap=+0.061: 1
+  gap=+0.062: 26
+  gap=+0.063: 2
+  gap=+0.064: 2
+  gap=+0.065: 26
+  gap=+0.068: 1
+  gap=+0.074: 1
+  gap=+0.075: 1
+  gap=+0.077: 1
+  gap=+0.079: 1
+  gap=+0.082: 1
+  gap=+0.089: 2
+
+exemplos gap-zero MESMA DESCRICAO LP (id, sigla_c1, sigla_c2, descricao_comum):
+  ('01F1_GTA_P:110', '81IE1', '81E1', '81 - TRIP SUB/SOBRE FREQUENCIA E1')
+  ('01F1_GTA_P:111', '81IE2', '81E2', '81 - TRIP SUB/SOBRE FREQUENCIA E2')
+  ('01F1_KGC_P:109', '81IE1', '81E1', '81 - TRIP SUB/SOBRE FREQUENCIA E1')
+  ('01F1_KGC_P:110', '81IE2', '81E2', '81 - TRIP SUB/SOBRE FREQUENCIA E2')
+  ('TRF3_P:101', '81IE1', '81E1', '81 - TRIP SUB/SOBRE FREQUENCIA E1')
+  ('TRF3_P:102', '81IE2', '81E2', '81 - TRIP SUB/SOBRE FREQUENCIA E2')
+  ('TR1_P:171', '81IE1', '81E1', '81 - TRIP SUB/SOBRE FREQUENCIA E1')
+  ('TR1_P:172', '81IE2', '81E2', '81 - TRIP SUB/SOBRE FREQUENCIA E2')
+  ('TR2_P:171', '81IE1', '81E1', '81 - TRIP SUB/SOBRE FREQUENCIA E1')
+  ('TR2_P:172', '81IE2', '81E2', '81 - TRIP SUB/SOBRE FREQUENCIA E2')
+  ('GTD_11:81', '81IE1', '81E1', '81 - TRIP SUB/SOBRE FREQUENCIA E1')
+  ('GTD_11:82', '81IE2', '81E2', '81 - TRIP SUB/SOBRE FREQUENCIA E2')
+  ('GTD_12:81', '81IE1', '81E1', '81 - TRIP SUB/SOBRE FREQUENCIA E1')
+  ('GTD_12:82', '81IE2', '81E2', '81 - TRIP SUB/SOBRE FREQUENCIA E2')
+  ('GTD_13:81', '81IE1', '81E1', '81 - TRIP SUB/SOBRE FREQUENCIA E1')
+
+exemplos gap-zero EMPATE GENUINO (id, sigla_c1, sigla_c2, descricao_c1 || descricao_c2):
+  ('01F1_GTA_P:95', '51N2', '51NL', '51 - SOBRECORRENTE TEMPORIZADA NEUTRO E2 || 51 - SOBRECORRENTE TEMPORIZADA LOCAL')
+  ('01F1_GTA_P:107', '67NT', '67NT2', '67 - DIRECIONAL SOBRECORRENTE NEUTRO TEMPORIZADO || 67 - DIRECIONAL SOBRECORRENTE NEUTRO TEMPORIZADO E2')
+  ('01F1_KGC_P:94', '51N2', '51NL', '51 - SOBRECORRENTE TEMPORIZADA NEUTRO E2 || 51 - SOBRECORRENTE TEMPORIZADA LOCAL')
+  ('01F1_KGC_P:106', '67NT', '67NT2', '67 - DIRECIONAL SOBRECORRENTE NEUTRO TEMPORIZADO || 67 - DIRECIONAL SOBRECORRENTE NEUTRO TEMPORIZADO E2')
+  ('TRF3_P:86', '51N2', '51NL', '51 - SOBRECORRENTE TEMPORIZADA NEUTRO E2 || 51 - SOBRECORRENTE TEMPORIZADA LOCAL')
+  ('TRF3_P:98', '67NT', '67NT2', '67 - DIRECIONAL SOBRECORRENTE NEUTRO TEMPORIZADO || 67 - DIRECIONAL SOBRECORRENTE NEUTRO TEMPORIZADO E2')
+  ('TR1_P:132', 'FVF', '63TA', 'FALHA VENTILACAO FORCADA || 63 - ALARME BUCHHOLZ TRAFO')
+  ('TR1_P:147', '87RA', '87C', '87 - DIFERENCIAL RESTRITO FASE A || 87 - DIFERENCIAL FASE C')
+  ('TR1_P:161', '51N2', '51NL', '51 - SOBRECORRENTE TEMPORIZADA NEUTRO E2 || 51 - SOBRECORRENTE TEMPORIZADA LOCAL')
+  ('TR1_P:168', '67NT', '67NT2', '67 - DIRECIONAL SOBRECORRENTE NEUTRO TEMPORIZADO || 67 - DIRECIONAL SOBRECORRENTE NEUTRO TEMPORIZADO E2')
+  ('TR1_P:184', '51N2', '51NL', '51 - SOBRECORRENTE TEMPORIZADA NEUTRO E2 || 51 - SOBRECORRENTE TEMPORIZADA LOCAL')
+  ('TR2_P:132', 'FVF', '63TA', 'FALHA VENTILACAO FORCADA || 63 - ALARME BUCHHOLZ TRAFO')
+  ('TR2_P:147', '87RA', '87C', '87 - DIFERENCIAL RESTRITO FASE A || 87 - DIFERENCIAL FASE C')
+  ('TR2_P:161', '51N2', '51NL', '51 - SOBRECORRENTE TEMPORIZADA NEUTRO E2 || 51 - SOBRECORRENTE TEMPORIZADA LOCAL')
+  ('TR2_P:168', '67NT', '67NT2', '67 - DIRECIONAL SOBRECORRENTE NEUTRO TEMPORIZADO || 67 - DIRECIONAL SOBRECORRENTE NEUTRO TEMPORIZADO E2')
+
+===============================================================================
+CONCLUSAO
+===============================================================================
+
+Hipotese original (design doc): "candidato 1 e candidato 2 sao literalmente
+a mesma sigla, porque a LP cadastra a mesma sigla duas vezes (variante Read
+e ReadWrite)". Essa formulacao especifica NAO se confirma -- e nao pode se
+confirmar, por construcao. `tdt.scoring.mescla.mesclar` (src/tdt/scoring/
+mescla.py:14) acumula os candidatos de tfidf/vetorial/fuzzy num dict
+chaveado por `Candidato.sigla`; se a LP tem "79" duas vezes com o mesmo
+texto de sigla, as duas linhas colapsam na MESMA entrada do dict antes da
+lista de candidatos existir. `rec.candidatos[0].sigla == rec.candidatos[1]
+.sigla` e estruturalmente impossivel na saida atual do pipeline (contagem:
+0 de 93 gap-zero). A LP realmente tem esse padrao de duplicacao — 53 siglas
+em DiscreteSignals e 7 em AnalogSignals aparecem em 2 linhas (Read +
+ReadWrite) com sigla-texto identico — mas isso nunca chega a virar um
+gap-zero "c1==c2" porque a fusao ja dedup por sigla-texto antes.
+
+A VERSAO REAL do bug (confirmada, forma mais geral da mesma hipotese):
+duas siglas DIFERENTES na LP compartilhando a MESMA DESCRICAO. E o caso de
+81IE1/81E1 e 81IE2/81E2 (unico par de descricoes duplicadas com siglas
+distintas em toda a LP — verificado por varredura completa de
+DiscreteSignals/AnalogSignals). Como o scoring (tfidf/vetorial/fuzzy) e
+guiado pela descricao textual, duas siglas com descricao identica
+literalmente empatam em score sempre que aparecem como candidatas — gap
+artificial de verdade, so que a "duplicata" esta na descricao, nao no
+texto da sigla propriamente. Isso responde por 36 dos 93 casos gap-zero
+(38.7% junto com os 0 mesma_sigla).
+
+Os 57 casos restantes (61.3%) sao empates/quase-empates GENUINOS entre
+siglas com descricoes distintas (ex.: 51N2 "...NEUTRO E2" vs 51NL
+"...LOCAL"; 67NT vs 67NT2; FVF "FALHA VENTILACAO FORCADA" vs 63TA "ALARME
+BUCHHOLZ TRAFO"; 87RA "DIFERENCIAL RESTRITO FASE A" vs 87C "DIFERENCIAL
+FASE C"). Esses NAO sao bug de LP: sao pares semanticamente proximos
+(mesma familia de protecao, elementos E1/E2, ou termos tecnicos que o
+scorer nao consegue distinguir hoje) que o scoring atual trata como
+empatados por falta de sinal discriminante — legitimos candidatos a
+resgate por regra de desempate (contexto de endereco/modulo/posicao) na
+Task 2/3, mas NAO uma correcao de duplicata de dados.
+
+RESUMO NUMERICO
+- score_baixo total: 398 (10 sem candidato 2, gap indefinido)
+- gap<=0.005 (gap-zero): 93 de 388 avaliados (23.9%)
+  - mesma_sigla (sigla-texto identico): 0 (estruturalmente impossivel)
+  - mesma_descricao_lp (siglas distintas, descricao LP identica -- BUG de LP): 36 (38.7% do gap-zero)
+  - empate_genuino (siglas e descricoes distintas -- NAO e bug): 57 (61.3% do gap-zero)
+
+RECOMENDACAO PARA TASK 2/3
+1. A hipotese "duplicata de LP causa gap-zero" esta CONFIRMADA, mas na
+   forma "duplicata de DESCRICAO" (81IE1/81E1, 81IE2/81E2), nao na forma
+   literal "mesma sigla-texto" (que o pipeline ja neutraliza via mesclar).
+   Task 2 pode: (a) consolidar a LP removendo/alertando sobre pares de
+   descricao duplicada com sigla diferente (fix de dados, 2 pares / 4
+   siglas afetadas: 81IE1, 81E1, 81IE2, 81E2), ou (b) tratar esse caso no
+   desempate como "irresolvivel por texto, decidir por outro sinal" já
+   que sao siglas semanticamente equivalentes pela LP.
+2. Os 57 casos de empate genuino (61.3% do gap-zero) precisam de um
+   mecanismo de resgate DIFERENTE — nao e dado ruim, e falta de sinal
+   discriminante entre candidatos textualmente proximos mas distintos
+   (E1 vs E2, LOCAL vs REMOTO, FASE A vs FASE C, etc.). Vale considerar
+   desempate por elemento/posicao/contexto de modulo em vez de so score
+   textual (Task 3, "resgate").
+3. O restante do histograma (gap > 0.005 ate ~0.09) mostra que a maioria
+   das revisoes score_baixo NAO e gap-zero — sao casos de margem pequena
+   mas real (varios buckets com 15-26 ocorrencias entre gap=0.02 e
+   gap=0.065), sugerindo que o problema mais generalizado nao e
+   duplicata de LP, e sim o LIMIAR de confianca do roteador sendo
+   conservador demais para gaps pequenos porem genuinos — fora do escopo
+   desta task, mas relevante para calibrar a Task 1 do SP-I/J se for o
+   caso.

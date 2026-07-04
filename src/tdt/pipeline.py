@@ -46,7 +46,7 @@ from tdt.normalizador_estrutural import corrigir
 from tdt.pareamento_polaridade import forcar_polaridade_equipamento
 from tdt.scoring import mescla
 from tdt.scoring.calibracao import aplicar_calibrador_confianca, calibrar_candidatos
-from tdt.scoring.tfidf import ScorerTFIDF
+from tdt.scoring.bm25 import ScorerBM25
 from tdt.scoring.vetorial import pontuar as pontuar_vetorial
 from tdt.scoring.vetorial import pontuar_com_embedding
 
@@ -109,7 +109,7 @@ def _construir_scorers(lp, config, encoder, categoria, cfg_efetivo) -> _Scorers:
     corpus_raw = _corpus(lp, config, categoria)
     corpus_vec = _corpus_enriquecido(lp, config, categoria)
     return _Scorers(
-        tfidf=ScorerTFIDF.construir(corpus_raw),
+        tfidf=ScorerBM25.construir(corpus_raw),
         indice=IndiceVetorial.construir(corpus_vec, encoder),
         fuzzy=FuzzyMatcher.construir(corpus_raw),
         config=cfg_efetivo,
@@ -251,6 +251,16 @@ def _classificar_sinal(
     com_regras, ajustes = motor_regras.aplicar_rastreado(
         rec, fundidos, config, lista_padrao=lista_padrao
     )
+    # Mapa sigla->delta total das regras, para o resgate na zona cinzenta do
+    # roteador (SP-H Task 3). `aplicar_rastreado` devolve só a lista plana de
+    # AjusteRegra (delta+motivo, sem sigla) para a justificativa -- o delta
+    # por sigla é recomputado aqui comparando o score antes/depois das
+    # regras (casado por sigla; `aplicar_rastreado` só re-pontua e reordena
+    # candidatos existentes, não renomeia siglas nem duplica).
+    scores_antes = {c.sigla: c.score for c in fundidos}
+    ajustes_por_sigla: dict[str, float] = {
+        c.sigla: c.score - scores_antes.get(c.sigla, c.score) for c in com_regras
+    }
     diag = None
     if diagnostico:
         por: dict[str, dict[str, float]] = {}
@@ -259,7 +269,10 @@ def _classificar_sinal(
                 por.setdefault(c.sigla, {})[fonte] = c.score
         diag = Diagnostico(scores_por_metodo=por)
     rec = replace(rec, diagnostico=diag) if diag is not None else rec
-    decidido = roteador.rotear(replace(rec, candidatos=tuple(com_regras)), config)
+    decidido = roteador.rotear(
+        replace(rec, candidatos=tuple(com_regras)), config,
+        lista_padrao=lista_padrao, ajustes=ajustes_por_sigla,
+    )
     if ajustes and decidido.status == "decidido":
         motivos = "; ".join(a.motivo for a in ajustes)
         decidido = replace(
@@ -448,6 +461,8 @@ def executar(
     diagnostico: bool = False,
     cancelado: "Callable[[], bool] | None" = None,
     cache_scorers_dir: "str | Path | None" = None,
+    sheets: "list[str] | None" = None,
+    aliases: "dict[str, str] | None" = None,
 ) -> tuple[ResultadoPipeline, openpyxl.Workbook]:
     aud = auditoria or Auditoria()
     lp = ListaPadraoADMS.carregar(lista_padrao_path)
@@ -470,12 +485,16 @@ def executar(
 
     wb_in = openpyxl.load_workbook(input_path, read_only=True, data_only=True)
     rota = classificar(wb_in, override=modo, config=config)
-    aud.evento("identificador", f"homogêneo={rota.homogeneo}, {len(rota.sheets_dados)} sheets", "INFO")
+    sheets_dados = rota.sheets_dados
+    if sheets is not None:
+        selecionadas = set(sheets)
+        sheets_dados = [sn for sn in sheets_dados if sn in selecionadas]
+    aud.evento("identificador", f"homogêneo={rota.homogeneo}, {len(sheets_dados)} sheets", "INFO")
 
     decididos: list[SignalRecord] = []
     revisao: list[ItemRevisao] = []
 
-    for sn in rota.sheets_dados:
+    for sn in sheets_dados:
         if cancelado is not None and cancelado():
             aud.evento("pipeline", "cancelado pelo usuário", "AVISO")
             break
@@ -489,6 +508,14 @@ def executar(
             sinais = list(estruturar(rows, mapa, sheet_name=sn, config=config, vocab=vocab,
                                      siglas_set=lp.siglas))
         sinais, conf_mod = aplicar_identidade(sinais, sn, rows, config)
+        alias_sheet = aliases.get(sn) if aliases else None
+        if alias_sheet:
+            sinais = [
+                replace(s, modulo=replace(s.modulo, nome=alias_sheet))
+                if s.modulo.origem_contexto == "sheet_name"
+                else s
+                for s in sinais
+            ]
         sinais, rev_modulo = particionar_por_confianca(sinais, conf_mod)
         ids_indefinidos: set[str] = set()
         if rev_modulo:

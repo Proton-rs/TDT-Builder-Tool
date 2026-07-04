@@ -117,6 +117,17 @@ except Exception as e:
 
 PCT, GAP = cfg.threshold_pct, cfg.threshold_gap
 log(f"\nground-truth: {len(ROTULOS)} pares | roteação: pct>={PCT} gap>={GAP}\n")
+
+# --- métrica primária: corretude vs GTD real ---
+try:
+    from gate_tdt_real import comparar
+    r = comparar("output/LISTA 1 - GTD/TDT.xlsx", "docs/TDT/exportTDT_UTR_GTD_1_20260626.xlsx")
+    log(f"[PRIMARIA] corretude vs GTD real: {r.iguais}/{r.comum} = {r.pct:.1f}%")
+except FileNotFoundError:
+    log("[PRIMARIA] gate TDT real: arquivos ausentes, pulado")
+log("")
+
+log(f"[SECUNDARIA] taxa de decisão e precisão:\n")
 log(f"{'método':<20} {'acc@1':>6} {'rec@3':>6} {'decid':>6} {'prec@dec':>9}")
 for nome, fn in METODOS.items():
     acc1 = rec3 = decid = corr_dec = 0

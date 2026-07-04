@@ -31,14 +31,109 @@ from dataclasses import replace
 
 from tdt.config import Config
 from tdt.contracts import Candidato, SignalRecord
+from tdt.dados.lista_padrao import ListaPadraoADMS
+from tdt.normalizacao.normalizador import canonizar
 
 # Limiares de "altíssimo" p/ a cascata — um único sinal tão forte que decide
 # sozinho, sem precisar de consenso.
 _FUZZY_ALTISSIMO = 0.95
 _E5_ALTISSIMO = 0.95
 
+# Gap <= este limiar é tratado como empate estrutural (mesmo critério usado
+# no diagnóstico SP-H Task 1 p/ classificar "gap-zero").
+_GAP_ZERO_LIMIAR = 0.005
 
-def _quadrante(rec: SignalRecord, config: Config) -> SignalRecord:
+
+def _resolver_empate_descricao_lp(
+    rec: SignalRecord,
+    candidatos: list[Candidato],
+    gap: float,
+    pct_ok: bool,
+    config: Config,
+    lista_padrao: ListaPadraoADMS | None,
+) -> SignalRecord | None:
+    """Quando os 2 melhores candidatos empatam (gap≈0) E suas siglas mapeiam
+    para a MESMA descrição-padrão na LP, o empate é estrutural — nenhum
+    texto discrimina entre eles, nem para o scorer nem para um revisor
+    humano. Decide de forma determinística (sigla alfabeticamente menor) em
+    vez de mandar para revisão. Devolve None se não se aplica (LP ausente,
+    sigla sem cadastro, descrições diferentes — empate genuíno, ou o
+    candidato top não atinge o mesmo piso de confiança (``pct_ok``) exigido
+    pelo caminho normal de decisão — sem isso, dois candidatos empatados em
+    score muito baixo seriam decididos só por coincidirem na LP, o que não é
+    confiança suficiente).
+    """
+    if (
+        lista_padrao is None
+        or not pct_ok
+        or gap > _GAP_ZERO_LIMIAR
+        or len(candidatos) < 2
+    ):
+        return None
+
+    c1, c2 = candidatos[0], candidatos[1]
+    sp1 = lista_padrao.por_sigla(c1.sigla)
+    sp2 = lista_padrao.por_sigla(c2.sigla)
+    if sp1 is None or sp2 is None:
+        return None
+
+    d1 = canonizar(sp1.descricao, config)
+    d2 = canonizar(sp2.descricao, config)
+    if not d1 or d1 != d2:
+        return None
+
+    vencedora = min(c1.sigla, c2.sigla)
+    return replace(
+        rec,
+        sigla_sinal=vencedora,
+        status="decidido",
+        justificativa=(
+            f"empate_descricao_lp_duplicada: {c1.sigla}/{c2.sigla}, "
+            f"escolhida {vencedora} por ordem alfabética"
+        ),
+    )
+
+
+def _resolver_resgate_por_regras(
+    rec: SignalRecord,
+    candidatos: list[Candidato],
+    gap: float,
+    config: Config,
+    ajustes: dict[str, float] | None,
+) -> SignalRecord | None:
+    """Zona cinzenta (pct_ok mas gap insuficiente): se o motor de regras de
+    domínio já apontou EXCLUSIVAMENTE para o candidato topo (ajuste
+    positivo no topo, zero ou negativo no segundo colocado), decide em vez
+    de mandar para revisão -- a regra fez o trabalho de discriminação que o
+    gap textual não conseguiu. Devolve None se não se aplica (sem
+    ``ajustes``, menos de 2 candidatos, ou o segundo colocado também tem
+    ajuste positivo -- regra não foi exclusiva, permanece ambíguo).
+    """
+    if not ajustes or len(candidatos) < 2:
+        return None
+
+    topo, segundo = candidatos[0], candidatos[1]
+    aj_topo = ajustes.get(topo.sigla, 0.0)
+    aj_seg = ajustes.get(segundo.sigla, 0.0)
+    if aj_topo > 0 and aj_seg <= 0:
+        return replace(
+            rec,
+            sigla_sinal=topo.sigla,
+            status="decidido",
+            justificativa=(
+                f"{topo.sigla} por resgate_regras "
+                f"(%={topo.score:.2f}, gap={gap:.2f}, regra=+{aj_topo:.2f})"
+            ),
+        )
+    return None
+
+
+def _quadrante(
+    rec: SignalRecord,
+    config: Config,
+    lista_padrao: ListaPadraoADMS | None = None,
+    ajustes: dict[str, float] | None = None,
+) -> SignalRecord:
     """Decisão legada por quadrante gap × percentual sobre ``rec.candidatos``."""
     candidatos = sorted(rec.candidatos, key=lambda c: c.score, reverse=True)
     if not candidatos:
@@ -59,6 +154,18 @@ def _quadrante(rec: SignalRecord, config: Config) -> SignalRecord:
             status="decidido",
             justificativa=f"{topo.sigla} decidido (%={topo.score:.2f}, gap={gap:.2f})",
         )
+
+    resolvido = _resolver_empate_descricao_lp(
+        rec, candidatos, gap, pct_ok, config, lista_padrao
+    )
+    if resolvido is not None:
+        return resolvido
+
+    if pct_ok and not gap_ok and config.resgate_por_regras:
+        resolvido = _resolver_resgate_por_regras(rec, candidatos, gap, config, ajustes)
+        if resolvido is not None:
+            return resolvido
+
     return replace(
         rec,
         status="revisao",
@@ -161,15 +268,34 @@ def rotear(
     rec: SignalRecord,
     config: Config,
     votos: dict[str, list[Candidato]] | None = None,
+    lista_padrao: ListaPadraoADMS | None = None,
+    ajustes: dict[str, float] | None = None,
 ) -> SignalRecord:
     """Roteia o sinal. ``votos`` (opcional) = candidatos calibrados por método.
 
     Com ``votos``, aplica a cascata (fuzzy > e5 > consenso) com gap dinâmico;
     cai no quadrante mesclado se nada decidir. Sem ``votos``, só o quadrante
     (retrocompat).
+
+    ``lista_padrao`` (opcional): quando o quadrante mesclado não decide por
+    empate estrutural (gap≈0) entre os 2 melhores candidatos, e a LP tiver a
+    MESMA descrição-padrão cadastrada para as duas siglas (bug de dados da
+    LP, não um empate genuíno), decide deterministicamente em vez de mandar
+    para revisão — ver ``_resolver_empate_descricao_lp``. Só se aplica
+    quando o candidato top também atinge ``config.threshold_pct`` (mesmo
+    ``pct_ok`` do caminho normal) — dois candidatos empatados em score baixo
+    não são decididos só por coincidirem na LP.
+
+    ``ajustes`` (opcional): mapa sigla->delta total aplicado pelo motor de
+    regras de domínio (``motor_regras.aplicar_rastreado``, agregado por
+    sigla). Na zona cinzenta (``pct_ok`` mas gap insuficiente), se o topo
+    tiver ajuste positivo exclusivo (segundo colocado com ajuste <= 0),
+    decide em vez de mandar para revisão — ver
+    ``_resolver_resgate_por_regras``. Gated por ``config.resgate_por_regras``
+    (default ``True``).
     """
     if votos:
         decidido = _decidir_por_votos(rec, config, votos)
         if decidido is not None:
             return decidido
-    return _quadrante(rec, config)
+    return _quadrante(rec, config, lista_padrao, ajustes)

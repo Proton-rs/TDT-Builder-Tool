@@ -9,6 +9,7 @@ from tdt.contracts import (
     SignalRecord,
     TipoSinal,
 )
+from tdt.dados.lista_padrao import ListaPadraoADMS, SinalPadrao
 from tdt.roteador import rotear
 
 CFG = Config()  # threshold_pct=0.70, threshold_gap=0.15
@@ -131,3 +132,110 @@ def test_cascata_e5_altissimo_decide_por_semantica():
     r = rotear(_rec([Candidato("DJ", 0.70, "mesclado")]), CFG, votos=votos)
     assert r.status == "decidido"
     assert "e5" in r.justificativa.lower()
+
+
+# --- empate por descrição LP duplicada (SP-H Task 2) ---
+#
+# Causa raiz confirmada: a LP tem pares de siglas DIFERENTES com a mesma
+# descrição-padrão (texto idêntico) -- ex. 81IE1/81E1. Como o scoring
+# compara contra a descrição da LP, esses pares SEMPRE empatam (gap=0)
+# para qualquer sinal de entrada -- um humano revisor também não teria
+# como discriminar só pelo texto/metadados da LP. O roteador deve
+# resolver isso deterministicamente (sigla alfabeticamente menor) em vez
+# de mandar para revisão, mas só quando a descrição-padrão bate IGUAL
+# (não é heurística de similaridade).
+
+
+def _lp(pares: list[tuple[str, str]]) -> ListaPadraoADMS:
+    """Constrói uma LP mínima: cada par (sigla, descricao)."""
+    discretos = tuple(
+        SinalPadrao(
+            sigla=sigla, descricao=descricao, signal_type="SingleBit",
+            direction="Input", mm="MM1", categoria="Discrete",
+        )
+        for sigla, descricao in pares
+    )
+    return ListaPadraoADMS(discretos=discretos, analogicos=())
+
+
+def test_empate_descricao_lp_duplicada_decide_por_ordem_alfabetica():
+    # 81IE1 e 81E1 têm a MESMA descrição-padrão na LP -> empate estrutural,
+    # nunca discriminável por texto. Roteador decide pela sigla
+    # alfabeticamente menor (81E1 < 81IE1) em vez de ir para revisão.
+    lp = _lp([
+        ("81IE1", "81 - TRIP SUB/SOBRE FREQUENCIA E1"),
+        ("81E1", "81 - TRIP SUB/SOBRE FREQUENCIA E1"),
+    ])
+    rec = _rec([Candidato("81IE1", 0.60, "mesclado"), Candidato("81E1", 0.60, "mesclado")])
+    r = rotear(rec, CFG, lista_padrao=lp)
+    assert r.status == "decidido"
+    assert r.sigla_sinal == "81E1"
+    assert "empate_descricao_lp_duplicada" in r.justificativa
+
+
+def test_empate_genuino_descricoes_diferentes_continua_revisao():
+    # 51N2 e 51NL têm descrições DIFERENTES na LP -- empate genuíno, não é
+    # bug de LP. Deve continuar indo para revisão como hoje (não regride).
+    lp = _lp([
+        ("51N2", "51 - SOBRECORRENTE TEMPORIZADA NEUTRO E2"),
+        ("51NL", "51 - SOBRECORRENTE TEMPORIZADA LOCAL"),
+    ])
+    rec = _rec([Candidato("51N2", 0.60, "mesclado"), Candidato("51NL", 0.60, "mesclado")])
+    r = rotear(rec, CFG, lista_padrao=lp)
+    assert r.status == "revisao"
+    assert r.sigla_sinal is None
+
+
+def test_empate_descricao_lp_duplicada_mas_score_baixo_continua_revisao():
+    # Mesmo par 81IE1/81E1 com descrição-padrão IDÊNTICA, mas os candidatos
+    # empatam num score BAIXO (0.10 << threshold_pct=0.45) -- nenhum dos dois
+    # atinge o piso de confiança mínimo exigido pelo caminho normal
+    # (`pct_ok`). Empate estrutural na LP não deve bypassar essa checagem:
+    # sem confiança mínima, mesmo tendo a MESMA descrição-padrão, o sinal
+    # deve continuar em revisão (achado da revisão de código: faltava o
+    # guard de `pct_ok` nesse caminho).
+    lp = _lp([
+        ("81IE1", "81 - TRIP SUB/SOBRE FREQUENCIA E1"),
+        ("81E1", "81 - TRIP SUB/SOBRE FREQUENCIA E1"),
+    ])
+    rec = _rec([Candidato("81IE1", 0.10, "mesclado"), Candidato("81E1", 0.10, "mesclado")])
+    r = rotear(rec, CFG, lista_padrao=lp)
+    assert r.status == "revisao"
+    assert r.sigla_sinal is None
+
+
+# --- resgate por regras na zona cinzenta (SP-H Task 3) ---
+#
+# Zona cinzenta: pct_ok (candidato top passa do threshold_pct) mas gap
+# insuficiente (< threshold_gap) -- hoje vai para revisão mesmo quando o
+# motor de regras de domínio (numero de protecao, fase, opostos, etc.) já
+# apontou exclusivamente para o topo (ajuste positivo) e não para o
+# segundo colocado (ajuste zero ou negativo). ``ajustes`` é o mapa
+# sigla->delta total aplicado pelas regras (calculado no pipeline a partir
+# de ``motor_regras.aplicar_rastreado``, que devolve uma lista plana de
+# ``AjusteRegra`` sem sigla -- o pipeline agrega por sigla antes de montar
+# esse mapa).
+
+_CANDS_ZONA_CINZENTA = [Candidato("SGFT", 0.62, "mesclado"), Candidato("SGT2", 0.58, "mesclado")]
+# pct_ok: 0.62 >= threshold_pct(0.45); gap=0.04 < threshold_gap(0.08) -> gap_ok False
+
+
+def test_resgate_por_regras_decide():
+    rec = _rec(_CANDS_ZONA_CINZENTA)
+    out = rotear(rec, CFG, ajustes={"SGFT": 0.15, "SGT2": 0.0})
+    assert out.status == "decidido" and out.sigla_sinal == "SGFT"
+    assert "resgate_regras" in out.justificativa
+
+
+def test_sem_regra_exclusiva_vai_revisao():
+    rec = _rec(_CANDS_ZONA_CINZENTA)
+    out = rotear(rec, CFG, ajustes={"SGFT": 0.15, "SGT2": 0.15})
+    assert out.status == "revisao"
+    assert out.sigla_sinal is None
+
+
+def test_resgate_desligado_por_config():
+    cfg = replace(CFG, resgate_por_regras=False)
+    rec = _rec(_CANDS_ZONA_CINZENTA)
+    out = rotear(rec, cfg, ajustes={"SGFT": 0.15})
+    assert out.status == "revisao"
