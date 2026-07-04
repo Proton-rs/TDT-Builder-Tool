@@ -270,8 +270,22 @@ case-insensitive e sem acento) **e** (2) existe pelo menos uma coluna
 binaria`, `utr cos`, `bit`, `word`, `registrador`, `coordinate`, `endpt`,
 `n3`/`n4`).
 
-**Resultado (rodado sobre as 462 linhas do log atual, 141 sheets
-processadas no total pelas 7 listas reais):**
+**Resultado (rodado sobre as 462 linhas do log atual, 134 sheets
+processadas no total pelas 7 listas reais — corrigido de "141" numa revisão
+anterior deste documento; 134 é a contagem verificada por soma de
+`sheets_dados` por arquivo e por contagem de linhas `col_indice=` no log,
+ambas concordando):**
+
+**Limitação conhecida do log-fonte:** `bench/diag_enderecos.py` trunca a
+lista de colunas concorrentes logadas a `concorrentes[:5]` por sheet — as
+28 sheets acima têm no máximo 3 concorrentes cada (não truncadas), então
+isso não afeta o veredito acima, mas 18 outras sheets do log (majoritariamente
+GPR: `GPR21/31/32/33/34/35/36`, `IB23`, `BC1`, `TR3DIF`, `TR2DIF`, `TR1AT`,
+`TR1BT`, `LTKNP67`, `COMANDOS`, `DIGITAIS`, `ANALOGICOS`, `SACA - MMD`) têm
+exatamente 5 concorrentes listados — um 6º concorrente mais fraco poderia
+existir sem aparecer no log. Relevante para qualquer varredura futura
+baseada neste log (ex. um scan do padrão do Caso B); não invalida o veredito
+desta varredura (que não depende de concorrentes além do 1º/2º lugar).
 
 ```
 Total de sheets flagadas: 28
