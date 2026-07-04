@@ -24,6 +24,10 @@ Regras de domínio abaixo são **decisões travadas** — confirmadas em produç
 10. **Whitelist de siglas por equipamento (`config.siglas_por_equipamento`)** — quando o equipamento-alvo é identificado (ex. `Seccionadora`), os candidatos de sigla são restritos à whitelist medida em dado real (`Export_base_Full`, 2103 sinais com equipamento `89-*`/`29-*`): `SECF, DSEC, SECC, 43LR, SECG, SECB, SECT, CCCO, CCFL, CCMO, FSEC, OI, LIBM, CCCM, CCAL, BSEC, MANI, MDCM, FLFC, BBFC, BBAB, FLAB, FALH, PROT, CCLO, VMTC, BBA2, SOBC, BATA, MINC` (30 siglas no frozenset atual de `src/tdt/config.py`; a spec de origem menciona uma semente de 34 medidos — o código convergiu para 30). Evita decisão de sigla de outra classe de equipamento mesmo quando o texto casa por similaridade. Fonte: [`2026-07-01-semantica-estados-multicoord-design.md`](superpowers/specs/2026-07-01-semantica-estados-multicoord-design.md) (D6), whitelist em `src/tdt/config.py`.
 11. **`LIBM` (Libera Manobra) decide normalmente mas é rebaixado a revisão por decisão de projeto** — casa a sigla certa, mas o real GTD descartou esse sinal na prática (a base tem 36 ocorrências); `config.siglas_revisao_projeto` gateia essa política, não é um erro de matching. Fonte: [`2026-07-01-semantica-estados-multicoord-design.md`](superpowers/specs/2026-07-01-semantica-estados-multicoord-design.md).
 
+## Pesquisa web — contexto geral de protocolo (GOOSE / IEC 61850)
+
+Este projeto trabalha com DNP3 (ver `Message Mapping`/`Direction` das tabelas abaixo), mas a maioria das subestações modernas de concessionárias BR também roda **IEC 61850** internamente (relé-a-relé, IED-a-IED), com **GOOSE (Generic Object Oriented Substation Event)** como o protocolo de troca rápida de eventos: mensagens multicast na camada de enlace (não roteáveis, sem TCP/IP), latência-alvo de até ~3 ms para mensagens de disparo críticas (trip, bloqueio) e até 100 ms para mensagens menos urgentes (conforme a classe de performance). GOOSE substitui fiação de cobre ponto-a-ponto entre relés (ex.: sinal de bloqueio 86 entre dois disjuntores adjacentes) por uma mensagem de rede — o DNP3 exportado para o SCADA/ADMS nesta LP é tipicamente downstream desse barramento de processo IEC 61850, ou seja, muitos sinais discretos aqui (`86`, `50BF`, interlocks) podem ter uma origem física de GOOSE dentro da subestação antes de virar ponto DNP3 para o centro de controle. Não achamos citação de GOOSE nas specs internas do projeto (fora de escopo do pipeline de matching, que trabalha só na camada DNP3/LP) — não há conflito, é conhecimento de contexto de arquitetura, não uma regra de classificação. Fonte: [Robson Gomes da Silva — Metodologia de documentação do protocolo GOOSE (USP)](https://www.teses.usp.br/teses/disponiveis/3/3143/tde-03022022-130817/publico/RobsonGomesdaSilvaCorr21.pdf), [SEL — Aplicação de IEC 61850 em uma subestação](https://selinc.com/api/download/21474836918/?lang=pt), [Conprove — Atrasos de tempo permitidos para mensagens GOOSE na IEC 61850](https://conprove.com/entenda-os-atrasos-de-tempo-permitidos-para-mensagens-goose-na-norma-iec-61850/).
+
 
 ## Família ANSI 20
 
@@ -85,6 +89,11 @@ Cruzado com `docs/TDT/exportTDT_UTR_GTD_1_20260626.xlsx` (`DNP3_DiscreteSignals`
 - Só as zonas de fase aparecem no dado real: `GTD_LTGTA_LTGTA_P_21`, `..._21Z1`, `..._21Z2`, `..._21Z3`, `..._21Z4` — **4 zonas por módulo de linha** (`21Z1..21Z4`), sempre `Read`/`SingleBit`, uma ocorrência por lado de relé (`_P`/`_A`, principal/alternado — 2 relés por linha nesta subestação). `21Z5` e as variantes de terra (`21N*`) da LP não aparecem nesta TDT real — famílias presentes na LP mas sem instância nesta amostra.
 - `21` (função habilitada, `Enabled`/`Read` — todas as 6 ocorrências reais são `Read`, nenhuma `ReadWrite`, diferente do par `Read`/`ReadWrite` que a LP lista) existe 1x por módulo de linha, par com a função — o padrão de "sigla-função" (`INCLUIDO;EXCLUIDO`) descrito na LP se confirma na estrutura, mas não na direção: aqui é só leitura.
 
+### Pesquisa web (ANSI 21 — Relé de distância)
+
+Função ANSI/IEEE C37.2 21: **Distance Relay** — mede a impedância vista pelo relé (V/I) e compara com a impedância da linha até um ponto de falta; atua quando a impedância medida cai dentro de uma zona (alcance) programada, tipicamente em múltiplas zonas escalonadas em tempo (Z1 instantânea, Z2/Z3/Z4 temporizadas, cobrindo trechos progressivamente maiores da linha adjacente como proteção de retaguarda). É a proteção principal de linhas de transmissão. Termo de campo: "proteção de distância" ou apenas "zonas" (zona 1, zona 2 etc.); "localizador de falta" (LP: `21D`) é uma função correlata mas distinta — estima a distância até a falta em km/milhas para orientar equipes de campo, não decide trip por si. Fonte: [ANSI/IEEE C37.2 Device Numbers](https://www.apt-power.com/wp-content/uploads/ANSI-IEEE-C37.2-List-of-Standard-Device-Numbers-for-Relay-Protection-APT-Power-1.pdf), [Electrical Axis — IEEE/ANSI Device Numbers](http://www.electricalaxis.com/2020/11/what-are-ieeeansi-device-numbers-used.html).
+- Exceção conhecida: zonas reversas (`67`-like, direção invertida) às vezes são implementadas dentro da própria função 21 (zona reversa/"Z reverse") em vez de aparecer como ANSI 67 separado — não observado nesta LP, mas comum em relés multifunção modernos (SEL, Siemens).
+
 ## Família ANSI 24
 
 _7 sigla(s)._
@@ -116,6 +125,11 @@ _11 sigla(s)._
 | 25OK | 25 - SINCRONISMO FONTE/CARGA | Custom | Discrete | Read | Transit;NORMAL;ATUADO;Error |  |  |  |
 | 25VT | 25 - TRIP DIFERENCA TENSAO | RelayTrip | Discrete | Read | Transit;NORMAL;ATUADO;Error |  |  |  |
 | 25_T | 25 - TRIP SINCRONISMO | RelayTrip | Discrete | Read | Transit;NORMAL;ATUADO;Error |  |  |  |
+
+### Pesquisa web (ANSI 25 — Check de sincronismo)
+
+Função ANSI/IEEE C37.2 25: **Synchronizing/Synchronism-Check Device** — verifica se dois sistemas CA (ex.: barra e linha, ou gerador e rede) estão dentro dos limites aceitáveis de tensão, frequência e ângulo de fase antes de permitir o fechamento do disjuntor que os une; evita fechamento fora de sincronismo (que causaria correntes de inrush severas e estresse mecânico/elétrico). Tolerâncias típicas de ângulo citadas em literatura de ensaio: ±5° de defasagem angular. Termo de campo BR: "check de sincronismo" ou "verificação de sincronismo" (raramente "relé 25" isolado); `25OK`/`25ER` da LP ("SINCRONISMO FONTE/CARGA" / "FALHA SINCRONISMO") mapeiam diretamente esse conceito de janela de sincronismo aprovada/reprovada. Fonte: [Conprove — Tutorial Teste Relé Siemens 7SA86 Sincronismo](https://conprove.com/wp-content/uploads/2021/10/Tutorial_Teste_Rele_Siemens_7SA86_SIPROTEC_5_Sincronismo_CTC.pdf), [Crushty MKS — Generator synchronizing check (ANSI 25)](https://crushtymks.com/pt/protection/1406-generator-synchronizing-check-protective-function-ansi-25.html).
+- Sinônimo de campo: "fechamento em barra morta" é um modo operacional relacionado mas distinto — dispensa o check de sincronismo porque um dos lados está sem tensão (não há risco de fechamento fora de fase); não confundir com `25CA`/`25OK` que pressupõem os dois lados energizados.
 
 ## Família ANSI 26
 
@@ -157,6 +171,10 @@ Cruzado com `docs/TDT/exportTDT_UTR_GTD_1_20260626.xlsx` (`DNP3_DiscreteSignals`
 - Só 4 siglas aparecem: `27` (função, `27 FUNCAO`, 6x, **todas `ReadWrite`, nenhuma `Read`** — diferente do par `Read`/`ReadWrite` que a LP lista, mesmo padrão "sigla-função" `INCLUIDO;EXCLUIDO` da regra 6), `27CD` (`27 - BLOQUEIO SUBTENSAO CDC`), `27E1`/`27E2` (`27 - SUBTENSAO E1`/`E2`, estágios). As demais 12 siglas da LP (`27AB`, `27AC`, `27BC`, `27BL`, `27BR`, `27CA`, `27CC`, `27LT`, `27TP`, `27_T`) não aparecem nesta amostra — famílias presentes na LP sem instância real aqui.
 - Aliases reais confirmam a semântica "estágio" (`E1`/`E2`) já documentada na descrição padrão — não há divergência de nomenclatura entre LP e TDT real para as siglas que aparecem.
 
+### Pesquisa web (ANSI 27 — Subtensão)
+
+Função ANSI/IEEE C37.2 27: **Undervoltage Relay** — detecta queda de tensão abaixo de um limiar ajustado, usada para deslastre de carga, proteção de motores/geradores contra subtensão prolongada, e como condição de bloqueio para outras funções (ex.: `27BL` bloqueia o religamento se a barra estiver sem tensão adequada). Termo de campo BR: "subtensão" é o próprio termo técnico padrão, sem gíria alternativa relevante. Fonte: [ANSI/IEEE C37.2 Device Numbers](https://www.apt-power.com/wp-content/uploads/ANSI-IEEE-C37.2-List-of-Standard-Device-Numbers-for-Relay-Protection-APT-Power-1.pdf).
+
 ## Família ANSI 32
 
 _1 sigla(s)._
@@ -180,6 +198,11 @@ _9 sigla(s)._
 | 43TP | 43 - TRANSFERENCIA DE PROTECAO | Custom | Discrete | ReadWrite | Transit;INCLUIDO;EXCLUIDO;Error |  |  |  |
 | 43TR | 43 - CHAVE LOCAL REMOTO TRANSFORMADOR | Custom | Discrete | Read | Transit;REMOTO;LOCAL;Error |  |  |  |
 | 43VF | 43 - CHAVE LOCAL REMOTO VENTILACAO FORCADA | Custom | Discrete | Read | Transit;REMOTO;LOCAL;Error |  |  |  |
+
+### Pesquisa web (ANSI 43 — Chave de transferência/seleção manual)
+
+Função ANSI/IEEE C37.2 43: **Manual Transfer or Selector Device** — chave operada manualmente que transfere circuitos de controle entre dois modos (ex.: local/remoto, manual/automático) ou entre dois circuitos de proteção; não é ela mesma uma proteção, mas um seletor de modo de operação. É a base ANSI de toda a família `43*` da LP (`43LR` chave local/remoto, `43AM` automático/manual, `43TP` transferência de proteção). Termo de campo BR para seccionadoras motorizadas com controle remoto: "seccionadora motorizada" ou "chave motorizada" (a sigla de projeto costuma ser `43LR` mesmo quando o equipamento físico é uma seccionadora, não um relé — a sigla nomeia a *função de seleção local/remoto*, não o equipamento). Desde a REN ANEEL 846/2019 e o PRODIST Módulo 6, telessupervisão de seccionadoras é requisito normativo para operação automatizada — reforça por que `43LR`/`SECx` aparecem tão consistentemente nas listas padrão de concessionárias BR. Fonte: [ANSI Device Numbers — ElectricalVolt](https://www.electricalvolt.com/ansi-device-numbers/), [A3A Engenharia — Monitoramento de chaves seccionadoras](https://a3aengenharia.com.br/conteudo/artigos-tecnicos/monitoramento-chaves-seccionadoras-subestacoes/), [NTC-41 CELG — Chave Seccionadora](https://www.enel.com.br/content/dam/enel-br/one-hub-brasil---2018/nomas-t%C3%A9cnicas-goi%C3%A1s/normas-t%C3%A9cnicas/NTC41.pdf).
+- Mecanismo motorizado real: alavanca de operação manual com rotação livre na posição "motor", e desacoplamento elétrico/mecânico do motor na posição "manual" — por isso `43LR` frequentemente aparece emparelhado com um sinal de posição de chave (não é raro ver `43LR` e a posição da seccionadora modelados como sinais irmãos do mesmo equipamento).
 
 ## Família ANSI 46
 
@@ -219,6 +242,12 @@ _17 sigla(s)._
 Cruzado com `docs/TDT/exportTDT_UTR_GTD_1_20260626.xlsx`. Das 17 siglas da LP, só 5 têm instância real, mas com volume alto (151 linhas discretas no total): `50F1`/`50F2` (`50F 1`/`50F 2`, 31 cada — estágios de fase), `50N1`/`50N2` (`50N 1`/`50N 2`, 31 cada — estágios de neutro), `50CD` (`50 - SOBRECORRENTE CDC`, 2). As variantes por fase nominal (`50FA/FB/FC/50CA/50FN/50N/50N3/50_1/50_2/50BF`) não aparecem nesta amostra.
 - **Gap real, não mapeamento incorreto**: `50EF` aparece 25x no TDT real (`50EF - END FAULT`, falha de terminal de linha) mas **não existe em nenhuma linha de `docs/Pontos Padrao ADMS_v2.xlsx`** (confirmado por busca direta na sheet `DiscreteSignals`) — não é erro de mineração do Task 1, a sigla simplesmente não está na Lista Padrão. Sinal a considerar para adicionar à LP se `50EF` for recorrente em outras subestações.
 
+### Pesquisa web (ANSI 50 — Sobrecorrente instantânea)
+
+Função ANSI/IEEE C37.2 50: **Instantaneous Overcurrent Relay** — atua sem retardo intencional de tempo assim que a corrente ultrapassa um limiar (pickup) ajustado; usada para faltas próximas ao ponto de medição, onde a corrente de curto é alta o suficiente para diferenciar claramente de sobrecarga normal. Sempre trabalha em conjunto com a função 51 (temporizada) para prover seletividade — 50 cobre a zona instantânea "perto", 51 cobre o restante com curva de tempo inverso. Termo de campo BR: "instantânea" ou "50" mesmo (os técnicos costumam falar apenas o número ANSI: "a 50 atuou"). Fonte: [ANSI/IEEE C37.2 Device Numbers](https://www.apt-power.com/wp-content/uploads/ANSI-IEEE-C37.2-List-of-Standard-Device-Numbers-for-Relay-Protection-APT-Power-1.pdf).
+- `50BF` (falha de disjuntor) é um uso derivado da lógica 50, não da proteção de linha em si: mede corrente residual após um comando de abertura para confirmar que o disjuntor de fato interrompeu — se a corrente persiste além de um tempo curto, dispara os disjuntores adjacentes (proteção de retaguarda local). É a mesma lógica do ANSI 62 (`62BF` na LP) — **ver conflito abaixo**.
+> **Conflito:** a literatura ANSI padrão associa falha de disjuntor à combinação `50BF`/lógica de breaker-failure, sem um número ANSI dedicado universal — mas esta LP já modela `62BF`/`BFAT`/`BFBT`/`BFP1-3` (família `BF*`) como a família específica de bloqueio por falha de disjuntor, com `50BF` cobrindo apenas o start da lógica (detecção de corrente residual). O compilado mantém a distinção observada na LP (50BF = detecção/start; 62/BF* = bloqueio consequente), pois é isso que o dado real da concessionária usa — dado real vence sobre a generalização da pesquisa web.
+
 ## Família ANSI 51
 
 _15 sigla(s)._
@@ -245,6 +274,12 @@ _15 sigla(s)._
 
 Cruzado com `docs/TDT/exportTDT_UTR_GTD_1_20260626.xlsx`. Só 3 das 15 siglas da LP têm instância real, mas de alto volume: `51F` (`51F`, 31 — sobrecorrente temporizada fase), `51N1` (`51N 1`, 31 — estágio 1 de neutro), `51N` (`51N`, 12, único `ReadWrite` do grupo — confirma o padrão "sigla-função" `Enabled`/`INCLUIDO;EXCLUIDO` já coberto pela regra 6, coerente com a LP que também lista `51N` como `Enabled`/`ReadWrite`).
 - `51NL` (citada na regra 51NL/local do commit `7f4e732`, fix de invariante documentado) e as variantes por fase nominal não aparecem nesta amostra — LP cobre mais granularidade do que este TDT específico usa.
+
+### Pesquisa web (ANSI 51 — Sobrecorrente temporizada; e SGF/terra)
+
+Função ANSI/IEEE C37.2 51: **AC Time Overcurrent Relay** — atua com retardo de tempo inversamente proporcional à magnitude da corrente (curva de tempo inverso, ex.: IEC/IEEE normal inverse, very inverse, extremely inverse), provendo seletividade entre proteções em cascata (a mais próxima da falta atua primeiro). `51N`/`50N` são as variantes de **neutro residual** (calculada a partir de 3Ia+3Ib+3Ic ou medida por TC de neutro), a proteção primária contra faltas fase-terra e fase-fase-terra — mais sensível que a proteção de fase porque a corrente de falta à terra costuma ser bem menor que curto trifásico franco. Ajuste típico citado em literatura de concessionária: corrente de partida de 20-33% da nominal, tempo de atuação de 3-15 s dependendo da filosofia da concessionária (grande variação entre concessionárias BR). Fonte: [Amazonas Energia — ET-03 Especificação Técnica Sistema de Proteção 50/51 Fase e Neutro](https://website.amazonasenergia.com/wp-content/uploads/2021/01/ET-03-Especifica%C3%A7%C3%A3o-T%C3%A9cn.Sistema-de-Prote%C3%A7%C3%A3o-com-Rel%C3%A9-Fun%C3%A7%C3%A3o-50-51-Fase-e-Neutro.pdf), [ANSI/IEEE C37.2 Device Numbers](https://www.apt-power.com/wp-content/uploads/ANSI-IEEE-C37.2-List-of-Standard-Device-Numbers-for-Relay-Protection-APT-Power-1.pdf).
+- **SGF** (sigla própria da LP, família alfabética `SG*`, não numérico-ANSI): a pesquisa web não confirmou um acrônimo padronizado universal para "SGF" — não é um termo ANSI C37.2 nem apareceu em documentação de fabricante pesquisada. Contexto da LP (`SGF`/`SGFT`/`SGT2` como `Enabled`/`RelayTrip` com mesmo padrão estrutural de `51N`/`67N`) e a nomenclatura completa por extenso já registrada no compilado (Task 2, se aplicável) sugerem fortemente que é abreviação de campo BR para "Sobrecorrente de/à terra" ou "Sistema de Ground Fault" — mas isso é inferência, não confirmação por fonte externa.
+> **Conflito:** nenhum — não há contradição, apenas lacuna de fonte externa. Manter a leitura estrutural já derivada da LP/Task 2 como a informação primária; não fabricar uma etimologia de "SGF" sem base.
 
 ## Família ANSI 56
 
@@ -277,6 +312,10 @@ _12 sigla(s)._
 
 Cruzado com `docs/TDT/exportTDT_UTR_GTD_1_20260626.xlsx`. 4 das 12 siglas da LP aparecem: `59` (função, `59 - FUNCAO SOBRETENSAO`, `ReadWrite`/`Read` — mesmo padrão-função da regra 6), `59CD` (`59 - BLOQUEIO CDC SOBRETENSAO`), `59E1`/`59E2` (`59 E1`/`E2`, estágios de fase). `59A`, `59E3-E5`, `59I`, `59N`, `59_T` não aparecem nesta amostra.
 - **Gap real, mesmo padrão do ANSI 50**: `59N1`/`59N2` aparecem no TDT real (`59 NEUTRO ESTAGIO 1`/`2`, 4x cada) mas **não existem em `docs/Pontos Padrao ADMS_v2.xlsx`** (só `59N` está na LP, sem estágios numerados) — mais um sinal de que a LP às vezes generaliza onde o campo distingue por estágio.
+
+### Pesquisa web (ANSI 59 — Sobretensão)
+
+Função ANSI/IEEE C37.2 59: **Overvoltage Relay** — detecta tensão acima de um limiar ajustado, protegendo isolamento de equipamentos e cabos contra sobretensão sustentada (ex.: perda de carga súbita fazendo a tensão subir, falha de regulação de tensão, ilhamento com geração excedente). Termo de campo BR: "sobretensão", sem gíria alternativa relevante. Fonte: [ANSI/IEEE C37.2 Device Numbers](https://www.apt-power.com/wp-content/uploads/ANSI-IEEE-C37.2-List-of-Standard-Device-Numbers-for-Relay-Protection-APT-Power-1.pdf).
 
 ## Família ANSI 61
 
@@ -313,6 +352,10 @@ _8 sigla(s)._
 | 63TA | 63 - ALARME BUCHHOLZ TRAFO | Custom | Discrete | Read | Transit;NORMAL;ATUADO;Error |  |  |  |
 | 63TC | 63 - TRIP BUCHHOLZ CDC OU TRAFO | RelayTrip | Discrete | Read | Transit;NORMAL;ATUADO;Error |  |  |  |
 | 63TD | 63 - TRIP BUCHHOLZ TRAFO | RelayTrip | Discrete | Read | Transit;NORMAL;ATUADO;Error |  |  |  |
+
+### Pesquisa web (ANSI 63 — Relé Buchholz / pressão de gás)
+
+Função ANSI/IEEE C37.2 63: **Pressure Switch** (na prática, para transformadores a óleo, quase sempre implementada como **relé Buchholz**) — dispositivo eletromecânico instalado na tubulação entre o tanque principal e o tanque de expansão de óleo, que detecta falhas internas por acúmulo de gases da decomposição do óleo isolante (defeitos lentos, tipo sobreaquecimento de contatos) ou por deslocamento brusco do óleo (defeitos rápidos, tipo arco/curto interno). Dois estágios físicos = dois flutuadores = os dois estados que a LP já modela: acúmulo lento de gás aciona um contato de **alarme** (`63A`), deslocamento brusco de óleo aciona um contato de **trip** (`63*D`/`63*C`), consistente com o padrão A/D já presente na LP para esta família inteira. Termo de campo BR: "Buchholz" é o nome universalmente usado (não "relé 63"); "válvula" (LP família ANSI 20, `20C`/`20T` "VALVULA OU BUCHHOLZ") é outra função correlata só de alívio de sobrepressão, frequentemente combinada na mesma sigla composta (`2063`, `206T`) porque as duas funções compartilham o mesmo contato físico em muitos relés de proteção de transformador. Fonte: [O Setor Elétrico — Buchholz: proteção de transformadores](https://www.celectra.com.br/blog/buchholz-protecao-de-transformadores-com-reles-de-gas-certificados/), [ACEE Engenharia — Função de Proteção 63: Relé Buchholz](https://acee.com.br/engenharia-de-protecao-e-controle/desvendando-a-funcao-de-protecao-63-rele-de-pressao-de-gas-buchholz-em-transformadores/), [Wikipédia PT — Relé de Buchholz](https://pt.wikipedia.org/wiki/Rel%C3%A9_de_Buchholz).
 
 ## Família ANSI 67
 
@@ -356,6 +399,10 @@ _30 sigla(s)._
 Cruzado com `docs/TDT/exportTDT_UTR_GTD_1_20260626.xlsx`. Família com maior volume real do documento (163 linhas discretas, 15 siglas distintas): `67` (função, 1x por módulo de linha, `Read`), `67F1`/`67F2` (estágios de fase, 22 cada), `67FT` (fase temporizado, 22), `67N1`/`67N2` (estágios de neutro, 22 cada), `67NT` (neutro temporizado, 22), e as variantes direto/reverso `67FD/FR/FTD/FTR` + `67ND/NR/NTD/NTR` (1 cada — só 1 relé na amostra usa essa granularidade direcional).
 - Nomenclatura de campo (`67 - DIRECIONAL SOBRECORRENTE FASE E1` etc.) é praticamente idêntica à descrição padrão da LP — família de proteção direcional bem coberta e sem gaps de nomenclatura nesta amostra.
 - Presença de 2 relés por linha (sufixo `_P`/`_A`, principal/alternado — ver ANSI 21) se repete aqui: mesma sigla `67F1` aparece nos dois relés da mesma linha, dobrando a cardinalidade esperada por módulo.
+
+### Pesquisa web (ANSI 67 — Direcional de sobrecorrente)
+
+Função ANSI/IEEE C37.2 67: **AC Directional Overcurrent Relay** — combina a medição de sobrecorrente (50/51) com um elemento direcional que determina o sentido do fluxo de corrente/potência, disparando apenas para faltas em uma direção específica (a jusante ou a montante do ponto de medição). Essencial em redes malhadas ou com geração distribuída, onde uma proteção de sobrecorrente simples não conseguiria diferenciar faltas nos dois sentidos possíveis de fluxo. Termo de campo BR: "direcional" (ex.: "a direcional de fase atuou"); `FD`/`FR`/`ND`/`NR` (direto/reverso) na LP nomeiam explicitamente o sentido detectado. Fonte: [ANSI/IEEE C37.2 Device Numbers](https://www.apt-power.com/wp-content/uploads/ANSI-IEEE-C37.2-List-of-Standard-Device-Numbers-for-Relay-Protection-APT-Power-1.pdf).
 
 ## Família ANSI 71
 
@@ -406,6 +453,11 @@ _9 sigla(s)._
 Cruzado com `docs/TDT/exportTDT_UTR_GTD_1_20260626.xlsx`. 4 das 9 siglas da LP aparecem, com bom volume (69 linhas): `79` (função religamento, `ReadWrite`, alias `79`, 15x), `79LO` (`79 BLOQUEADO`, 18), `79OK` (`79 OK`, 18), `79RE` (`79 RESET`, 18 — atenção: no real, o alias de `79RE` é "RESET", enquanto a descrição padrão da LP para `79RE` é "79 - RELIGAMENTO PRONTO" — nomes de campo abreviados divergem do texto completo da LP, mas a sigla em si bate). `79TF`, `79_1`, `79_EXC`, `79_INC` não aparecem nesta amostra.
 - Caso relevante para a regra 7 (Fusão): `79_EXC`/`79_INC` (comando incluir/excluir religamento) da LP não aparecem no real como Write órfão — sugere que, nesta amostra, a função `79` inteira já cobre o papel de habilita/desabilita via `ReadWrite` (mesmo padrão-função `INCLUIDO;EXCLUIDO` da regra 6), sem precisar dos comandos dedicados.
 
+### Pesquisa web (ANSI 79 — Religamento automático)
+
+Função ANSI/IEEE C37.2 79: **AC Reclosing Relay** — controla o fechamento automático do disjuntor após um trip por falta, restaurando o fornecimento sem intervenção do operador; ciclo típico em distribuição BR é fechamento em barra morta após verificação de ausência de tensão (citado ~20 s na literatura de religadores) e supervisão de sincronismo/tensão quando há geração nos dois lados. Amplamente usado em religadores de distribuição para reduzir tempo de interrupção em faltas transitórias (galho de árvore, descarga atmosférica) que se autoextinguem após a abertura. Termo de campo BR: "religamento" (nunca "reclosing"); `79OK` = religamento bem-sucedido, `79LO` = bloqueado após esgotar tentativas (lockout do ciclo de religamento, distinto do `86` geral). Fonte: [UNIUBE — Religamento Automático de uma Subestação](https://uniube.br/eventos/entec/2011/arquivos/eletrica1.pdf), [Adeel Materiais Elétricos — O que é o Religamento Automático?](https://adeel.com.br/religamento-automatico/), [O Setor Elétrico — Rearme Automático em Cabines Primárias](https://www.osetoreletrico.com.br/rearme-automatico-em-cabines-primarias-de-media-tensao/).
+- Sinônimo de campo importante: **"rearme automático"** (ANSI 79V/79F, por tensão/frequência) é conceitualmente diferente do religamento tradicional (79 por sobrecorrente) — rearme atua em eventos de tensão/desequilíbrio/falta de fase e não deve ser usado para sobrecorrente/curto-circuito. A LP não distingue `79V`/`79F` como siglas próprias (todas as variantes caem sob a família `79` genérica) — nenhum conflito de dado real detectado, mas é um ponto de atenção para granularidade futura da LP.
+
 ## Família ANSI 81
 
 _20 sigla(s)._
@@ -439,6 +491,11 @@ Cruzado com `docs/TDT/exportTDT_UTR_GTD_1_20260626.xlsx`. Segunda maior família
 - **Gap real**: `81IE1`/`81IE2` (na LP, "TRIP SUB/SOBRE FREQUENCIA E1/E2") e `81O2` não aparecem nesta amostra. Em contrapartida `81O1` aparece no real mas com alias diferente da contraparte esperada `81E1` — sugere que `81O1`/`81O2` (sobrefrequência) e `81E1`-`81E5` (estágios genéricos) coexistem como famílias de nomenclatura distintas dentro do próprio ANSI 81, não intercambiáveis.
 - `81U1`-`81U5` no real são `ReadWrite` (ajuste é comandável), enquanto a LP os lista como `Custom`/`Read` (`Transit;DESABILITADO;HABILITADO;Error`) — divergência de `Direction` a observar se a fusão D+C (regra 1) está classificando esses ajustes corretamente.
 
+### Pesquisa web (ANSI 81 — Sub/sobrefrequência)
+
+Função ANSI/IEEE C37.2 81: **Frequency Relay** — monitora a frequência do sistema e atua quando ela sai de uma faixa aceitável; subdividida na nomenclatura de mercado em `81U` (underfrequency/subfrequência, indica déficit de geração/sobrecarga do sistema), `81O` (overfrequency/sobrefrequência, indica excesso de geração relativo à carga) e `81df/dt` (taxa de variação de frequência, ROCOF). É a proteção-chave para deslastre de carga automático em déficit de geração e para detecção de ilhamento em geração distribuída (junto com `78` vetor/salto de fase e `27`/`59`). Termo de campo BR: "sub/sobrefrequência" ou apenas "a 81 atuou"; múltiplos estágios (`E1`-`E5` na LP) refletem esquemas de deslastre escalonado (cada estágio desliga um bloco de carga em uma faixa de frequência diferente). Fonte: [Pextron — Funções ANSI: a arquitetura invisível da proteção elétrica moderna](https://www.pextron.com/funcoes-ansi-a-arquitetura-invisivel-da-protecao-eletrica-moderna/), [SciELO — Método prático para ajustes de relés de frequência para detecção de ilhamento](https://scielo.br/scielo.php?pid=S0103-17592008000200008&script=sci_arttext).
+> **Conflito:** a nomenclatura de mercado padrão associa `81O`/`81U` a sobre/subfrequência de forma exclusiva e simétrica — mas o TDT real (nota acima) mostra `81O1` com alias que não tem contraparte `81E1` equivalente, e a própria LP já documenta `81E1`-`81E5` como estágios genéricos coexistindo com `81O1`/`81O2`/`81SO`/`81SU` como famílias de nomenclatura paralelas dentro do mesmo ANSI 81. O compilado mantém a leitura já registrada no Task 2 (dado real: duas famílias de nomenclatura não intercambiáveis) — dado real vence sobre a expectativa de nomenclatura simétrica da pesquisa web.
+
 ## Família ANSI 85
 
 _1 sigla(s)._
@@ -465,6 +522,11 @@ _7 sigla(s)._
 
 Cruzado com `docs/TDT/exportTDT_UTR_GTD_1_20260626.xlsx`. Só 2 das 7 siglas da LP aparecem, baixo volume: `86` (`86 BLOQUEIO`, 6x, split **4 `ReadWrite` + 2 `Read`** — a variante `ReadWrite` que a LP também lista é maioria no real, não ausente) e `86BF` (`86BF`, `ReadWrite`, 3x — bloqueio por falha de disjuntor, coerente com "86 - BLOQUEIO DEFEITO DISJUNTOR" da LP). `86C`, `86CC`, `86FL` não aparecem nesta amostra.
 - Família de baixo volume real (9 linhas) mas coerente 1:1 com a LP nas siglas que aparecem — sem achados de divergência.
+
+### Pesquisa web (ANSI 86 — Relé de bloqueio/lockout)
+
+Função ANSI/IEEE C37.2 86: **Lockout Relay** — dispositivo de bloqueio (auxiliar, não uma proteção em si) que, uma vez atuado por um trip de uma função de proteção (ex.: 87 diferencial, 63 Buchholz), trava mecânica ou eletricamente o circuito de fechamento do disjuntor, impedindo o operador de religar remotamente até que uma inspeção/reparo seja feita e o relé seja resetado manualmente no painel. Contatos tipicamente do tipo *latched* (travado) — permanecem no estado atuado até reset manual, mesmo que a condição de falta já tenha desaparecido; esse é o traço distintivo que separa 86 de um simples relé de trip. Termo de campo BR: "bloqueio" ou "relé 86"; a ação de destravar é "resetar o 86" ou "dar reset no bloqueio". Fonte: [Arteche — ANSI 86 Lockout Relays](https://www.arteche.com/en/ansi-86-lockout-relays), [Mesh Engenharia — Função 86: Bloqueio e Segurança](https://www.linkedin.com/pulse/rel%C3%A9-de-bloqueio-e-fun%C3%A7%C3%A3o-86-mesh-engenharia), [Kraus & Naimer — Relé de Bloqueio Função 86](https://www.krausnaimer.com.br/produtos/rele-de-bloqueio/rele-de-bloqueio-funcao-86-com-sinalizador-mecanico/).
+- Diferença chave com **ANSI 94** (**Tripping or Trip-Free Relay**, LP: `94` "RETRIP"): 94 é a função que efetivamente comanda a bobina de abertura do disjuntor a partir de qualquer proteção que tenha atuado (um relé auxiliar de disparo, muitas vezes com múltiplas bobinas para redundância); 86 é o bloqueio que *impede o fechamento subsequente*. Em muitos esquemas de proteção os dois coexistem no mesmo relé auxiliar multifunção (retrip + lockout), o que explica por que a LP às vezes atribui a mesma sigla-base a ambos os papéis dependendo da concessionária. Fonte: [ElectricalVolt — ANSI Device Numbers and Acronyms](https://www.electricalvolt.com/ansi-device-numbers/).
 
 ## Família ANSI 87
 
@@ -516,6 +578,10 @@ _7 sigla(s)._
 | 90VF | AUTOMATISMO RELE 90 E VENTILACAO FORCADA | Enabled | Discrete | ReadWrite | Transit;INCLUIDO;EXCLUIDO;Error |  |  |  |
 | 90VF | AUTOMATISMO RELE 90 E VENTILACAO FORCADA | Enabled | Discrete | Read | Transit;INCLUIDO;EXCLUIDO;Error |  |  |  |
 
+### Pesquisa web (ANSI 90 — Regulador de tensão / CDC-OLTC)
+
+Função ANSI/IEEE C37.2 90: **Regulating Device / Voltage Regulator Relay** — no contexto de transformadores de potência, controla o **comutador de derivação em carga (CDC / OLTC — On-Load Tap Changer)**, ajustando automaticamente a relação de transformação (mudando taps) para manter a tensão de saída dentro de uma banda-morta configurada, sem interromper o fluxo de carga (diferente do comutador *sem* carga, que exige desenergização). Componentes principais: acionamento motorizado, chave seletora e chave de carga (esta última com contatos e resistores em óleo próprio, separado do óleo do transformador). `90DP` (discrepância de tap) é o alarme clássico quando a posição real do comutador diverge da posição comandada/esperada — falha mecânica ou de sincronismo do motor de acionamento. Termo de campo BR: "CDC" (nunca "OLTC" em conversa oral, embora ambos apareçam em documentação), "comutador" para curto. Fonte: [Treetech SAM — Comutador de derivação](https://sam.treetech.com.br/pt-BR/support/solutions/articles/69000843041-comutador-de-derivac%C3%A3o), [saVRee — Comutador de Derivação em Carga (LTC) Explicado](https://savree.com/pt/enciclopedia/comutador-de-derivacao-em-carga-ltc), [ABB — Tap changer control with voltage regulator OLATCC (ANSI 90V)](https://techdoc.relays.protection-control.abb/r/REX615-Technical-Manual/PCL1/en-US/Tap-changer-control-with-voltage-regulator-OLATCC-ANSI-90V).
+
 ## Família ANSI 94
 
 _1 sigla(s)._
@@ -523,6 +589,10 @@ _1 sigla(s)._
 | Sigla | Descrição padrão | Tipo ADMS | Categoria | Direção | Estados / MM | Tipo medição | Unidade | DE->PARA |
 |---|---|---|---|---|---|---|---|---|
 | 94 | 94 - RETRIP | RelayTrip | Discrete | Read | Transit;NORMAL;ATUADO;Error |  |  | TEXT |
+
+### Pesquisa web (ANSI 94 — Retrip / trip-free)
+
+Função ANSI/IEEE C37.2 94: **Tripping or Trip-Free Relay** — relé auxiliar de disparo que recebe o sinal de qualquer função de proteção que tenha atuado (87, 21, 50/51 etc.) e energiza a(s) bobina(s) de abertura do disjuntor; "trip-free" refere-se à característica de permitir que o disjuntor abra mesmo que um comando de fechamento esteja simultaneamente presente (não trava o mecanismo em ciclo fechar-abrir-fechar). Na prática de campo BR, "retrip" costuma se referir à redundância: um segundo comando de abertura enviado a uma bobina de trip diferente (bobina 1/bobina 2) quando o primeiro disparo não é confirmado, como camada extra antes de escalar para proteção de falha de disjuntor (50BF/62). Fonte: [ANSI/IEEE C37.2 Device Numbers](https://www.apt-power.com/wp-content/uploads/ANSI-IEEE-C37.2-List-of-Standard-Device-Numbers-for-Relay-Protection-APT-Power-1.pdf), [ElectricalVolt — ANSI Device Numbers and Acronyms](https://www.electricalvolt.com/ansi-device-numbers/).
 
 ## Sigla AB*
 
@@ -786,6 +856,10 @@ _9 sigla(s)._
 | CDRA | CDC REMOTO AUTOMATICO | Custom | Discrete | Read | Transit;DESATIVADO;ATIVADO;Error |  |  |  |
 | CDRM | CDC REMOTO MANUAL | Custom | Discrete | Read | Transit;DESATIVADO;ATIVADO;Error |  |  |  |
 
+### Pesquisa web (CD* — CDC / OLTC)
+
+CDC = **Comutador de Derivação em Carga**, equivalente ao termo internacional **OLTC (On-Load Tap Changer)** — ver detalhamento completo em "Pesquisa web (ANSI 90 — Regulador de tensão / CDC-OLTC)" acima, já que a função de controle automático do CDC é o próprio ANSI 90. Esta família `CD*` cobre os modos operacionais e falhas do equipamento em si: `CDAM`/`CDLA`/`CDLM`/`CDRA`/`CDRM` (par automático/manual × local/remoto — mesma lógica de seleção de modo do ANSI 43), `CDCO` (modo de operação em paralelismo — mestre/individual/comandado, relevante quando há dois ou mais transformadores em paralelo cujos CDCs precisam manter taps sincronizados para não circular corrente reativa entre eles), `CDFL`/`CDMT` (falha do equipamento/motor de acionamento). A confirmação de que a whitelist do projeto já trata `CDC` como comando tipo pulso legítimo sem discreto de status (regra 9, `config.siglas_write_legitimo`) é coerente com a natureza operacional real do CDC: cada comando "sobe tap"/"desce tap" é um pulso incremental (`TapIncrement`), não uma mudança de estado binário como abrir/fechar — não há "status" de comando, só a posição resultante (medida analógica de tap, fora do escopo desta família discreta). Fonte: [Wikipédia PT — Comutador de carga](https://pt.wikipedia.org/wiki/Comutador_de_carga), [Treetech SAM — Comutador de derivação](https://sam.treetech.com.br/pt-BR/support/solutions/articles/69000843041-comutador-de-derivac%C3%A3o).
+
 ## Sigla CF*
 
 _1 sigla(s)._
@@ -878,6 +952,13 @@ _5 sigla(s)._
 ### Nomenclaturas reais observadas (DJ* — posição de disjuntor)
 
 Cruzado com `docs/TDT/exportTDT_UTR_GTD_1_20260626.xlsx`. `DJF1` tem forte presença real: 24 linhas discretas, sempre `ReadWrite`/`MultiCoord`, Message Mapping `DESLIGAR@LIGAR___DESLIGADO@LIGADO___SwitchStatus_D_TC_SE` — confirma exatamente a regra 5 (pareamento por sigla de posição) e a regra 7 (fusão em `MultiCoord`, nunca `DoubleBit`). `DJA1` **não aparece nenhuma vez** nesta amostra (0 ocorrências) — a LP modela disjuntor NA (normalmente aberto) mas esta subestação real só tem disjuntores NF (normalmente fechado); gap por ausência de equipamento na amostra, não por falha de mineração. `DJIE` também não aparece.
+
+### Pesquisa web (DJ* — disjuntor: mola, SF6, NA/NF)
+
+Disjuntor não é um número ANSI (é o equipamento, não a função de proteção); mas seu estado interno de operação carrega dois conceitos de campo recorrentes na LP e no TDT real:
+- **Mola de abertura/fechamento** (LP: `BBAB`/`BBFC`/`BBA1`/`BBA2`/`BBFL` na família `BB*` — "BOBINA ABERTURA"/"BOBINA FECHAMENTO"; atenção: a LP nomeia como "bobina", mas o conceito de campo de "mola carregada/descarregada" é do mecanismo de operação associado): a mola de operação tem dois estados de sinalização, **carregada** (armada, pronta para a próxima manobra) e **descarregada** (acabou de operar, precisa recarregar antes de poder operar de novo); o disjuntor **não pode fechar** se a mola de fechamento estiver descarregada — trava mecânica de segurança. O contato "CH" (indicação de mola carregada) é o sinal de campo típico. Termo de campo BR: "mola carregada"/"mola descarregada" (não "spring charged/discharged" em conversa oral, mesmo que a documentação de fabricante use inglês). Fonte: [Schneider Electric — Como funciona o contato de mola carregada CH](https://www.se.com/br/pt/faqs/FA289161/), [Mesh Engenharia — Como Manobrar Disjuntores de Média Tensão](https://pt.linkedin.com/pulse/como-manobrar-disjuntores-de-m%C3%A9dia-tens%C3%A3o-mesh-engenharia).
+- **SF6** (LP família `SF*`: `SF6`/`SF6A`/`SF6B`/`SFAB`/`SFFC`) — gás hexafluoreto de enxofre usado como meio isolante e de interrupção de arco em disjuntores de alta tensão; a densidade do gás é monitorada por densímetro, com dois estágios de contato: **alarme** (perda de gás detectada, ainda operável) e **bloqueio** (densidade abaixo do mínimo seguro — trava o disjuntor na posição atual, aberto ou fechado, para não arriscar reignição de arco na câmara de interrupção). O padrão alarme/bloqueio já presente na LP para `SF6A`/`SF6B` reflete exatamente esses dois estágios físicos do densímetro. Fonte: [saVRee — Disjuntor SF6 Explicado](https://savree.com/pt/enciclopedia/disjuntor-sf6), [NTC-45 CELG — Disjuntor de Alta Tensão](https://www.enel.com.br/content/dam/enel-br/one-hub-brasil---2018/nomas-t%C3%A9cnicas-goi%C3%A1s/normas-t%C3%A9cnicas/NTC45.pdf).
+- **NA/NF**: "DISJUNTOR NA" (`DJA1`) = normalmente aberto, "DISJUNTOR NF" (`DJF1`) = normalmente fechado — terminologia padrão de posição de repouso do equipamento em condição normal de operação, comum a disjuntores e seccionadoras (ver `SEC*` abaixo), não específica de disjuntor.
 
 ## Sigla DM*
 
@@ -1605,6 +1686,11 @@ _15 sigla(s)._
 Cruzado com `docs/TDT/exportTDT_UTR_GTD_1_20260626.xlsx`. Das 6 posições de seccionadora da LP, 4 aparecem: `SECF` (SECCIONADORA FONTE, 6x, `ReadWrite`/`MultiCoord`, MM `ABRIR@FECHAR___ABERTO@FECHADO`), `SECB` (BYPASS, 6x), `SECC` (CARGA, 4x, mesmo padrão `MultiCoord`), `SECG` (TERRA, 2x — mas com MM diferente: `null@null___ABERTO@FECHADO___SwitchStatus_D_TS_SO_terra`, sufixo `_terra` específico e sem par de comando `ABRIR@FECHAR`, i.e. seccionadora de terra aparenta ser só status, sem comando modelado nesta amostra). `SECI`/`SECL`/`SECT` não aparecem (0 ocorrências) — interbarras/interlinhas/transferência não existem nesta subestação real.
 - Confirma a regra 7 (fusão → `MultiCoord`) e é a base direta da whitelist da regra 10: `SECF`/`SECC`/`SECB` aqui batem com as siglas de posição da whitelist `config.siglas_por_equipamento["Seccionadora"]`; `DSEC` (defeito) e `43LR` (chave local/remoto) da mesma whitelist também têm presença real forte (16 e 24 ocorrências, `SingleBit`/`Read`).
 
+### Pesquisa web (SEC* — seccionadora)
+
+Seccionadora (disconnector/isolator switch) não é uma função ANSI — é o equipamento de manobra que isola visivelmente um trecho de circuito para manutenção segura (diferente do disjuntor, ela **não tem capacidade de interromper corrente de carga ou de falta**; só pode ser operada com o circuito já desenergizado por outro dispositivo, ou em alguns modelos específicos com corrente de magnetização/carga a vazio). As posições nomeadas na LP (`FONTE`, `CARGA`, `BYPASS`, `TERRA`, `INTERBARRAS`, `TRANSFERENCIA`) descrevem a função topológica do ponto de manobra na subestação, não um tipo diferente de mecanismo físico. Termo de campo BR: "chave seccionadora" ou apenas "seccionadora" (nunca "isolador" em PT-BR, que tem outro significado — o componente isolante). Motorização e telessupervisão remota são requisito normativo desde a REN ANEEL 846/2019 (PRODIST Módulo 6) — daí a forte presença real de `43LR` (chave local/remoto) emparelhada com a posição da seccionadora. Fonte: [ABB — Como funciona uma chave seccionadora?](https://loja.br.abb.com/blog/post/como-funciona-chave-seccionadora), [A3A Engenharia — Monitoramento de chaves seccionadoras em subestações](https://a3aengenharia.com.br/conteudo/artigos-tecnicos/monitoramento-chaves-seccionadoras-subestacoes/), [NTC-41 CELG — Chave Seccionadora Especificação](https://www.enel.com.br/content/dam/enel-br/one-hub-brasil---2018/nomas-t%C3%A9cnicas-goi%C3%A1s/normas-t%C3%A9cnicas/NTC41.pdf).
+- **Seccionadora de terra** (`SECG`) é um caso especial: sua função é aterrar um trecho já isolado para segurança de manutenção (não faz parte do circuito de potência em operação normal) — isso é coerente com o achado real já registrado acima (MM `_terra` sem par de comando `ABRIR@FECHAR`, aparentando ser só status nesta amostra): operacionalmente, seccionadoras de terra costumam ter intertravamento rígido que impede fechamento com o circuito energizado, então nem sempre há comando remoto habilitado — **nenhum conflito**, a ausência de par de comando no dado real é consistente com a prática de campo de intertravamento de segurança, não um gap de mineração.
+
 ## Sigla SF*
 
 _5 sigla(s)._
@@ -1627,6 +1713,10 @@ _4 sigla(s)._
 | SGF | FUNCAO SGF | Enabled | Discrete | ReadWrite | Transit;INCLUIDO;EXCLUIDO;Error |  |  |  |
 | SGFT | TRIP SGF | RelayTrip | Discrete | Read | Transit;NORMAL;ATUADO;Error |  |  |  |
 | SGT2 | TRIP SGF E2 | RelayTrip | Discrete | Read | Transit;NORMAL;ATUADO;Error |  |  |  |
+
+### Pesquisa web (SG* — SGF)
+
+Ver nota completa em "Pesquisa web (ANSI 51 — Sobrecorrente temporizada; e SGF/terra)" acima — a pesquisa web não confirmou um acrônimo padronizado universal para "SGF"; a estrutura da sigla na LP (`Enabled`/`RelayTrip`, mesmo padrão de `51N`/`67N`) é consistente com "Sobrecorrente de/à terra", mas isso permanece inferência estrutural, não achado de fonte externa.
 
 ## Sigla SI*
 
@@ -1924,3 +2014,17 @@ _10 sigla(s)._
 - Famílias geradas: 151
 
 Cobertura: OK — todas as siglas da LP aparecem em alguma família acima.
+
+---
+
+## Candidatos a regra
+
+Itens acionáveis para o motor de regras (`src/tdt/motor_regras.py` / `src/tdt/config.py`), derivados da pesquisa web (Task 3) cruzada com os achados de dado real já registrados nas Tasks 1/2. Formato: SE `<condição>` ENTÃO `<ajuste>`, com evidência.
+
+1. **SE** a sigla candidata é `50BF` **e** o texto de entrada menciona "falha de disjuntor"/"breaker failure" isolado (sem menção a "bloqueio") **ENTÃO** não promover automaticamente para a família `62`/`BF*` (bloqueio) — tratar `50BF` como o *start* da lógica de falha de disjuntor (detecção de corrente residual) e `62BF`/`BFAT`/`BFBT`/`BFP1-3` como o bloqueio consequente, mantendo a distinção que a LP já modela. Evidência: pesquisa ANSI padrão não separa os dois papéis com números distintos universalmente, mas a LP tem `50BF` na família ANSI 50 e a família `BF*` isolada só para bloqueio — dado real vence.
+2. **SE** o texto de entrada contém "mola" (carregada/descarregada/armada) **ENTÃO** priorizar candidatos na família `BB*` (`BBAB`/`BBFC`/`BBA1`/`BBA2`) em vez de tratar como sinal genérico de bobina — o campo usa "mola" e "bobina" de forma quase intercambiável para o mesmo mecanismo de operação do disjuntor, mas a LP só tem siglas `BB*` ("BOBINA"); um matcher que rejeita "mola" por não achar match textual literal com "bobina" perderia esses sinais. Evidência: pesquisa de campo confirma "mola carregada/descarregada" como termo predominante em documentação de manobra (Schneider Electric, Mesh Engenharia), enquanto a LP nomeia como "BOBINA ABERTURA"/"BOBINA FECHAMENTO".
+3. **SE** o texto de entrada contém "SF6" **e** o candidato tem estados `NORMAL;ATUADO` (não `ALARME;BLOQUEIO` explícito) **ENTÃO** desambiguar por termo: "baixa pressão" isolado → `SF6` (alarme, estágio 1 do densímetro); "bloqueio"/"bloqueado" junto de SF6 → `SF6B`/`SFAB`/`SFFC` (estágio 2, bloqueio de abertura/fechamento) — os dois estágios físicos do densímetro (alarme vs. bloqueio) devem mapear para siglas diferentes mesmo quando o texto de entrada usa "SF6" genérico para ambos. Evidência: saVRee/NTC-45 CELG confirmam dois estágios distintos de contato no densímetro de SF6; a LP já tem essa distinção nas 5 siglas da família `SF*`.
+4. **SE** o equipamento identificado é `Seccionadora` **e** a posição é `TERRA`/`SECG` **e** não há sigla de comando (`ABRIR@FECHAR`) nos dados de origem **ENTÃO** não marcar como `comando_sem_discreto` nem como gap de mineração — seccionadora de terra tipicamente tem intertravamento de segurança que impede operação remota quando o circuito está energizado, então a ausência de comando modelado é esperada, não um erro. Evidência: TDT real (`docs/TDT/exportTDT_UTR_GTD_1_20260626.xlsx`) já mostra `SECG` com MM `_terra` sem par `ABRIR@FECHAR`, registrado no Task 2; pesquisa web confirma a prática de intertravamento de seccionadora de terra como padrão de segurança, não peculiaridade desta amostra.
+5. **SE** o texto de entrada contém "CDC" ou "OLTC" ou "comutador" (de derivação/carga/tap) **e** o verbo é "aumentar"/"diminuir"/"subir tap"/"descer tap" **ENTÃO** classificar como `CDC`/`TapIncrement`/`Write`, nunca como `ReadWrite` de status — CDC é fisicamente um comando incremental de pulso (chave seletora + chave de carga movendo um tap por vez), sem par de status binário análogo a abrir/fechar; a whitelist `config.siglas_write_legitimo` já trata isso corretamente (regra 9), mas o candidato textual "comutador"/"OLTC" (sinônimo em inglês, pode aparecer em listas de origem de concessionárias com influência de fabricante estrangeiro) deve casar com a mesma sigla `CDC`, não gerar uma família nova. Evidência: pesquisa (Treetech, saVRee, Wikipédia PT) confirma CDC = OLTC = mesmo equipamento; termo de campo BR usa "CDC" quase exclusivamente em conversa, mas documentação técnica/importada pode trazer "OLTC".
+6. **SE** o texto de entrada contém "religamento" **e** o candidato é `79LO` **ENTÃO** não confundir com o bloqueio geral `86` — `79LO` é especificamente o esgotamento do ciclo de religamento (lockout do religador após N tentativas malsucedidas), um conceito mais estreito que o bloqueio geral de proteção `86` (que trava por qualquer função de proteção que tenha atuado, com reset manual em painel). Um matcher que generaliza qualquer "bloqueio"/"lockout" para `86` erraria `79LO`. Evidência: LP já separa `79LO` (família 79) de `86`/`86BF` (família 86) como siglas distintas; pesquisa web (UNIUBE, Adeel) confirma que o lockout do religador é conceitualmente restrito ao ciclo de religamento, não à proteção geral.
+7. **SE** o texto de entrada contém "check de sincronismo" ou "verificação de sincronismo" **e** não menciona explicitamente "barra morta" **ENTÃO** priorizar candidatos da família ANSI 25 com estados `NORMAL;FALTA`/`NORMAL;ATUADO` (`25CA`, `25ER`, `25OK`) sobre qualquer sigla de fechamento sem verificação — "barra morta" é um modo operacional que *dispensa* o check de sincronismo (um dos lados está desenergizado), então texto que menciona esse termo não deve casar com as siglas de sincronismo da família 25. Evidência: pesquisa (Conprove, UNIUBE) distingue claramente os dois modos; a LP não tem sigla própria para "fechamento em barra morta" nesta família, então o risco de falso-positivo é real se o matcher não filtrar esse termo.
