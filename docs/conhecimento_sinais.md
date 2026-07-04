@@ -83,7 +83,7 @@ _25 sigla(s)._
 Cruzado com `docs/TDT/exportTDT_UTR_GTD_1_20260626.xlsx` (`DNP3_DiscreteSignals`, sheet real de UTR). Descrições de campo estão em branco nesse export (nomenclatura real vem só do Signal Name padronizado `{SE}_{MODULO}_{EQUIP}_{SIGLA}`); a evidência de campo é estrutural: cardinalidade e datatype por sinal, não texto.
 
 - Só as zonas de fase aparecem no dado real: `GTD_LTGTA_LTGTA_P_21`, `..._21Z1`, `..._21Z2`, `..._21Z3`, `..._21Z4` — **4 zonas por módulo de linha** (`21Z1..21Z4`), sempre `Read`/`SingleBit`, uma ocorrência por lado de relé (`_P`/`_A`, principal/alternado — 2 relés por linha nesta subestação). `21Z5` e as variantes de terra (`21N*`) da LP não aparecem nesta TDT real — famílias presentes na LP mas sem instância nesta amostra.
-- `21` (função habilitada, `Enabled`/`ReadWrite`) existe 1x por módulo de linha, par com a função — confirma o padrão de "sigla-função" (`INCLUIDO;EXCLUIDO`) descrito na LP.
+- `21` (função habilitada, `Enabled`/`Read` — todas as 6 ocorrências reais são `Read`, nenhuma `ReadWrite`, diferente do par `Read`/`ReadWrite` que a LP lista) existe 1x por módulo de linha, par com a função — o padrão de "sigla-função" (`INCLUIDO;EXCLUIDO`) descrito na LP se confirma na estrutura, mas não na direção: aqui é só leitura.
 
 ## Família ANSI 24
 
@@ -154,7 +154,7 @@ _16 sigla(s)._
 
 Cruzado com `docs/TDT/exportTDT_UTR_GTD_1_20260626.xlsx` (`DNP3_DiscreteSignals`). `Description` vem em branco em todo o export (0/1641 linhas); a nomenclatura real observável é o `Signal Alias` + `Signal Name` padronizado + estrutura (cardinalidade/datatype/direção).
 
-- Só 4 siglas aparecem: `27` (função, `27 FUNCAO`, `ReadWrite`/`Read`, 1x por módulo, mesmo padrão "sigla-função" `INCLUIDO;EXCLUIDO` da regra 6), `27CD` (`27 - BLOQUEIO SUBTENSAO CDC`), `27E1`/`27E2` (`27 - SUBTENSAO E1`/`E2`, estágios). As demais 12 siglas da LP (`27AB`, `27AC`, `27BC`, `27BL`, `27BR`, `27CA`, `27CC`, `27LT`, `27TP`, `27_T`) não aparecem nesta amostra — famílias presentes na LP sem instância real aqui.
+- Só 4 siglas aparecem: `27` (função, `27 FUNCAO`, 6x, **todas `ReadWrite`, nenhuma `Read`** — diferente do par `Read`/`ReadWrite` que a LP lista, mesmo padrão "sigla-função" `INCLUIDO;EXCLUIDO` da regra 6), `27CD` (`27 - BLOQUEIO SUBTENSAO CDC`), `27E1`/`27E2` (`27 - SUBTENSAO E1`/`E2`, estágios). As demais 12 siglas da LP (`27AB`, `27AC`, `27BC`, `27BL`, `27BR`, `27CA`, `27CC`, `27LT`, `27TP`, `27_T`) não aparecem nesta amostra — famílias presentes na LP sem instância real aqui.
 - Aliases reais confirmam a semântica "estágio" (`E1`/`E2`) já documentada na descrição padrão — não há divergência de nomenclatura entre LP e TDT real para as siglas que aparecem.
 
 ## Família ANSI 32
@@ -463,7 +463,7 @@ _7 sigla(s)._
 
 ### Nomenclaturas reais observadas (ANSI 86)
 
-Cruzado com `docs/TDT/exportTDT_UTR_GTD_1_20260626.xlsx`. Só 2 das 7 siglas da LP aparecem, baixo volume: `86` (`86 BLOQUEIO`, `Read`, 6x — note que no real não há a variante `ReadWrite` que a LP também lista) e `86BF` (`86BF`, `ReadWrite`, 3x — bloqueio por falha de disjuntor, coerente com "86 - BLOQUEIO DEFEITO DISJUNTOR" da LP e o único caso `ReadWrite` real da família). `86C`, `86CC`, `86FL` não aparecem nesta amostra.
+Cruzado com `docs/TDT/exportTDT_UTR_GTD_1_20260626.xlsx`. Só 2 das 7 siglas da LP aparecem, baixo volume: `86` (`86 BLOQUEIO`, 6x, split **4 `ReadWrite` + 2 `Read`** — a variante `ReadWrite` que a LP também lista é maioria no real, não ausente) e `86BF` (`86BF`, `ReadWrite`, 3x — bloqueio por falha de disjuntor, coerente com "86 - BLOQUEIO DEFEITO DISJUNTOR" da LP). `86C`, `86CC`, `86FL` não aparecem nesta amostra.
 - Família de baixo volume real (9 linhas) mas coerente 1:1 com a LP nas siglas que aparecem — sem achados de divergência.
 
 ## Família ANSI 87
