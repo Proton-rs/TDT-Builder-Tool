@@ -134,8 +134,45 @@ def _col_descricao(rows, inicio, ncols, encoder, ref_emb) -> int | None:
     return melhor
 
 
+_ROTULO_CONTADOR_POSICAO = ("LINHA", "LINE", "SEQ", "ROW", "ITEM")
+_ROTULO_ENDERECO = ("DNP3", "INDEX", "ENDERECO", "ADDRESS", "ADDR", "ENDPT")
+_BONUS_ENDERECO = 0.10  # tie-break: header com cara de endereço soma 10% ao score bruto
+
+
+def _rotulo_bate(rotulo: str, termos: tuple[str, ...]) -> bool:
+    return any(t in rotulo for t in termos)
+
+
+def _e_contador_de_posicao(rows: list[tuple], c: int, inicio: int) -> bool:
+    """Detecta coluna "contador de posição": o valor numérico da célula é a
+    própria posição da linha na sheet (a menos de um deslocamento constante),
+    quase sem exceção. Isso é diferente de "monotônico"/"sequencial" -- uma
+    coluna de ENDEREÇO real também pode ser 1,2,3.../2100,2101,2102... (ver
+    caso SNMP/FWB, onde "UTR COS Index" é sequencial e genuíno); o que
+    identifica um contador de posição especificamente é que ele rastreia a
+    ENUMERAÇÃO DA PRÓPRIA LINHA da planilha (deslocamento fixo = número da
+    linha em que aparece, sempre o mesmo em quase toda a coluna), não um
+    valor de domínio (endereço de protocolo) que por coincidência também é
+    sequencial.
+    """
+    deslocamentos: list[int] = []
+    for i, r in enumerate(rows[inicio:], start=inicio):
+        if c < len(r) and r[c] is not None:
+            v = str(r[c]).strip()
+            if v and _INT.match(v):
+                deslocamentos.append(int(v) - i)
+    if len(deslocamentos) < 2:
+        return False
+    mais_comum = max(set(deslocamentos), key=deslocamentos.count)
+    razao = sum(1 for d in deslocamentos if d == mais_comum) / len(deslocamentos)
+    return razao >= 0.95
+
+
 def _col_indice(rows, inicio, ncols) -> int | None:
-    melhor, melhor_score = None, 0.0
+    header_row = inicio - 1
+    header = rows[header_row] if 0 <= header_row < len(rows) else ()
+
+    candidatos: list[tuple[int, float]] = []
     for c in range(ncols):
         vals = _valores_coluna(rows, c, inicio)
         if not vals:
@@ -145,8 +182,35 @@ def _col_indice(rows, inicio, ncols) -> int | None:
         crescente = sum(1 for a, b in zip(ints, ints[1:]) if b > a)
         mono = (crescente / (len(ints) - 1)) if len(ints) > 1 else 0.0
         score = frac * (0.5 + 0.5 * mono)
-        if score > melhor_score:
-            melhor, melhor_score = c, score
+        if score <= 0.0:
+            continue
+        candidatos.append((c, score))
+
+    if not candidatos:
+        return None
+
+    rotulo_de = {c: _norm(header[c]) if c < len(header) else "" for c, _ in candidatos}
+
+    # Veto: coluna com rótulo de "contador de posição" (Linha/Seq/Item/...) E
+    # cujos valores de fato rastreiam a posição da linha na sheet -- nunca é
+    # um endereço DNP3 (é a identidade da linha, não o protocolo). Só afeta
+    # candidatos que casam AMBOS os critérios (rótulo E forma), preservando
+    # colunas de endereço real que também são sequenciais (ex. SNMP/FWB).
+    sobreviventes = [
+        (c, score) for c, score in candidatos
+        if not (_rotulo_bate(rotulo_de[c], _ROTULO_CONTADOR_POSICAO) and _e_contador_de_posicao(rows, c, inicio))
+    ]
+    if not sobreviventes:
+        sobreviventes = candidatos  # todos vetados (improvável) -- não fica sem índice
+
+    # Desempate: rótulo com cara de endereço de protocolo ganha um bônus
+    # multiplicativo -- decide entre concorrentes de score próximo (ex.
+    # "Entrada Binária" vs "DNP3.0") sem inverter diferenças de score grandes.
+    melhor, melhor_ajustado = None, -1.0
+    for c, score in sobreviventes:
+        ajustado = score * (1 + _BONUS_ENDERECO) if _rotulo_bate(rotulo_de[c], _ROTULO_ENDERECO) else score
+        if ajustado > melhor_ajustado:
+            melhor, melhor_ajustado = c, ajustado
     return melhor
 
 

@@ -271,3 +271,65 @@ def test_sem_siglas_set_nao_detecta_sigla():
     ]
     mapa = analisar(rows, encoder=_fake_encoder, ref_emb=_REF)
     assert "sigla" not in mapa.colunas
+
+
+# --- _col_indice() robustez: ruído de "contador de posição" (SP-M Task 2) --
+
+
+def test_indice_nao_confunde_contador_de_linha_com_endereco_que_reinicia_por_bloco():
+    # Caso A real (S4_LOG, GAU/RGE): coluna "Linha" é um contador de posição
+    # (rastreia a própria linha da planilha -- 4 blocos de 1..5, reinicia sem
+    # NENHUM gap interno) e a coluna real de endereço ("EndPt") tem faixa e
+    # cardinalidade de um endereço de protocolo real, mas com jitter interno
+    # (não estritamente crescente em vários pontos, como no dado bruto real).
+    # Score bruto: "Linha"=0.921 > "EndPt"=0.895 (mesma proporção do caso
+    # real: 0.987 vs 0.974) -- "Linha" vence por score, mas não pode vencer
+    # por ser, em forma, a própria enumeração da linha (rótulo E deslocamento
+    # constante batem).
+    header = ("Linha", "Descricao", "Tipo", "EndPt")
+    linha_vals = [1, 2, 3, 4, 5] * 4
+    endpt_vals = [100, 101, 90, 103, 104, 105, 106, 80, 109, 200,
+                  201, 202, 70, 204, 205, 206, 60, 208, 209, 210]
+    descs = ["FALHA COMUNICACAO", "DISJUNTOR ABERTO", "CORRENTE FASE"] * 7
+    rows = [header] + [
+        (str(linha_vals[i]), descs[i % 3], "Digital", str(endpt_vals[i]))
+        for i in range(len(linha_vals))
+    ]
+    mapa = analisar(rows, encoder=_fake_encoder, ref_emb=_REF)
+    assert mapa.colunas["indice"] == 3  # EndPt, não "Linha" (col 0)
+
+
+def test_indice_prefere_header_de_endereco_sobre_terminal_fisico_do_ied():
+    # Caso B real (GPR21/31/33/34/35/36): "Entrada Binária" (terminal físico
+    # do IED, reinicia por bloco Analógicos/Comandos/Digitais) tem score
+    # bruto levemente MAIOR que "DNP3.0" (endereço real, contínuo dentro do
+    # bloco Digitais) -- mas "DNP3.0" tem rótulo com cara de endereço de
+    # protocolo, o que deve decidir o desempate.
+    header = ("Entrada Binaria", "Descricao", "Tipo", "DNP3.0")
+    entrada_binaria = [1, 2, 3, 4, 5, 6, 7, 16, 21, 22, 23, 24]  # score=0.857 (sem gap real)
+    dnp3 = [1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 1, 2]  # score=0.836 (reinicia 3x, mono cai)
+    descs = ["FALHA COMUNICACAO", "DISJUNTOR ABERTO", "CORRENTE FASE"] * 4
+    rows = [header] + [
+        (str(entrada_binaria[i]), descs[i], "Digital", str(dnp3[i]))
+        for i in range(len(entrada_binaria))
+    ]
+    mapa = analisar(rows, encoder=_fake_encoder, ref_emb=_REF)
+    assert mapa.colunas["indice"] == 3  # DNP3.0, não "Entrada Binaria" (col 0)
+
+
+def test_indice_por_padrao_sequencial_sheet_wide_permanece_correto():
+    # Caso "SNMP" (FWB): quando a coluna de endereço REAL também é sequencial
+    # sheet-wide (sem reiniciar, sem gap -- ex. 2100,2101,2102...) e o rótulo
+    # já tem cara de endereço, ela deve continuar vencendo -- não é vetada só
+    # por ser sequencial (distinção: aqui ela NÃO tem rótulo de "contador de
+    # posição", então o veto de Caso A não deveria nem se aplicar).
+    header = ("Linha", "Descricao", "Tipo", "UTR COS Index")
+    linha_vals = [1, 2, 3, 4, 5, 6]
+    utr_vals = [2100, 2101, 2102, 2103, 2104, 2105]
+    descs = ["FALHA COMUNICACAO", "DISJUNTOR ABERTO", "CORRENTE FASE"] * 2
+    rows = [header] + [
+        (str(linha_vals[i]), descs[i], "Digital", str(utr_vals[i]))
+        for i in range(len(linha_vals))
+    ]
+    mapa = analisar(rows, encoder=_fake_encoder, ref_emb=_REF)
+    assert mapa.colunas["indice"] == 3  # UTR COS Index, não "Linha"

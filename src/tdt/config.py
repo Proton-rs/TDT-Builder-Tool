@@ -224,7 +224,19 @@ class Config:
     # descartou LIBM; base full tem 36) -> rebaixa para revisão.
     siglas_revisao_projeto: frozenset[str] = frozenset({"LIBM"})
     # D5: comandos que são Write legítimo (sem discreto de status).
-    siglas_write_legitimo: frozenset[str] = frozenset({"CDC"})
+    # AUTC/PB/CMD: SP-I Task 2, casos reais PSACA_CC:20/21/22 (LISTA 1 - GTD)
+    # — "Comando Iluminação Pátio", "Seleção de Barra Preferencial", "Rearme
+    # 86 Automatismo". Nenhum tem status correspondente em lugar nenhum do
+    # input (confirmado por reprocessamento + varredura). Seguro whitelistar
+    # globalmente por sigla porque a whitelist só morde dentro de um grupo
+    # dc_pairer._chave = (módulo, equipamento, sigla) que já não tem NENHUM
+    # Input — confirmado que, embora CMD/AUTC apareçam como Input legítimo em
+    # dezenas de outros módulos (ex. "Falha Comando de Desligar/Ligar",
+    # "Automatismo - Atuado"), em NENHUM desses outros módulos existe um
+    # grupo (módulo, equipamento, CMD/AUTC) com Output e zero Input — logo
+    # esses grupos nunca passam pelo ramo `elif not inputs` e não são
+    # afetados por esta whitelist.
+    siglas_write_legitimo: frozenset[str] = frozenset({"CDC", "AUTC", "PB", "CMD"})
     # D3: siglas fundíveis além das SwitchStatus da lista padrão.
     siglas_fundiveis_extra: frozenset[str] = frozenset()
     # Resgate por regras na zona cinzenta (SP-H Task 3): quando pct_ok mas

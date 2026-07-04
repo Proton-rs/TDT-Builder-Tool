@@ -12,7 +12,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox, QDialog, QDialogButtonBox, QHBoxLayout, QInputDialog, QLabel,
     QLineEdit, QListWidget, QListWidgetItem, QMenu, QMessageBox, QProgressBar,
-    QPushButton, QSizePolicy, QTableView, QVBoxLayout, QWidget,
+    QPushButton, QSizePolicy, QTableView, QTabBar, QVBoxLayout, QWidget,
 )
 
 from tdt import pipeline
@@ -72,6 +72,85 @@ def decidir_acao_pareamento(registros: list[SignalRecord]):
     )
 
 
+class FiltroColunaDialog(QDialog):
+    """Popup estilo Excel: busca + lista checkable de valores distintos.
+
+    ponytail: só wiring -- toda a lógica de filtro (quais linhas passam,
+    valores distintos) vive no ProxyRevisao (`valores_unicos`,
+    `set_filtro_coluna`). Este diálogo apenas coleta o que o usuário marcou
+    e repassa; não sabe nada sobre SignalRecord nem sobre o modelo fonte.
+    """
+
+    def __init__(self, nome_coluna: str, valores: list[str], selecionados: set[str] | None, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(f"Filtrar '{nome_coluna}'")
+        self._valores = valores
+        marcar_tudo = selecionados is None
+
+        self.busca = QLineEdit()
+        self.busca.setPlaceholderText("buscar...")
+        self.busca.textChanged.connect(self._filtrar_lista)
+
+        self.chk_todos = QCheckBox("Selecionar tudo")
+        self.chk_todos.setTristate(False)
+        self.chk_todos.toggled.connect(self._alternar_tudo)
+
+        self.lista = QListWidget()
+        for v in valores:
+            item = QListWidgetItem(v)
+            item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+            marcado = marcar_tudo or v in selecionados
+            item.setCheckState(Qt.Checked if marcado else Qt.Unchecked)
+            self.lista.addItem(item)
+        self.chk_todos.setChecked(all(
+            self.lista.item(i).checkState() == Qt.Checked for i in range(self.lista.count())
+        ) if self.lista.count() else True)
+
+        botoes = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        botoes.accepted.connect(self.accept)
+        botoes.rejected.connect(self.reject)
+        btn_limpar = QPushButton("Limpar Filtro")
+        btn_limpar.clicked.connect(self._limpar)
+        botoes.addButton(btn_limpar, QDialogButtonBox.ResetRole)
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(self.busca)
+        layout.addWidget(self.chk_todos)
+        layout.addWidget(self.lista)
+        layout.addWidget(botoes)
+
+        self._limpo = False
+
+    def _filtrar_lista(self, termo: str) -> None:
+        termo = termo.strip().upper()
+        for i in range(self.lista.count()):
+            item = self.lista.item(i)
+            item.setHidden(bool(termo) and termo not in item.text().upper())
+
+    def _alternar_tudo(self, marcado: bool) -> None:
+        for i in range(self.lista.count()):
+            item = self.lista.item(i)
+            if not item.isHidden():
+                item.setCheckState(Qt.Checked if marcado else Qt.Unchecked)
+
+    def _limpar(self) -> None:
+        self._limpo = True
+        self.accept()
+
+    def valores_selecionados(self) -> set[str] | None:
+        """`None` = sem filtro (limpar ou tudo marcado); senão o conjunto marcado."""
+        if self._limpo:
+            return None
+        marcados = {
+            self.lista.item(i).text()
+            for i in range(self.lista.count())
+            if self.lista.item(i).checkState() == Qt.Checked
+        }
+        if len(marcados) == len(self._valores):
+            return None
+        return marcados
+
+
 class PareamentoDialog(QDialog):
     """Confirmação simples: mostra os sinais selecionados e a ação proposta."""
 
@@ -95,6 +174,7 @@ class TelaRevisao(QWidget):
         super().__init__()
         self._estado = estado
         self._linha = -1
+        self._selecao_filtro_coluna: dict[int, set[str]] = {}
 
         btn_voltar = QPushButton("← Voltar"); btn_voltar.clicked.connect(self.voltar.emit)
         btn_remover = QPushButton("Remover Sinal"); btn_remover.clicked.connect(self._remover_sinais)
@@ -156,18 +236,20 @@ class TelaRevisao(QWidget):
 
         self.chk_so_revisao = QCheckBox("Mostrar apenas revisão")
         self.chk_so_revisao.toggled.connect(self._filtrar_status)
-        self.ed_filtro = QLineEdit()
-        self.ed_filtro.setPlaceholderText("Filtrar (todas as colunas)…")
-        self.ed_filtro.textChanged.connect(self._filtrar_texto)
         self.lbl_selecao = QLabel("0 selecionados")
         barra_filtro = QHBoxLayout()
         barra_filtro.addWidget(self.chk_so_revisao)
-        barra_filtro.addWidget(self.ed_filtro, 1)
+        barra_filtro.addStretch()
         barra_filtro.addWidget(self.lbl_selecao)
+
+        self.abas_sheet = QTabBar()
+        self.abas_sheet.addTab("Tudo")
+        self.abas_sheet.currentChanged.connect(self._trocar_aba_sheet)
 
         corpo = QHBoxLayout(); corpo.addWidget(cofre); corpo.addWidget(self.tabela, 1)
         raiz = QVBoxLayout(self)
         raiz.addLayout(topo)
+        raiz.addWidget(self.abas_sheet)
         raiz.addLayout(barra_filtro)
         raiz.addLayout(corpo, 1)
 
@@ -175,12 +257,16 @@ class TelaRevisao(QWidget):
         self._modelo = ModeloSinais(self._estado)
         self._proxy = ProxyRevisao(self)
         self._proxy.setSourceModel(self._modelo)
-        self._proxy.setFilterKeyColumn(-1)
+        self._popular_abas_sheet()
         self.tabela.setModel(self._proxy)
         self.tabela.setSortingEnabled(True)
         self.tabela.horizontalHeader().setSortIndicatorClearable(True)
         self.tabela.horizontalHeader().setContextMenuPolicy(Qt.CustomContextMenu)
         self.tabela.horizontalHeader().customContextMenuRequested.connect(self._filtrar_coluna)
+        # clique direito = filtro legado (texto livre / módulo); duplo-clique
+        # no header = popup estilo Excel (multi-valor, Task 3) -- gatilhos
+        # distintos pra não colidir com sectionClicked (ordenação).
+        self.tabela.horizontalHeader().sectionDoubleClicked.connect(self._abrir_filtro_coluna_excel)
         self.tabela.setEditTriggers(QTableView.DoubleClicked)
         self.tabela.horizontalHeader().setSectionsMovable(True)  # arrastar colunas
         col_sinal = ModeloSinais.COLUNAS.index("Sinal")
@@ -206,8 +292,26 @@ class TelaRevisao(QWidget):
     def _filtrar_status(self, ativo: bool) -> None:
         self._proxy.setEsconderDecididos(ativo)
 
-    def _filtrar_texto(self, termo: str) -> None:
-        self._proxy.setFilterFixedString(termo)
+    def _popular_abas_sheet(self) -> None:
+        """Uma aba por sheet distinta presente nos registros + "Tudo" (primeira).
+
+        ponytail: reconstrói o QTabBar do zero a cada carregar() -- não há
+        recarga incremental de sheets nesta tela, então não vale a pena
+        diffar contra o estado anterior.
+        """
+        self.abas_sheet.blockSignals(True)
+        while self.abas_sheet.count() > 0:
+            self.abas_sheet.removeTab(0)
+        self.abas_sheet.addTab("Tudo")
+        for sheet in self._modelo.sheets_distintas():
+            self.abas_sheet.addTab(sheet)
+        self.abas_sheet.blockSignals(False)
+        self.abas_sheet.setCurrentIndex(0)
+        self._proxy.set_sheet(None)
+
+    def _trocar_aba_sheet(self, indice: int) -> None:
+        nome = None if indice <= 0 else self.abas_sheet.tabText(indice)
+        self._proxy.set_sheet(nome)
 
     def _filtrar_coluna(self, pos) -> None:
         col = self.tabela.horizontalHeader().logicalIndexAt(pos)
@@ -225,6 +329,26 @@ class TelaRevisao(QWidget):
 
     def _eh_coluna_modulo(self, col: int) -> bool:
         return col == ModeloSinais.COLUNAS.index("Módulo")
+
+    def _abrir_filtro_coluna_excel(self, col: int) -> None:
+        """Abre o popup estilo Excel (multi-valor) pra `col`.
+
+        ponytail: gatilho é duplo-clique na seção do header -- separado do
+        clique direito (menu de contexto), que mantém o filtro de texto
+        livre/módulo legado intacto. Os dois mecanismos de filtro por
+        coluna coexistem e combinam em AND dentro do ProxyRevisao.
+        """
+        nome = ModeloSinais.COLUNAS[col]
+        valores = self._proxy.valores_unicos(col)
+        atuais = self._selecao_filtro_coluna.get(col)
+        dialog = FiltroColunaDialog(nome, valores, atuais, self)
+        if dialog.exec() == QDialog.Accepted:
+            novos = dialog.valores_selecionados()
+            self._proxy.set_filtro_coluna(col, novos)
+            if novos is None:
+                self._selecao_filtro_coluna.pop(col, None)
+            else:
+                self._selecao_filtro_coluna[col] = novos
 
     def _construir_menu_coluna(self, col: int, _pos) -> QMenu:
         """Menu de checkboxes com os módulos distintos presentes nos registros.
@@ -344,7 +468,8 @@ class TelaRevisao(QWidget):
             out_path = Path(output) / "TDT.xlsx"
             wb.save(str(out_path))
             revisao = self._estado.resultado.revisao if self._estado.resultado else ()
-            gerar_relatorio_revisao(self._estado.registros, revisao, output)
+            diag = self._estado.resultado.diagnostico if self._estado.resultado else {}
+            gerar_relatorio_revisao(self._estado.registros, revisao, output, diagnostico=diag)
             QMessageBox.information(
                 self, "Sucesso",
                 f"TDT gerado: {out_path}\nAuditoria: {Path(output) / 'Auditoria_Revisao.xlsx'}",

@@ -275,3 +275,51 @@ pela maior fatia numérica dos comandos "sem par" nesta lista.
 
 `python -m pytest -q` executado como checagem — nenhuma alteração em
 `src/` feita nesta task (apenas `bench/diag_outputs_sem_par.py` novo).
+
+## Validação final — antes/depois (Task 2, commit 97697bf)
+
+Causas C (parcial) e D corrigidas: `AUTC`/`PB`/`CMD` adicionadas a
+`config.siglas_write_legitimo` (antes só `CDC`). Causa C completa
+(mismatch de chave `CMD`×`AUTO` em `PSACA_CC:19/27`) foi deliberadamente
+**deferida** — caso isolado (1 ocorrência confirmada em ambos os datasets
+reais do repo), correção genérica (mapa de correlação de siglas) julgada
+de risco desproporcional ao ganho (`CMD` significa Input/status em 27
+outros módulos; ver `.superpowers/sdd/spI-task-2-report.md` para a
+investigação completa). `PSACA_CC:19` acabou beneficiado como efeito
+colateral do fix de `CMD` na whitelist (mesmo grupo que `PSACA_CC:20`),
+saindo de `comando_sem_discreto` para `write_legítimo` — não é o
+resultado ideal (idealmente fundiria com `PSACA_CC:27`), mas é uma
+melhora líquida sobre o estado anterior (revisão obrigatória).
+
+Reexecução de `bench/diag_outputs_sem_par.py` em 2026-07-03 (pós Task 2):
+
+```
+                                antes   depois
+pareado                          108      108
+write_legitimo                     0        4
+revisao:comando_sem_discreto      66       62
+revisao:score_baixo               65       65
+revisao:estado_sem_candidato      20       20
+revisao:sem_endereco              12       12
+revisao:fora_whitelist_equip.      8        8
+ESCAPOU                            0        0
+```
+
+`ESCAPOU` permanece 0 nos dois momentos — critério de aceite #2 do design
+("zero outputs escapou") já estava satisfeito mesmo antes de qualquer fix
+de código, pois o modelo de 3 baldes do `dc_pairer` nunca teve buraco de
+contrato nesta lista; o trabalho real da Task 2 foi mover 4 casos
+genuinamente mal classificados (`comando_sem_discreto` → `write_legítimo`)
+dentro do modelo já correto.
+
+Gate de corretude (`bench/gate_tdt_real.py`, LISTA 1 - GTD vs TDT real):
+inalterado em `comum=1042 iguais=637 (61.1%)` antes e depois — esperado,
+já que a correção só reclassifica o BALDE de destino (write_legítimo em
+vez de revisão), não altera qual sigla é decidida para nenhum registro.
+
+As causas A/B (62 casos) e a categoria mais ampla de 105 registros que
+nunca chegam ao `dc_pairer` permanecem **fora de escopo desta SP**
+(pertencem a SP-E/SP-G/SP-H — filtros de scoring/semântica de estado
+upstream) e foram registradas como follow-up.
+
+**SP-I concluída**: 3/3 tasks (diagnóstico, fix causas C/D, validação).

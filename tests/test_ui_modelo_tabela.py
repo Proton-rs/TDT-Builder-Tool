@@ -43,6 +43,24 @@ def test_dimensoes_e_header(qtbot):
     assert m.headerData(0, Qt.Horizontal, Qt.DisplayRole) == "Sinal"
 
 
+def test_sheets_distintas_deriva_do_id_e_ordena(qtbot):
+    st = AppState()
+    st.registros = [
+        replace(_rec(), id="Discreto:0"),
+        replace(_rec(), id="Analogicos:0"),
+        replace(_rec(), id="Discreto:1"),
+    ]
+    m = ModeloSinais(st)
+    assert m.sheets_distintas() == ["Analogicos", "Discreto"]
+
+
+def test_sheets_distintas_ignora_id_sem_sheet(qtbot):
+    st = AppState()
+    st.registros = [replace(_rec(), id="manual_abc123")]
+    m = ModeloSinais(st)
+    assert m.sheets_distintas() == []
+
+
 def test_colunas_novas_e_sem_duplicata():
     cols = ModeloSinais.COLUNAS
     assert "Descr. ADMS" in cols

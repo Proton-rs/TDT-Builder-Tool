@@ -143,6 +143,12 @@ class ItemRevisao:
 class ResultadoPipeline:
     lista: ListaHomogenea
     revisao: tuple[ItemRevisao, ...]
+    # id -> {"desc_normalizada", "regras_aplicadas", "gap", "gap_exigido",
+    # "etapa_decisora", "endereco_bruto"}: contexto de decisão p/ auditoria
+    # estendida (SP-J), fora do SignalRecord p/ não acoplar contrato central
+    # a um caso de uso (exportação). Vazio p/ ids sem decisão rastreada
+    # (ex. dual-pass de categoria incerta) -- nunca fabricado.
+    diagnostico: dict[str, dict] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

@@ -108,3 +108,129 @@ def test_filtro_coluna_vazio_remove_filtro():
     proxy.setFiltroColuna(col_desc, "")
     assert proxy.filtroColuna(col_desc) == ""
     assert proxy.rowCount() == 2
+
+
+# --- set_sheet (SP-J Task 2: abas por sheet no lugar do filtro global) ---
+
+def _modelo_com_itens(itens):
+    """itens: lista de (sigla, sheet) -> registros com id f"{sheet}:{i}"."""
+    registros = [
+        _rec(f"{sheet}:{i}", "revisao", sigla)
+        for i, (sigla, sheet) in enumerate(itens)
+    ]
+    estado = _estado_com(registros)
+    return ModeloSinais(estado)
+
+
+def test_filtro_por_sheet(qapp):
+    modelo = _modelo_com_itens([("sig1", "Discreto"), ("sig2", "Analogicos")])
+    proxy = ProxyRevisao()
+    proxy.setSourceModel(modelo)
+    proxy.set_sheet("Discreto")
+    assert proxy.rowCount() == 1
+    proxy.set_sheet(None)
+    assert proxy.rowCount() == 2
+
+
+# --- filtro estilo Excel por coluna (SP-J Task 3: multi-valor, combina AND
+# com o filtro de texto legado, com set_sheet da Task 2 e entre colunas) ---
+
+_COL_MOTIVO = ModeloSinais.COLUNAS.index("Motivo")
+_COL_STATUS = ModeloSinais.COLUNAS.index("Status")
+
+
+def _motivo(proxy, linha):
+    return proxy.index(linha, _COL_MOTIVO).data()
+
+
+def _proxy_padrao():
+    return _proxy_com([
+        _rec("Discreto:1", "revisao", "DISJUNTOR ABERTO"),
+        _rec("Discreto:2", "decidido", "SECCIONADORA FECHADA"),
+        _rec("Analogicos:3", "revisao", "TENSAO BARRA"),
+    ])
+
+
+def test_filtro_coluna_combina_and(qapp):
+    proxy = _proxy_padrao()
+    proxy.set_filtro_coluna(_COL_STATUS, {"revisao"})
+    proxy.set_filtro_coluna(_COL_MOTIVO, {"—"})
+    # ambos os filtros já isolam o mesmo conjunto (registros sem motivo
+    # calculado exibem "—"); a asserção real é que o AND não derruba tudo.
+    assert proxy.rowCount() >= 1
+    assert all(_motivo(proxy, i) == "—" for i in range(proxy.rowCount()))
+
+
+def test_filtro_coluna_combina_and_com_sheet(qapp):
+    proxy = _proxy_padrao()
+    proxy.set_filtro_coluna(_COL_STATUS, {"revisao"})
+    proxy.set_sheet("Discreto")
+    assert proxy.rowCount() == 1
+    col_desc = ModeloSinais.COLUNAS.index("Descr. bruta")
+    assert proxy.index(0, col_desc).data() == "DISJUNTOR ABERTO"
+
+
+def test_limpar_filtro(qapp):
+    proxy = _proxy_padrao()
+    proxy.set_filtro_coluna(_COL_MOTIVO, {"score_baixo"})
+    assert _COL_MOTIVO in proxy.colunas_filtradas()
+    proxy.set_filtro_coluna(_COL_MOTIVO, None)
+    assert _COL_MOTIVO not in proxy.colunas_filtradas()
+    assert proxy.rowCount() == 3
+
+
+def test_valores_unicos_retorna_valores_distintos_ordenados(qapp):
+    proxy = _proxy_padrao()
+    assert proxy.valores_unicos(_COL_STATUS) == ["decidido", "revisao"]
+
+
+def test_set_filtro_coluna_none_nao_aparece_em_colunas_filtradas(qapp):
+    proxy = _proxy_padrao()
+    assert proxy.colunas_filtradas() == set()
+    proxy.set_filtro_coluna(_COL_STATUS, {"revisao"})
+    assert proxy.colunas_filtradas() == {_COL_STATUS}
+
+
+# --- indicador de filtro ativo no header (SP-J Task 4) ---
+
+def test_header_data_marca_coluna_filtrada(qapp):
+    from PySide6.QtCore import Qt
+
+    proxy = _proxy_padrao()
+    rotulo_base = proxy.headerData(_COL_STATUS, Qt.Horizontal)
+    proxy.set_filtro_coluna(_COL_STATUS, {"revisao"})
+    assert proxy.headerData(_COL_STATUS, Qt.Horizontal) == f"{rotulo_base} ▼*"
+
+
+def test_header_data_volta_ao_normal_apos_limpar_filtro(qapp):
+    from PySide6.QtCore import Qt
+
+    proxy = _proxy_padrao()
+    rotulo_base = proxy.headerData(_COL_STATUS, Qt.Horizontal)
+    proxy.set_filtro_coluna(_COL_STATUS, {"revisao"})
+    proxy.set_filtro_coluna(_COL_STATUS, None)
+    assert proxy.headerData(_COL_STATUS, Qt.Horizontal) == rotulo_base
+
+
+def test_set_filtro_coluna_emite_header_data_changed_so_quando_muda(qapp):
+    from PySide6.QtCore import Qt
+
+    proxy = _proxy_padrao()
+    emissoes = []
+    proxy.headerDataChanged.connect(
+        lambda orientacao, first, last: emissoes.append((orientacao, first, last))
+    )
+
+    proxy.set_filtro_coluna(_COL_STATUS, {"revisao"})
+    assert emissoes == [(Qt.Horizontal, _COL_STATUS, _COL_STATUS)]
+
+    # reaplicar valores diferentes na mesma coluna já filtrada não muda o
+    # conjunto de "colunas filtradas" -- não deve reemitir.
+    proxy.set_filtro_coluna(_COL_STATUS, {"decidido"})
+    assert emissoes == [(Qt.Horizontal, _COL_STATUS, _COL_STATUS)]
+
+    proxy.set_filtro_coluna(_COL_STATUS, None)
+    assert emissoes == [
+        (Qt.Horizontal, _COL_STATUS, _COL_STATUS),
+        (Qt.Horizontal, _COL_STATUS, _COL_STATUS),
+    ]
