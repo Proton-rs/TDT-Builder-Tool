@@ -240,6 +240,19 @@ class ModeloSinais(QAbstractTableModel):
         """
         return sorted({sheet_origem(r) for r in self._estado.registros if sheet_origem(r)})
 
+    def pendentes_por_sheet(self) -> dict[str, int]:
+        """Sheet -> nº de registros com status "revisao" (sheets sem pendência
+        aparecem com 0, para a aba poder mostrar o check)."""
+        contagem: dict[str, int] = {}
+        for r in self._estado.registros:
+            s = sheet_origem(r)
+            if not s:
+                continue
+            contagem.setdefault(s, 0)
+            if r.status == "revisao":
+                contagem[s] += 1
+        return contagem
+
     def remover_linhas(self, indices: list[int]) -> None:
         """Remove as linhas (índices da fonte, 0-based) da lista subjacente.
 

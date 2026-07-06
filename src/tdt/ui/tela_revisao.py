@@ -178,6 +178,7 @@ class PareamentoDialog(QDialog):
 class TelaRevisao(QWidget):
     voltar = Signal()
     desfazer_pedido = Signal()
+    pendentes_mudaram = Signal(int)
 
     def __init__(self, estado: AppState):
         super().__init__()
@@ -294,6 +295,21 @@ class TelaRevisao(QWidget):
         atalho_busca = QShortcut(QKeySequence.Find, self)
         atalho_busca.activated.connect(self.busca.setFocus)
 
+    def _rotulo_aba(self, nome: str, pendentes: int) -> str:
+        return f"{nome} ✓" if pendentes == 0 else f"{nome} · {pendentes}"
+
+    def _atualizar_abas_sheet(self) -> None:
+        if not hasattr(self, "_modelo"):
+            return
+        contagem = self._modelo.pendentes_por_sheet()
+        total = sum(contagem.values())
+        self.abas_sheet.setTabText(0, self._rotulo_aba("Tudo", total))
+        for i in range(1, self.abas_sheet.count()):
+            sheet = self.abas_sheet.tabData(i)
+            self.abas_sheet.setTabText(
+                i, self._rotulo_aba(sheet, contagem.get(sheet, 0)))
+        self.pendentes_mudaram.emit(total)
+
     def carregar(self) -> None:
         self._modelo = ModeloSinais(self._estado)
         self._proxy = ProxyRevisao(self)
@@ -316,6 +332,10 @@ class TelaRevisao(QWidget):
         self.tabela.setItemDelegateForColumn(col_modulo, DelegateModulo(self._estado, self.tabela))
         self.tabela.selectionModel().currentRowChanged.connect(self._linha_mudou)
         self.tabela.selectionModel().selectionChanged.connect(self._atualizar_selecao)
+        self._modelo.dataChanged.connect(lambda *_: self._atualizar_abas_sheet())
+        self._modelo.rowsInserted.connect(lambda *_: self._atualizar_abas_sheet())
+        self._modelo.rowsRemoved.connect(lambda *_: self._atualizar_abas_sheet())
+        self._atualizar_abas_sheet()
         self._atualizar_chip_filtros()
 
     def refresh(self) -> None:
@@ -325,6 +345,7 @@ class TelaRevisao(QWidget):
         self._modelo.beginResetModel()
         self._modelo.endResetModel()
         self._atualizar_painel()
+        self._atualizar_abas_sheet()
 
     def _atualizar_selecao(self, *_args) -> None:
         n = len(self.tabela.selectionModel().selectedRows())
@@ -356,13 +377,14 @@ class TelaRevisao(QWidget):
             self.abas_sheet.removeTab(0)
         self.abas_sheet.addTab("Tudo")
         for sheet in self._modelo.sheets_distintas():
-            self.abas_sheet.addTab(sheet)
+            i = self.abas_sheet.addTab(sheet)
+            self.abas_sheet.setTabData(i, sheet)
         self.abas_sheet.blockSignals(False)
         self.abas_sheet.setCurrentIndex(0)
         self._proxy.set_sheet(None)
 
     def _trocar_aba_sheet(self, indice: int) -> None:
-        nome = None if indice <= 0 else self.abas_sheet.tabText(indice)
+        nome = None if indice <= 0 else self.abas_sheet.tabData(indice)
         self._proxy.set_sheet(nome)
 
     def _filtrar_coluna(self, pos) -> None:

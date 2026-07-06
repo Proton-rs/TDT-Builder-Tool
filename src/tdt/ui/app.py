@@ -67,6 +67,8 @@ class MainWindow(QMainWindow):
         self.tela_inicial.abrir_config.connect(lambda: self._navegar("config"))
         self.tela_revisao.voltar.connect(lambda: self._navegar("entrada"))
         self.tela_revisao.desfazer_pedido.connect(self._desfazer)
+        self.tela_revisao.pendentes_mudaram.connect(
+            lambda n: self.sidebar.atualizar_badge("revisao", n))
         self.tela_config.voltar.connect(self._voltar_config)
 
         container = QWidget()

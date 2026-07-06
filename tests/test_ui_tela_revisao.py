@@ -229,8 +229,10 @@ def test_abas_sheet_tem_tudo_primeiro_mais_uma_por_sheet_distinta(qtbot):
         _rec_sheet("Analogicos:0", "SE1", "B"),
         _rec_sheet("Discreto:1", "SE1", "C"),
     ])
-    textos = [tela.abas_sheet.tabText(i) for i in range(tela.abas_sheet.count())]
-    assert textos == ["Tudo", "Analogicos", "Discreto"]
+    # Verifica tabData em vez de tabText (tabText agora contém contadores)
+    dados = [tela.abas_sheet.tabData(i) if tela.abas_sheet.tabData(i) is not None else "Tudo"
+             for i in range(tela.abas_sheet.count())]
+    assert dados == ["Tudo", "Analogicos", "Discreto"]
     assert tela.abas_sheet.currentIndex() == 0
     assert tela._proxy.rowCount() == 3
 
@@ -242,7 +244,7 @@ def test_selecionar_aba_sheet_filtra_a_tabela(qtbot):
     ])
     idx_discreto = next(
         i for i in range(tela.abas_sheet.count())
-        if tela.abas_sheet.tabText(i) == "Discreto"
+        if tela.abas_sheet.tabData(i) == "Discreto"
     )
     tela.abas_sheet.setCurrentIndex(idx_discreto)
     assert tela._proxy.rowCount() == 1
@@ -257,7 +259,7 @@ def test_voltar_para_aba_tudo_remove_o_filtro_de_sheet(qtbot):
     ])
     idx_discreto = next(
         i for i in range(tela.abas_sheet.count())
-        if tela.abas_sheet.tabText(i) == "Discreto"
+        if tela.abas_sheet.tabData(i) == "Discreto"
     )
     tela.abas_sheet.setCurrentIndex(idx_discreto)
     assert tela._proxy.rowCount() == 1
@@ -450,3 +452,24 @@ def test_aprovar_sem_candidatos_e_noop(qtbot):
     tela.tabela.selectRow(0)
     tela._aprovar_e_proximo()
     assert tela._estado.registros[0].status == "revisao"
+
+
+def test_aba_mostra_contador_e_check(qtbot):
+    from dataclasses import replace
+    regs = [_rec_sheet("SAN2:1", "M", "A"), _rec_sheet("TRAFO:1", "M", "B")]
+    regs = [replace(r, status="revisao") for r in regs]  # status explícito
+    tela = _tela_carregada(qtbot, regs)
+    textos = [tela.abas_sheet.tabText(i) for i in range(tela.abas_sheet.count())]
+    assert any("SAN2 · 1" in t for t in textos)
+    tela._modelo.definir_sigla(0, "DJF1")  # SAN2 zera pendências
+    textos = [tela.abas_sheet.tabText(i) for i in range(tela.abas_sheet.count())]
+    assert any("SAN2 ✓" in t for t in textos)
+
+
+def test_pendentes_mudaram_emitido_ao_aprovar(qtbot):
+    from dataclasses import replace
+    tela = _tela_carregada(qtbot, [replace(_rec_sheet("SAN2:1", "M", "A"), status="revisao")])
+    valores = []
+    tela.pendentes_mudaram.connect(valores.append)
+    tela._modelo.definir_sigla(0, "DJF1")
+    assert valores and valores[-1] == 0
