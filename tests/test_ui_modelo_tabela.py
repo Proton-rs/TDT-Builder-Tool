@@ -40,7 +40,7 @@ def test_dimensoes_e_header(qtbot):
     m = ModeloSinais(_state(_rec()))
     assert m.rowCount() == 1
     assert m.columnCount() == len(ModeloSinais.COLUNAS)
-    assert m.headerData(0, Qt.Horizontal, Qt.DisplayRole) == "Sinal"
+    assert m.headerData(0, Qt.Horizontal, Qt.DisplayRole) == "Sinal ✎"
 
 
 def test_sheets_distintas_deriva_do_id_e_ordena(qtbot):

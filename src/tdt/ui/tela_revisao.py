@@ -8,12 +8,12 @@ from __future__ import annotations
 import uuid
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QSettings, Signal
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication, QButtonGroup, QCheckBox, QDialog, QDialogButtonBox, QHBoxLayout, QLabel,
-    QLineEdit, QListWidget, QListWidgetItem, QMessageBox, QProgressBar,
-    QPushButton, QSizePolicy, QTableView, QTabBar, QVBoxLayout, QWidget,
+    QLineEdit, QListWidget, QListWidgetItem, QMenu, QMessageBox, QProgressBar,
+    QPushButton, QSizePolicy, QSplitter, QTableView, QTabBar, QVBoxLayout, QWidget,
 )
 
 from tdt import pipeline
@@ -27,6 +27,11 @@ from tdt.relatorio_revisao import gerar_relatorio_revisao
 from tdt.ui.proxy_revisao import ProxyRevisao
 
 _METODOS = (("emb", "vetorial"), ("tfidf", "tfidf"), ("fuzzy", "fuzzy"))
+
+_COLUNAS_PADRAO = frozenset({
+    "Sinal", "Confiança", "Status", "Motivo", "Descr. bruta",
+    "Descr. ADMS", "Módulo", "Endereço",
+})
 
 _OPCOES_COMBO = {
     "Tipo": ["Discrete/Input", "Discrete/Output", "Discrete/InputOutput",
@@ -241,7 +246,7 @@ class TelaRevisao(QWidget):
         painel.addWidget(self.busca)
         painel.addWidget(self.lista_resultados)
         cofre = QWidget(); cofre.setObjectName("painelDetalhe")
-        cofre.setLayout(painel); cofre.setFixedWidth(280)
+        cofre.setLayout(painel); cofre.setMinimumWidth(220)
 
         # --- tabela ---
         self.tabela = QTableView()
@@ -265,6 +270,8 @@ class TelaRevisao(QWidget):
         barra_filtro = QHBoxLayout()
         barra_filtro.addLayout(botoes_status)
         barra_filtro.addStretch()
+        self.btn_colunas = QPushButton("Colunas ▾")
+        barra_filtro.addWidget(self.btn_colunas)
         self.btn_limpar_filtros = QPushButton("")
         self.btn_limpar_filtros.setVisible(False)
         self.btn_limpar_filtros.clicked.connect(self._limpar_filtros)
@@ -275,12 +282,16 @@ class TelaRevisao(QWidget):
         self.abas_sheet.addTab("Tudo")
         self.abas_sheet.currentChanged.connect(self._trocar_aba_sheet)
 
-        corpo = QHBoxLayout(); corpo.addWidget(cofre); corpo.addWidget(self.tabela, 1)
+        self.splitter = QSplitter(Qt.Horizontal)
+        self.splitter.addWidget(cofre)
+        self.splitter.addWidget(self.tabela)
+        self.splitter.setStretchFactor(1, 1)
+        self.splitter.setSizes([280, 920])
         raiz = QVBoxLayout(self)
         raiz.addLayout(topo)
         raiz.addWidget(self.abas_sheet)
         raiz.addLayout(barra_filtro)
-        raiz.addLayout(corpo, 1)
+        raiz.addWidget(self.splitter, 1)
 
         # Atalhos de teclado
         for tecla in (Qt.Key_Return, Qt.Key_Enter):
@@ -337,6 +348,18 @@ class TelaRevisao(QWidget):
         self._modelo.rowsRemoved.connect(lambda *_: self._atualizar_abas_sheet())
         self._atualizar_abas_sheet()
         self._atualizar_chip_filtros()
+        settings = QSettings("tdt", "ui")
+        estado_header = settings.value("revisao_header_state")
+        header = self.tabela.horizontalHeader()
+        if estado_header is not None and header.count() == len(ModeloSinais.COLUNAS):
+            header.restoreState(estado_header)
+        else:
+            for i, nome in enumerate(ModeloSinais.COLUNAS):
+                self.tabela.setColumnHidden(i, nome not in _COLUNAS_PADRAO)
+        estado_splitter = settings.value("revisao_splitter_state")
+        if estado_splitter is not None:
+            self.splitter.restoreState(estado_splitter)
+        self._montar_menu_colunas()
 
     def refresh(self) -> None:
         """Re-sincroniza a view após mutação externa de registros (ex.: undo)."""
@@ -642,3 +665,21 @@ class TelaRevisao(QWidget):
             self.tabela.selectRow(proxima)
         else:
             self._atualizar_painel()
+
+    def _montar_menu_colunas(self) -> None:
+        menu = QMenu(self.btn_colunas)
+        for i, nome in enumerate(ModeloSinais.COLUNAS):
+            acao = menu.addAction(nome)
+            acao.setCheckable(True)
+            acao.setChecked(not self.tabela.isColumnHidden(i))
+            acao.toggled.connect(
+                lambda visivel, c=i: self.tabela.setColumnHidden(c, not visivel))
+        self.btn_colunas.setMenu(menu)
+
+    def hideEvent(self, event):
+        if hasattr(self, "_proxy"):
+            settings = QSettings("tdt", "ui")
+            settings.setValue(
+                "revisao_header_state", self.tabela.horizontalHeader().saveState())
+            settings.setValue("revisao_splitter_state", self.splitter.saveState())
+        super().hideEvent(event)

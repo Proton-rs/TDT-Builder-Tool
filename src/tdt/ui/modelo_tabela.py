@@ -92,7 +92,8 @@ class ModeloSinais(QAbstractTableModel):
 
     def headerData(self, secao, orientacao, role=Qt.DisplayRole):
         if role == Qt.DisplayRole and orientacao == Qt.Horizontal:
-            return COLUNAS[secao]
+            nome = COLUNAS[secao]
+            return f"{nome} ✎" if nome in _EDITAVEIS else nome
         return None
 
     def flags(self, index):

@@ -1,4 +1,4 @@
-from PySide6.QtCore import QItemSelectionModel, QPoint
+from PySide6.QtCore import QItemSelectionModel, QPoint, QSettings, Qt
 from PySide6.QtWidgets import QDialog
 
 import pytest
@@ -473,3 +473,29 @@ def test_pendentes_mudaram_emitido_ao_aprovar(qtbot):
     tela.pendentes_mudaram.connect(valores.append)
     tela._modelo.definir_sigla(0, "DJF1")
     assert valores and valores[-1] == 0
+
+
+# --- preset de colunas, menu, splitter e persistência (Task 12) ---
+
+def _isolar_qsettings(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        "tdt.ui.tela_revisao.QSettings",
+        lambda *a, **k: QSettings(str(tmp_path / "ui.ini"), QSettings.IniFormat))
+
+
+def test_preset_esconde_colunas_extras(qtbot, monkeypatch, tmp_path):
+    _isolar_qsettings(monkeypatch, tmp_path)
+    tela = _tela_carregada(qtbot, [_rec("1", "SE1", "A")])
+    assert tela.tabela.isColumnHidden(ModeloSinais.COLUNAS.index("Tokens"))
+    assert not tela.tabela.isColumnHidden(ModeloSinais.COLUNAS.index("Sinal"))
+    assert not tela.tabela.isColumnHidden(ModeloSinais.COLUNAS.index("Motivo"))
+
+
+def test_header_marca_colunas_editaveis(qtbot):
+    st = AppState()
+    st.registros = [_rec("1", "SE1", "A")]
+    modelo = ModeloSinais(st)
+    col_sinal = ModeloSinais.COLUNAS.index("Sinal")
+    assert "✎" in modelo.headerData(col_sinal, Qt.Horizontal, Qt.DisplayRole)
+    col_status = ModeloSinais.COLUNAS.index("Status")
+    assert "✎" not in modelo.headerData(col_status, Qt.Horizontal, Qt.DisplayRole)
