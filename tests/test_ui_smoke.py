@@ -70,52 +70,52 @@ def test_main_window_instancia(qtbot):
     assert win.stack.currentIndex() == 0  # tela inicial
 
 
-def test_aba_revisao_comeca_desabilitada(qtbot):
+def test_aba_revisao_comeca_bloqueada(qtbot):
     st = AppState()
     win = MainWindow(st)
     qtbot.addWidget(win)
-    assert win.abas.count() == 3
-    assert win.abas.isTabEnabled(1) is False
-    assert win.abas.isTabEnabled(2) is False
+    assert win.sidebar._estados["revisao"] == "bloqueada"
+    assert win.sidebar._estados["geracao"] == "bloqueada"
 
 
-def test_clicar_aba_revisao_troca_o_stack(qtbot):
+def test_navegar_para_config_troca_o_stack(qtbot):
     st = AppState()
     win = MainWindow(st)
     qtbot.addWidget(win)
-    win.abas.setTabEnabled(1, True)
-    win.abas.setCurrentIndex(1)
-    assert win.stack.currentIndex() == 1
+    win._navegar("config")
+    assert win.stack.currentIndex() == 2
 
 
-def test_ir_para_revisao_habilita_e_seleciona_aba(qtbot):
-    st = AppState()
-    st.flags["pular_revisao"] = False
-    st.flags["aprovar_acima_threshold"] = False
-    win = MainWindow(st)
-    qtbot.addWidget(win)
-    win._ir_para_revisao()
-    assert win.abas.isTabEnabled(1) is True
-    assert win.abas.currentIndex() == 1
-    assert win.stack.currentIndex() == 1
-
-
-def test_ir_para_revisao_tambem_habilita_aba_analise(qtbot):
+def test_ir_para_revisao_habilita_e_seleciona(qtbot):
+    from tdt.contracts import ListaHomogenea, ResultadoPipeline
     st = AppState()
     st.flags["pular_revisao"] = False
     st.flags["aprovar_acima_threshold"] = False
+    st.resultado = ResultadoPipeline(ListaHomogenea(None, "DNP3", ()), ())
     win = MainWindow(st)
     qtbot.addWidget(win)
-    win._ir_para_revisao()
-    assert win.abas.isTabEnabled(2) is True
+    win._pos_execucao()
+    assert win.sidebar._estados["revisao"] == "disponivel"
+    assert win.stack.currentIndex() == 1
 
 
-def test_clicar_aba_analise_troca_para_stack_index_3(qtbot):
+def test_ir_para_revisao_tambem_habilita_analise(qtbot):
+    from tdt.contracts import ListaHomogenea, ResultadoPipeline
+    st = AppState()
+    st.flags["pular_revisao"] = False
+    st.flags["aprovar_acima_threshold"] = False
+    st.resultado = ResultadoPipeline(ListaHomogenea(None, "DNP3", ()), ())
+    win = MainWindow(st)
+    qtbot.addWidget(win)
+    win._pos_execucao()
+    assert win.sidebar._estados["analise"] == "disponivel"
+
+
+def test_navegar_para_analise_troca_para_stack_index_3(qtbot):
     st = AppState()
     win = MainWindow(st)
     qtbot.addWidget(win)
-    win.abas.setTabEnabled(2, True)
-    win.abas.setCurrentIndex(2)
+    win._navegar("analise")
     assert win.stack.currentIndex() == 3
 
 

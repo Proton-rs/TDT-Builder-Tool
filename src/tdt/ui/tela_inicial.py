@@ -134,6 +134,10 @@ class TelaInicial(QWidget):
         self.ed_output.setText(p.get("output", ""))
         self._atualizar_estado_botao()
 
+    def log_msg(self, texto: str) -> None:
+        """Indireção de log — a Task 7 troca o widget sem tocar os callers."""
+        self.log.appendPlainText(texto)
+
     def _input_valido(self) -> bool:
         """Verifica se os arquivos de entrada estão configurados."""
         p = self._estado.paths

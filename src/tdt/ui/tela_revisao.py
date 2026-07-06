@@ -280,6 +280,14 @@ class TelaRevisao(QWidget):
         self.tabela.selectionModel().currentRowChanged.connect(self._linha_mudou)
         self.tabela.selectionModel().selectionChanged.connect(self._atualizar_selecao)
 
+    def refresh(self) -> None:
+        """Re-sincroniza a view após mutação externa de registros (ex.: undo)."""
+        if not hasattr(self, "_modelo"):
+            return
+        self._modelo.beginResetModel()
+        self._modelo.endResetModel()
+        self._atualizar_painel()
+
     def _atualizar_selecao(self, *_args) -> None:
         n = len(self.tabela.selectionModel().selectedRows())
         self.lbl_selecao.setText(f"{n} selecionado" + ("" if n == 1 else "s"))
