@@ -59,3 +59,27 @@ def test_estado_completa_troca_glifo(qtbot, tmp_path):
     sb = _sidebar(qtbot, tmp_path)
     sb.definir_estado("entrada", "completa")
     assert "✓" in sb._botoes["entrada"].text()
+
+
+def test_definir_estado_chave_desconhecida_levanta_valueerror(qtbot, tmp_path):
+    sb = _sidebar(qtbot, tmp_path)
+    with pytest.raises(ValueError):
+        sb.definir_estado("chave_que_nao_existe", "completa")
+
+
+def test_definir_estado_valor_invalido_levanta_valueerror(qtbot, tmp_path):
+    sb = _sidebar(qtbot, tmp_path)
+    with pytest.raises(ValueError):
+        sb.definir_estado("entrada", "estado_que_nao_existe")
+
+
+def test_atualizar_badge_chave_desconhecida_levanta_valueerror(qtbot, tmp_path):
+    sb = _sidebar(qtbot, tmp_path)
+    with pytest.raises(ValueError):
+        sb.atualizar_badge("chave_que_nao_existe", 5)
+
+
+def test_definir_ativa_chave_desconhecida_levanta_valueerror(qtbot, tmp_path):
+    sb = _sidebar(qtbot, tmp_path)
+    with pytest.raises(ValueError):
+        sb.definir_ativa("chave_que_nao_existe")

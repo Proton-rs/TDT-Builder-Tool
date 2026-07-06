@@ -110,16 +110,24 @@ class Sidebar(QWidget):
         btn.style().polish(btn)
 
     def definir_estado(self, chave: str, estado: str) -> None:
+        if chave not in self._botoes:
+            raise ValueError(f"chave desconhecida: {chave!r}")
+        if estado not in {"disponivel", "bloqueada", "completa"}:
+            raise ValueError(f"estado invalido: {estado!r}")
         self._estados[chave] = estado
         self._atualizar_botao(chave)
 
     def definir_ativa(self, chave: str) -> None:
+        if chave not in self._botoes:
+            raise ValueError(f"chave desconhecida: {chave!r}")
         anterior, self._ativa = self._ativa, chave
         if anterior in self._botoes:
             self._atualizar_botao(anterior)
         self._atualizar_botao(chave)
 
     def atualizar_badge(self, chave: str, n: int) -> None:
+        if chave not in self._botoes:
+            raise ValueError(f"chave desconhecida: {chave!r}")
         self._badges[chave] = n
         self._atualizar_botao(chave)
 
