@@ -45,7 +45,7 @@ def test_botao_limpar_log_esvazia_o_log(qtbot):
     st = AppState()
     tela = TelaInicial(st)
     qtbot.addWidget(tela)
-    tela.log.appendPlainText("algo")
+    tela.log.append("algo")
     tela.btn_limpar_log.click()
     assert tela.log.toPlainText() == ""
 
