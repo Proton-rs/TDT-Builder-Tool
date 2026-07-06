@@ -247,3 +247,20 @@ def test_set_status_visivel_none_mostra_tudo():
     proxy.set_status_visivel("decidido")
     proxy.set_status_visivel(None)
     assert proxy.rowCount() == 2
+
+
+def test_filtros_ativos_conta_texto_e_valores(qtbot):
+    proxy = _proxy_com([_rec("a:1", "DJF1", "decidido")])
+    assert proxy.filtros_ativos() == 0
+    proxy.setFiltroColuna(0, "DJ")
+    proxy.set_filtro_coluna(2, {"decidido"})
+    assert proxy.filtros_ativos() == 2
+    proxy.limpar_filtros()
+    assert proxy.filtros_ativos() == 0
+
+
+def test_marcador_header_para_filtro_texto(qtbot):
+    from PySide6.QtCore import Qt
+    proxy = _proxy_com([_rec("a:1", "DJF1", "decidido")])
+    proxy.setFiltroColuna(0, "DJ")
+    assert "▼" in proxy.headerData(0, Qt.Horizontal, Qt.DisplayRole)

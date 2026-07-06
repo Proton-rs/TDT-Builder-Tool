@@ -10,8 +10,8 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
-    QButtonGroup, QCheckBox, QDialog, QDialogButtonBox, QHBoxLayout, QInputDialog, QLabel,
-    QLineEdit, QListWidget, QListWidgetItem, QMenu, QMessageBox, QProgressBar,
+    QButtonGroup, QCheckBox, QDialog, QDialogButtonBox, QHBoxLayout, QLabel,
+    QLineEdit, QListWidget, QListWidgetItem, QMessageBox, QProgressBar,
     QPushButton, QSizePolicy, QTableView, QTabBar, QVBoxLayout, QWidget,
 )
 
@@ -81,11 +81,14 @@ class FiltroColunaDialog(QDialog):
     e repassa; não sabe nada sobre SignalRecord nem sobre o modelo fonte.
     """
 
-    def __init__(self, nome_coluna: str, valores: list[str], selecionados: set[str] | None, parent=None):
+    def __init__(self, nome_coluna: str, valores: list[str], selecionados: set[str] | None, contem_inicial: str = "", parent=None):
         super().__init__(parent)
         self.setWindowTitle(f"Filtrar '{nome_coluna}'")
         self._valores = valores
         marcar_tudo = selecionados is None
+
+        self.ed_contem = QLineEdit(contem_inicial)
+        self.ed_contem.setPlaceholderText("contém… (texto livre)")
 
         self.busca = QLineEdit()
         self.busca.setPlaceholderText("buscar...")
@@ -114,6 +117,7 @@ class FiltroColunaDialog(QDialog):
         botoes.addButton(btn_limpar, QDialogButtonBox.ResetRole)
 
         layout = QVBoxLayout(self)
+        layout.addWidget(self.ed_contem)
         layout.addWidget(self.busca)
         layout.addWidget(self.chk_todos)
         layout.addWidget(self.lista)
@@ -149,6 +153,9 @@ class FiltroColunaDialog(QDialog):
         if len(marcados) == len(self._valores):
             return None
         return marcados
+
+    def texto_contem(self) -> str:
+        return "" if self._limpo else self.ed_contem.text().strip()
 
 
 class PareamentoDialog(QDialog):
@@ -249,6 +256,10 @@ class TelaRevisao(QWidget):
         barra_filtro = QHBoxLayout()
         barra_filtro.addLayout(botoes_status)
         barra_filtro.addStretch()
+        self.btn_limpar_filtros = QPushButton("")
+        self.btn_limpar_filtros.setVisible(False)
+        self.btn_limpar_filtros.clicked.connect(self._limpar_filtros)
+        barra_filtro.addWidget(self.btn_limpar_filtros)
         barra_filtro.addWidget(self.lbl_selecao)
 
         self.abas_sheet = QTabBar()
@@ -272,10 +283,6 @@ class TelaRevisao(QWidget):
         self.tabela.horizontalHeader().setSortIndicatorClearable(True)
         self.tabela.horizontalHeader().setContextMenuPolicy(Qt.CustomContextMenu)
         self.tabela.horizontalHeader().customContextMenuRequested.connect(self._filtrar_coluna)
-        # clique direito = filtro legado (texto livre / módulo); duplo-clique
-        # no header = popup estilo Excel (multi-valor, Task 3) -- gatilhos
-        # distintos pra não colidir com sectionClicked (ordenação).
-        self.tabela.horizontalHeader().sectionDoubleClicked.connect(self._abrir_filtro_coluna_excel)
         self.tabela.setEditTriggers(QTableView.DoubleClicked)
         self.tabela.horizontalHeader().setSectionsMovable(True)  # arrastar colunas
         col_sinal = ModeloSinais.COLUNAS.index("Sinal")
@@ -288,6 +295,7 @@ class TelaRevisao(QWidget):
         self.tabela.setItemDelegateForColumn(col_modulo, DelegateModulo(self._estado, self.tabela))
         self.tabela.selectionModel().currentRowChanged.connect(self._linha_mudou)
         self.tabela.selectionModel().selectionChanged.connect(self._atualizar_selecao)
+        self._atualizar_chip_filtros()
 
     def refresh(self) -> None:
         """Re-sincroniza a view após mutação externa de registros (ex.: undo)."""
@@ -340,62 +348,39 @@ class TelaRevisao(QWidget):
         col = self.tabela.horizontalHeader().logicalIndexAt(pos)
         if col < 0:
             return
-        if self._eh_coluna_modulo(col):
-            menu = self._construir_menu_coluna(col, pos)
-            menu.exec(self.tabela.horizontalHeader().viewport().mapToGlobal(pos))
-            return
-        nome = ModeloSinais.COLUNAS[col]
-        atual = self._proxy.filtroColuna(col)
-        texto, ok = QInputDialog.getText(self, f"Filtrar '{nome}'", "Contém:", text=atual)
-        if ok:
-            self._proxy.setFiltroColuna(col, texto.strip())
-
-    def _eh_coluna_modulo(self, col: int) -> bool:
-        return col == ModeloSinais.COLUNAS.index("Módulo")
-
-    def _abrir_filtro_coluna_excel(self, col: int) -> None:
-        """Abre o popup estilo Excel (multi-valor) pra `col`.
-
-        ponytail: gatilho é duplo-clique na seção do header -- separado do
-        clique direito (menu de contexto), que mantém o filtro de texto
-        livre/módulo legado intacto. Os dois mecanismos de filtro por
-        coluna coexistem e combinam em AND dentro do ProxyRevisao.
-        """
         nome = ModeloSinais.COLUNAS[col]
         valores = self._proxy.valores_unicos(col)
         atuais = self._selecao_filtro_coluna.get(col)
-        dialog = FiltroColunaDialog(nome, valores, atuais, self)
-        if dialog.exec() == QDialog.Accepted:
-            novos = dialog.valores_selecionados()
-            self._proxy.set_filtro_coluna(col, novos)
-            if novos is None:
-                self._selecao_filtro_coluna.pop(col, None)
-            else:
-                self._selecao_filtro_coluna[col] = novos
+        dialog = FiltroColunaDialog(
+            nome, valores, atuais,
+            contem_inicial=self._proxy.filtroColuna(col), parent=self)
+        if dialog.exec() != QDialog.Accepted:
+            return
+        novos = dialog.valores_selecionados()
+        self._proxy.set_filtro_coluna(col, novos)
+        self._proxy.setFiltroColuna(col, dialog.texto_contem())
+        if novos is None:
+            self._selecao_filtro_coluna.pop(col, None)
+        else:
+            self._selecao_filtro_coluna[col] = novos
+        self._atualizar_chip_filtros()
 
-    def _construir_menu_coluna(self, col: int, _pos) -> QMenu:
-        """Menu de checkboxes com os módulos distintos presentes nos registros.
 
-        ponytail: single-select (cada clique substitui o filtro anterior via
-        setFiltroColuna). Multi-select exigiria estender ProxyRevisao pra
-        aceitar uma lista de valores aceitos por coluna — não fazemos isso
-        agora porque o caso de uso atual (isolar um módulo por vez) não pede.
-        """
-        menu = QMenu(self)
-        modulos = sorted({
-            r.modulo.nome for r in self._estado.registros
-            if r.modulo and r.modulo.nome
-        })
-        filtro_atual = self._proxy.filtroColuna(col)
-        for mod in modulos:
-            acao = menu.addAction(mod)
-            acao.setCheckable(True)
-            acao.setChecked(mod.upper() == filtro_atual.upper())
-            acao.triggered.connect(lambda _checked=False, m=mod: self._proxy.setFiltroColuna(col, m))
-        menu.addSeparator()
-        acao_limpar = menu.addAction("Limpar Filtro")
-        acao_limpar.triggered.connect(lambda: self._proxy.setFiltroColuna(col, ""))
-        return menu
+    def _atualizar_chip_filtros(self) -> None:
+        n = self._proxy.filtros_ativos()
+        self.btn_limpar_filtros.setText(f"Filtros ativos: {n} — limpar todos")
+        self.btn_limpar_filtros.setVisible(n > 0)
+
+    def _limpar_filtros(self) -> None:
+        self._proxy.limpar_filtros()
+        self._selecao_filtro_coluna.clear()
+        self._atualizar_chip_filtros()
+
+    def filtrar_endereco(self, texto: str) -> None:
+        """Filtro "contém" na coluna Endereço (usado pela tela de Geração)."""
+        col = ModeloSinais.COLUNAS.index("Endereço")
+        self._proxy.setFiltroColuna(col, texto)
+        self._atualizar_chip_filtros()
 
     def _registro(self):
         if 0 <= self._linha < len(self._estado.registros):

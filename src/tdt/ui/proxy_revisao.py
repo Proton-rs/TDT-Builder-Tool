@@ -39,11 +39,14 @@ class ProxyRevisao(QSortFilterProxyModel):
         self.invalidateFilter()
 
     def setFiltroColuna(self, col: int, texto: str) -> None:
+        estava = col in self._filtros_coluna
         if texto:
             self._filtros_coluna[col] = texto.upper()
         else:
             self._filtros_coluna.pop(col, None)
         self.invalidateFilter()
+        if estava != (col in self._filtros_coluna):
+            self.headerDataChanged.emit(Qt.Horizontal, col, col)
 
     def filtroColuna(self, col: int) -> str:
         return self._filtros_coluna.get(col, "")
@@ -72,12 +75,23 @@ class ProxyRevisao(QSortFilterProxyModel):
         """Colunas com filtro de valores (estilo Excel) ativo no momento."""
         return set(self._filtros_coluna_valores.keys())
 
+    def filtros_ativos(self) -> int:
+        return len(set(self._filtros_coluna) | set(self._filtros_coluna_valores))
+
+    def limpar_filtros(self) -> None:
+        cols = set(self._filtros_coluna) | set(self._filtros_coluna_valores)
+        self._filtros_coluna.clear()
+        self._filtros_coluna_valores.clear()
+        self.invalidateFilter()
+        for col in cols:
+            self.headerDataChanged.emit(Qt.Horizontal, col, col)
+
     def headerData(self, secao, orientacao, role=Qt.DisplayRole):
         valor = super().headerData(secao, orientacao, role)
         if (
             role == Qt.DisplayRole
             and orientacao == Qt.Horizontal
-            and secao in self._filtros_coluna_valores
+            and (secao in self._filtros_coluna_valores or secao in self._filtros_coluna)
         ):
             return f"{valor}{MARCADOR_FILTRO}"
         return valor
