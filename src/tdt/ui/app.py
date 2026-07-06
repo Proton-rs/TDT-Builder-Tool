@@ -45,7 +45,7 @@ class MainWindow(QMainWindow):
         self.resize(1200, 700)
 
         self.stack = QStackedWidget()
-        self.tela_inicial = TelaInicial(estado)
+        self.tela_inicial = TelaInicial(estado, config_path=config_path)
         self.tela_revisao = TelaRevisao(estado)
         self.tela_config = TelaConfig(estado, config_path=config_path)
         self.tela_analise = TelaAnalise()

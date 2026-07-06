@@ -1,6 +1,7 @@
-"""Tela Inicial: configura e dispara o pipeline; LOG ao vivo; PARAR.
+"""Tela Entrada: setup guiado com cards de estado; dispara o pipeline.
 
-ponytail: lê sheets com openpyxl read_only; worker injetável p/ teste.
+ponytail: cards são QFrame com propriedade QSS estado="ok|faltando"; a
+validação vive em motivo_bloqueio (pura). Worker injetável p/ teste.
 """
 
 from __future__ import annotations
@@ -9,16 +10,16 @@ from html import escape
 from pathlib import Path
 
 import openpyxl
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
-    QButtonGroup, QCheckBox, QComboBox, QFileDialog, QGroupBox, QHBoxLayout,
-    QLabel, QLineEdit, QListWidget, QListWidgetItem, QMessageBox, QPlainTextEdit,
-    QProgressBar, QPushButton, QRadioButton, QVBoxLayout, QWidget,
+    QButtonGroup, QCheckBox, QComboBox, QFileDialog, QFrame, QGroupBox,
+    QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMessageBox,
+    QProgressBar, QPushButton, QRadioButton, QTextEdit, QVBoxLayout, QWidget,
 )
-from PySide6.QtCore import Qt
 
 from tdt.dados.lista_padrao import ListaPadraoADMS
-from tdt.defaults import DEFAULT_LISTA, DEFAULT_OUTPUT
+from tdt.defaults import DEFAULT_LISTA, DEFAULT_OUTPUT, DEFAULT_TEMPLATE
+from tdt.ui.config_io import salvar_config
 from tdt.ui.estado import AppState
 from tdt.ui.worker import PipelineWorker
 
@@ -47,6 +48,11 @@ def motivo_bloqueio(sigla: str, paths: dict) -> list[str]:
     return faltas
 
 
+def pode_executar(sigla_se: str, input_ok: bool) -> bool:
+    """Mantida por compatibilidade com testes/chamadores existentes."""
+    return bool(sigla_se.strip()) and input_ok
+
+
 def linha_log_html(texto: str) -> str:
     """Linha de log com cor por nível, pronta para QTextEdit.append."""
     cor = "#c6ccd9"
@@ -57,41 +63,90 @@ def linha_log_html(texto: str) -> str:
     return f'<span style="color:{cor}">{escape(texto)}</span>'
 
 
-def pode_executar(sigla_se: str, input_ok: bool) -> bool:
-    """Valida se a execução pode prosseguir.
+class CardArquivo(QFrame):
+    """Card de pré-requisito com estado visual ok/faltando."""
 
-    Args:
-        sigla_se: sigla da subestação (será stripped antes da validação)
-        input_ok: boolean que indica se os dados de entrada estão válidos
+    def __init__(self, titulo: str, ao_clicar):
+        super().__init__()
+        self._titulo = titulo
+        self.lbl_titulo = QLabel(titulo)
+        self.lbl_valor = QLabel("não configurado")
+        self.lbl_valor.setProperty("nivel", "aviso")
+        self.btn = QPushButton("Selecionar…")
+        self.btn.clicked.connect(ao_clicar)
+        col = QVBoxLayout()
+        col.setSpacing(1)
+        col.addWidget(self.lbl_titulo)
+        col.addWidget(self.lbl_valor)
+        lay = QHBoxLayout(self)
+        lay.addLayout(col, 1)
+        lay.addWidget(self.btn)
+        self.definir_caminho("")
 
-    Returns:
-        True se pode executar (sigla não vazia e input_ok=True), False caso contrário
-    """
-    return bool(sigla_se.strip()) and input_ok
+    def definir_caminho(self, caminho: str) -> None:
+        ok = bool(caminho) and Path(caminho).exists()
+        self.setProperty("estado", "ok" if ok else "faltando")
+        if ok:
+            self.lbl_titulo.setText(f"✓ {self._titulo}")
+            self.lbl_valor.setText(Path(caminho).name)
+            self.lbl_valor.setProperty("nivel", "")
+            self.setToolTip(caminho)
+            self.btn.setText("Trocar…")
+        else:
+            self.lbl_titulo.setText(f"! {self._titulo}")
+            self.lbl_valor.setText("não configurado")
+            self.lbl_valor.setProperty("nivel", "aviso")
+            self.setToolTip("")
+            self.btn.setText("Selecionar…")
+        for w in (self, self.lbl_valor):
+            w.style().unpolish(w)
+            w.style().polish(w)
 
 
 class TelaInicial(QWidget):
     abrir_config = Signal()
     executou = Signal()
 
-    def __init__(self, estado: AppState, worker_factory=PipelineWorker):
+    def __init__(self, estado: AppState, worker_factory=PipelineWorker,
+                 config_path="config.toml"):
         super().__init__()
         self._estado = estado
         self._worker_factory = worker_factory
         self._worker = None
+        self._config_path = config_path
 
-        self.ed_input = QLineEdit()
-        self.ed_input.setReadOnly(True)
-        self.ed_input.setPlaceholderText("Nenhum arquivo de entrada selecionado")
-        self.ed_input.textChanged.connect(self._atualizar_estado_botao)
-        btn_in = QPushButton("Input…"); btn_in.clicked.connect(self._escolher_input)
+        # --- coluna Arquivos: cards ---
+        self.cards: dict[str, CardArquivo] = {}
+        defs = [
+            ("input", "Input", False, DEFAULT_LISTA),
+            ("template", "Template DNP3", False, DEFAULT_TEMPLATE),
+            ("lista_padrao", "Lista Padrão ADMS", False, DEFAULT_LISTA),
+            ("output", "Pasta de saída", True, DEFAULT_OUTPUT),
+        ]
+        col_arq = QVBoxLayout()
+        for chave, titulo, is_pasta, _default in defs:
+            card = CardArquivo(
+                titulo,
+                lambda _=False, c=chave, p=is_pasta: self._escolher(c, p))
+            self.cards[chave] = card
+            col_arq.addWidget(card)
+        self._defaults_dialogo = {c: d for c, _t, _p, d in defs}
 
-        self.ed_output = QLineEdit()
-        self.ed_output.setReadOnly(True)
-        self.ed_output.setPlaceholderText("Nenhuma pasta de saída selecionada")
-        btn_out = QPushButton("Output…"); btn_out.clicked.connect(self._escolher_output)
+        self.lbl_sheets = QLabel("Sheets")
+        self.lista_sheets = QListWidget()
+        self.lista_sheets.itemChanged.connect(self._sheet_alterada)
+        col_arq.addWidget(self.lbl_sheets)
+        col_arq.addWidget(self.lista_sheets, 1)
 
-        self.combo_proto = QComboBox(); self.combo_proto.addItem("DNP3")
+        # --- coluna Análise ---
+        self.combo_sub = QComboBox()
+        self.combo_sub.setEditable(True)
+        self.combo_sub.lineEdit().setPlaceholderText("sigla da SE, ex.: SAN2")
+        self.combo_sub.lineEdit().textChanged.connect(self._atualizar_estado_botao)
+
+        self.combo_proto = QComboBox()
+        self.combo_proto.addItem("DNP3")
+
         self.grupo_modo = QButtonGroup(self)
         cx_modo = QVBoxLayout()
         for i, (rotulo, _val) in enumerate(_MODOS):
@@ -103,103 +158,111 @@ class TelaInicial(QWidget):
 
         self.chk_pular = QCheckBox("Pular revisão manual")
         self.chk_aprovar = QCheckBox("Aprovar auto. acima do threshold")
-        self.chk_aprovar.setChecked(estado.flags.get("aprovar_acima_threshold", True))
+        self.chk_aprovar.setChecked(
+            estado.flags.get("aprovar_acima_threshold", True))
 
-        self.combo_sub = QComboBox(); self.combo_sub.setEditable(True)
-        self.combo_sub.lineEdit().setPlaceholderText("Obrigatório — sigla da subestação")
-        self.combo_sub.lineEdit().textChanged.connect(self._atualizar_estado_botao)
+        col_ana = QVBoxLayout()
+        col_ana.addWidget(QLabel("Subestação *"))
+        col_ana.addWidget(self.combo_sub)
+        col_ana.addWidget(QLabel("Protocolo"))
+        col_ana.addWidget(self.combo_proto)
+        col_ana.addWidget(QLabel("Método de processamento"))
+        col_ana.addLayout(cx_modo)
+        col_ana.addWidget(QLabel("Flags"))
+        col_ana.addWidget(self.chk_pular)
+        col_ana.addWidget(self.chk_aprovar)
+        col_ana.addStretch()
 
-        self.lista_sheets = QListWidget()
-        self.lista_sheets.itemChanged.connect(self._sheet_alterada)
-
-        self.btn_executar = QPushButton("EXECUTAR"); self.btn_executar.clicked.connect(self._executar)
+        # --- faixa de execução ---
+        self.btn_executar = QPushButton("Executar análise")
         self.btn_executar.setProperty("acao", "principal")
-        self.btn_executar.setToolTip("Informe a sigla da SE")
-        self.btn_parar = QPushButton("PARAR"); self.btn_parar.clicked.connect(self._parar)
+        self.btn_executar.clicked.connect(self._executar)
+        self.btn_parar = QPushButton("Parar")
+        self.btn_parar.clicked.connect(self._parar)
         self.btn_parar.setEnabled(False)
-        btn_cfg = QPushButton("⚙"); btn_cfg.clicked.connect(self.abrir_config.emit)
+        btn_cfg = QPushButton("⚙")
+        btn_cfg.setToolTip("Configurações")
+        btn_cfg.clicked.connect(self.abrir_config.emit)
 
-        self.log = QPlainTextEdit(); self.log.setReadOnly(True)
-        self.btn_limpar_log = QPushButton("Limpar log")
-        self.btn_limpar_log.clicked.connect(self.log.clear)
+        self.lbl_motivo = QLabel("")
+        self.lbl_motivo.setProperty("nivel", "aviso")
+        self.lbl_motivo.setVisible(False)
 
+        self.lbl_etapa = QLabel("")
+        self.lbl_etapa.setVisible(False)
         self.progresso_bar = QProgressBar()
         self.progresso_bar.setVisible(False)
 
-        col_esq = QVBoxLayout()
-        for w in (QLabel("Input:"), self.ed_input, btn_in,
-                  QLabel("Output:"), self.ed_output, btn_out,
-                  QLabel("Protocolo:"), self.combo_proto,
-                  QLabel("Método de processamento:")):
-            col_esq.addWidget(w)
-        col_esq.addLayout(cx_modo)
-        col_esq.addWidget(QLabel("Flags:")); col_esq.addWidget(self.chk_pular); col_esq.addWidget(self.chk_aprovar)
+        self.btn_toggle_log = QPushButton("Ver log ▾")
+        self.btn_toggle_log.clicked.connect(self._alternar_log)
+        self.btn_limpar_log = QPushButton("Limpar log")
+        self.btn_limpar_log.clicked.connect(lambda: self.log.clear())
+        self.btn_limpar_log.setVisible(False)
+        self.log = QTextEdit()
+        self.log.setReadOnly(True)
+        self.log.setVisible(False)
 
-        col_meio = QVBoxLayout()
-        col_meio.addWidget(QLabel("Subestação")); col_meio.addWidget(self.combo_sub)
-        col_meio.addWidget(QLabel("Sheets")); col_meio.addWidget(self.lista_sheets)
+        botoes = QHBoxLayout()
+        botoes.addWidget(self.btn_executar)
+        botoes.addWidget(self.btn_parar)
+        botoes.addStretch()
+        botoes.addWidget(self.btn_toggle_log)
+        botoes.addWidget(self.btn_limpar_log)
+        botoes.addWidget(btn_cfg)
 
-        col_dir = QVBoxLayout()
-        topo = QHBoxLayout(); topo.addStretch(); topo.addWidget(btn_cfg)
-        botoes = QHBoxLayout(); botoes.addWidget(self.btn_executar); botoes.addWidget(self.btn_parar)
-        col_dir.addLayout(topo); col_dir.addLayout(botoes)
-        log_header = QHBoxLayout()
-        log_header.addWidget(QLabel("LOG"))
-        log_header.addStretch()
-        log_header.addWidget(self.btn_limpar_log)
-        col_dir.addLayout(log_header)
-        col_dir.addWidget(self.log)
-        col_dir.addWidget(self.progresso_bar)
+        faixa_exec = QVBoxLayout()
+        faixa_exec.addLayout(botoes)
+        faixa_exec.addWidget(self.lbl_motivo)
+        faixa_exec.addWidget(self.lbl_etapa)
+        faixa_exec.addWidget(self.progresso_bar)
+        faixa_exec.addWidget(self.log, 1)
 
         def _grupo(titulo, layout):
-            g = QGroupBox(titulo); g.setLayout(layout); return g
+            g = QGroupBox(titulo)
+            g.setLayout(layout)
+            return g
 
-        raiz = QHBoxLayout(self)
-        raiz.addWidget(_grupo("Entrada / Processamento", col_esq))
-        raiz.addWidget(_grupo("Subestação / Sheets", col_meio))
-        raiz.addWidget(_grupo("Execução", col_dir), 1)
+        colunas = QHBoxLayout()
+        colunas.addWidget(_grupo("Arquivos", col_arq), 1)
+        colunas.addWidget(_grupo("Análise", col_ana), 1)
 
+        raiz = QVBoxLayout(self)
+        raiz.addLayout(colunas, 1)
+        raiz.addLayout(faixa_exec)
+
+        self.recarregar()
+
+    # --- estado / validação ---
     def recarregar(self) -> None:
         p = self._estado.paths
-        self.ed_input.setText(p.get("input", ""))
-        self.ed_output.setText(p.get("output", ""))
+        for chave, card in self.cards.items():
+            card.definir_caminho(p.get(chave, ""))
         self._atualizar_estado_botao()
 
-    def log_msg(self, texto: str) -> None:
-        """Indireção de log — a Task 7 troca o widget sem tocar os callers."""
-        self.log.appendPlainText(texto)
-
-    def _input_valido(self) -> bool:
-        """Verifica se os arquivos de entrada estão configurados."""
-        p = self._estado.paths
-        faltando = [k for k in ("input", "template", "lista_padrao")
-                    if not p.get(k) or not Path(p[k]).exists()]
-        return len(faltando) == 0
-
     def _atualizar_estado_botao(self) -> None:
-        """Atualiza o estado do botão Executar baseado em validações."""
-        sigla = self.combo_sub.currentText()
-        input_ok = self._input_valido()
-        habilitado = pode_executar(sigla, input_ok)
-        self.btn_executar.setEnabled(habilitado)
+        faltas = motivo_bloqueio(self.combo_sub.currentText(), self._estado.paths)
+        self.btn_executar.setEnabled(not faltas)
+        self.lbl_motivo.setText("Falta: " + ", ".join(faltas) if faltas else "")
+        self.lbl_motivo.setVisible(bool(faltas))
 
-    def _escolher_input(self):
-        atual = self._estado.paths.get("input", "") or DEFAULT_LISTA
-        caminho, _ = QFileDialog.getOpenFileName(
-            self, "Input .xlsx", dir=atual, filter="Excel (*.xlsx)")
+    def _escolher(self, chave: str, is_pasta: bool) -> None:
+        atual = self._estado.paths.get(chave, "") or self._defaults_dialogo[chave]
+        if is_pasta:
+            caminho = QFileDialog.getExistingDirectory(
+                self, "Pasta de saída", dir=atual)
+        else:
+            caminho, _ = QFileDialog.getOpenFileName(
+                self, f"Selecionar {chave}", dir=atual, filter="Excel (*.xlsx)")
         if not caminho:
             return
-        self._estado.paths["input"] = caminho
-        self.ed_input.setText(caminho)
-        self._popular_sheets(caminho)
+        self._estado.paths[chave] = caminho
+        self.cards[chave].definir_caminho(caminho)
+        salvar_config(self._config_path, self._estado.config, self._estado.paths)
+        if chave == "input":
+            self._popular_sheets(caminho)
+        self._atualizar_estado_botao()
 
-    def _escolher_output(self):
-        atual = self._estado.paths.get("output", "") or DEFAULT_OUTPUT
-        caminho = QFileDialog.getExistingDirectory(self, "Pasta de output", dir=atual)
-        if caminho:
-            self._estado.paths["output"] = caminho
-            self.ed_output.setText(caminho)
-
+    # --- sheets (inalterado em relação à versão anterior) ---
     def _popular_sheets(self, caminho):
         self.lista_sheets.clear()
         try:
@@ -207,16 +270,17 @@ class TelaInicial(QWidget):
             nomes = wb.sheetnames
             wb.close()
         except Exception as e:
-            self.log.appendPlainText(f"[ERRO] não li sheets: {e}")
+            self.log_msg(f"[ERRO] não li sheets: {e}")
             return
         aliases = self._estado.aliases
         for nome in nomes:
             texto = aliases.get(nome, nome)
             it = QListWidgetItem(texto)
-            it.setData(Qt.UserRole, nome)  # nome original da sheet
+            it.setData(Qt.UserRole, nome)
             it.setFlags(it.flags() | Qt.ItemIsUserCheckable | Qt.ItemIsEditable)
             it.setCheckState(Qt.Checked)
             self.lista_sheets.addItem(it)
+        self._atualizar_rotulo_sheets()
 
     def _sheet_alterada(self, it: QListWidgetItem) -> None:
         original = it.data(Qt.UserRole)
@@ -225,28 +289,21 @@ class TelaInicial(QWidget):
             self._estado.aliases[original] = novo
         elif original in self._estado.aliases:
             del self._estado.aliases[original]
-
         if it.checkState() == Qt.Unchecked:
             self._estado.sheets_excluidas.add(original)
         else:
             self._estado.sheets_excluidas.discard(original)
+        self._atualizar_rotulo_sheets()
 
-    def _coletar(self):
-        self._estado.modo = _MODOS[self.grupo_modo.checkedId()][1]
-        self._estado.flags["pular_revisao"] = self.chk_pular.isChecked()
-        self._estado.flags["aprovar_acima_threshold"] = self.chk_aprovar.isChecked()
-        texto = self.combo_sub.currentText().strip()
-        self._estado.subestacao = None if not texto else texto
+    def _atualizar_rotulo_sheets(self) -> None:
+        total = self.lista_sheets.count()
+        marcadas = sum(
+            1 for i in range(total)
+            if self.lista_sheets.item(i).checkState() == Qt.Checked)
+        self.lbl_sheets.setText(
+            f"Sheets · {marcadas} de {total} marcadas" if total else "Sheets")
 
     def _sheets_selecionadas(self) -> list[str] | None:
-        """Nomes originais das sheets marcadas na lista, na ordem exibida.
-
-        Retorna None (sem restrição) quando a lista de sheets está vazia —
-        p.ex. execução disparada sem passar por `_popular_sheets` (input
-        ainda não foi lido nessa sessão de UI) — para não quebrar o
-        comportamento pré-existente de processar tudo que a heurística de
-        conteúdo decidir.
-        """
         if self.lista_sheets.count() == 0:
             return None
         return [
@@ -255,39 +312,60 @@ class TelaInicial(QWidget):
             if (it := self.lista_sheets.item(i)).checkState() == Qt.Checked
         ]
 
+    # --- execução ---
+    def _coletar(self):
+        self._estado.modo = _MODOS[self.grupo_modo.checkedId()][1]
+        self._estado.flags["pular_revisao"] = self.chk_pular.isChecked()
+        self._estado.flags["aprovar_acima_threshold"] = self.chk_aprovar.isChecked()
+        texto = self.combo_sub.currentText().strip()
+        self._estado.subestacao = None if not texto else texto
+
     def _executar(self):
         self._coletar()
-
-        # Defense in depth: validar sigla antes de continuar
-        sigla = self.combo_sub.currentText()
-        if not pode_executar(sigla, True):
-            QMessageBox.warning(self, "Sigla da SE obrigatória",
-                                "Informe uma sigla válida para a subestação.")
+        faltas = motivo_bloqueio(self.combo_sub.currentText(), self._estado.paths)
+        if faltas:
+            QMessageBox.warning(self, "Pendências",
+                                "Resolva antes de executar:\n"
+                                + "\n".join(f"  • {f}" for f in faltas))
             self._fim()
             return
-
-        p = self._estado.paths
-        faltando = [k for k in ("input", "template", "lista_padrao")
-                    if not p.get(k) or not Path(p[k]).exists()]
-        if faltando:
-            QMessageBox.warning(self, "Arquivos ausentes",
-                                "Configure os caminhos abaixo em ⚙:\n"
-                                + "\n".join(f"  • {k}" for k in faltando))
-            self._fim()
-            return
-        self.btn_executar.setEnabled(False); self.btn_parar.setEnabled(True)
+        self.btn_executar.setEnabled(False)
+        self.btn_parar.setEnabled(True)
         sheets = self._sheets_selecionadas()
         self._worker = self._worker_factory(
             paths=self._estado.paths, config=self._estado.config,
             modo=self._estado.modo, subestacao=self._estado.subestacao,
-            app_state=self._estado, sheets=sheets, aliases=dict(self._estado.aliases),
+            app_state=self._estado, sheets=sheets,
+            aliases=dict(self._estado.aliases),
         )
-        self._worker.log.connect(self.log.appendPlainText)
-        self._worker.erro.connect(lambda m: self.log.appendPlainText(f"[ERRO] {m}"))
+        self._worker.log.connect(self._on_log)
+        self._worker.erro.connect(self._on_erro)
         self._worker.erro.connect(self._fim)
         self._worker.terminado.connect(self._terminado)
         self._worker.progresso.connect(self._atualizar_progresso)
         self._worker.start()
+
+    # --- log / progresso ---
+    def log_msg(self, texto: str) -> None:
+        self.log.append(linha_log_html(texto))
+
+    def _on_log(self, texto: str) -> None:
+        self.log_msg(texto)
+        if texto.startswith("[INFO]"):
+            self.lbl_etapa.setText(texto[len("[INFO]"):].strip())
+            self.lbl_etapa.setVisible(True)
+
+    def _on_erro(self, msg: str) -> None:
+        self.log_msg(f"[ERRO] {msg}")
+        self._mostrar_log(True)
+
+    def _alternar_log(self) -> None:
+        self._mostrar_log(not self.log.isVisibleTo(self))
+
+    def _mostrar_log(self, visivel: bool) -> None:
+        self.log.setVisible(visivel)
+        self.btn_limpar_log.setVisible(visivel)
+        self.btn_toggle_log.setText("Ocultar log ▴" if visivel else "Ver log ▾")
 
     def _atualizar_progresso(self, atual: int, total: int) -> None:
         self.progresso_bar.setVisible(True)
@@ -300,16 +378,18 @@ class TelaInicial(QWidget):
         if caminho_lp:
             try:
                 self._estado.lista_padrao = ListaPadraoADMS.carregar(caminho_lp)
-            except Exception as e:  # ponytail: lista ruim só desliga ADMS na UI + loga
-                self.log.appendPlainText(f"[AVISO] não carreguei lista padrão p/ UI: {e}")
+            except Exception as e:
+                self.log_msg(f"[AVISO] não carreguei lista padrão p/ UI: {e}")
         self._fim()
         self.executou.emit()
 
     def _parar(self):
         if self._worker is not None:
             self._worker.parar()
-            self.log.appendPlainText("[AVISO] PARAR solicitado")
+            self.log_msg("[AVISO] Parar solicitado")
 
     def _fim(self, *args):
-        self.btn_executar.setEnabled(True); self.btn_parar.setEnabled(False)
+        self._atualizar_estado_botao()
+        self.btn_parar.setEnabled(False)
         self.progresso_bar.setVisible(False)
+        self.lbl_etapa.setVisible(False)
