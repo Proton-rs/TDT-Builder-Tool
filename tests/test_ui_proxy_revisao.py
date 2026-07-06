@@ -34,7 +34,7 @@ def test_esconder_decididos_filtra_linhas():
     modelo = ModeloSinais(estado)
     proxy = ProxyRevisao()
     proxy.setSourceModel(modelo)
-    proxy.setEsconderDecididos(True)
+    proxy.set_status_visivel("revisao")
     assert proxy.rowCount() == 1
     col_status = ModeloSinais.COLUNAS.index("Status")
     assert proxy.index(0, col_status).data() == "revisao"
@@ -48,7 +48,7 @@ def test_esconder_decididos_desativado_mostra_tudo():
     modelo = ModeloSinais(estado)
     proxy = ProxyRevisao()
     proxy.setSourceModel(modelo)
-    proxy.setEsconderDecididos(False)
+    proxy.set_status_visivel(None)
     assert proxy.rowCount() == 2
 
 
@@ -60,7 +60,7 @@ def test_map_to_source_aponta_pro_registro_correto_apos_filtro():
     modelo = ModeloSinais(estado)
     proxy = ProxyRevisao()
     proxy.setSourceModel(modelo)
-    proxy.setEsconderDecididos(True)
+    proxy.set_status_visivel("revisao")
     fonte = proxy.mapToSource(proxy.index(0, 0))
     assert fonte.row() == 1  # registro "2" é o índice 1 na fonte
 
@@ -234,3 +234,16 @@ def test_set_filtro_coluna_emite_header_data_changed_so_quando_muda(qapp):
         (Qt.Horizontal, _COL_STATUS, _COL_STATUS),
         (Qt.Horizontal, _COL_STATUS, _COL_STATUS),
     ]
+
+
+def test_set_status_visivel_revisao_esconde_decididos():
+    proxy = _proxy_com([_rec("a:1", "decidido", "DJF1"), _rec("a:2", "revisao", None)])
+    proxy.set_status_visivel("revisao")
+    assert proxy.rowCount() == 1
+
+
+def test_set_status_visivel_none_mostra_tudo():
+    proxy = _proxy_com([_rec("a:1", "decidido", "DJF1"), _rec("a:2", "revisao", None)])
+    proxy.set_status_visivel("decidido")
+    proxy.set_status_visivel(None)
+    assert proxy.rowCount() == 2

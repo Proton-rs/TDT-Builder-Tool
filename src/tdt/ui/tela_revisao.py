@@ -10,7 +10,7 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
-    QCheckBox, QDialog, QDialogButtonBox, QHBoxLayout, QInputDialog, QLabel,
+    QButtonGroup, QCheckBox, QDialog, QDialogButtonBox, QHBoxLayout, QInputDialog, QLabel,
     QLineEdit, QListWidget, QListWidgetItem, QMenu, QMessageBox, QProgressBar,
     QPushButton, QSizePolicy, QTableView, QTabBar, QVBoxLayout, QWidget,
 )
@@ -234,11 +234,20 @@ class TelaRevisao(QWidget):
         self.tabela.setSelectionBehavior(QTableView.SelectRows)
         self.tabela.setAlternatingRowColors(True)
 
-        self.chk_so_revisao = QCheckBox("Mostrar apenas revisão")
-        self.chk_so_revisao.toggled.connect(self._filtrar_status)
+        self.grupo_status = QButtonGroup(self)
+        self._status_por_id = {0: None, 1: "revisao", 2: "decidido"}
+        botoes_status = QHBoxLayout()
+        for i, rotulo in enumerate(("Todos", "Pendentes", "Decididos")):
+            b = QPushButton(rotulo)
+            b.setCheckable(True)
+            if i == 0:
+                b.setChecked(True)
+            self.grupo_status.addButton(b, i)
+            botoes_status.addWidget(b)
+        self.grupo_status.idClicked.connect(self._filtrar_status_id)
         self.lbl_selecao = QLabel("0 selecionados")
         barra_filtro = QHBoxLayout()
-        barra_filtro.addWidget(self.chk_so_revisao)
+        barra_filtro.addLayout(botoes_status)
         barra_filtro.addStretch()
         barra_filtro.addWidget(self.lbl_selecao)
 
@@ -297,8 +306,14 @@ class TelaRevisao(QWidget):
         self._linha = fonte.row()
         self._atualizar_painel()
 
-    def _filtrar_status(self, ativo: bool) -> None:
-        self._proxy.setEsconderDecididos(ativo)
+    def _filtrar_status_id(self, id_botao: int) -> None:
+        if hasattr(self, "_proxy"):
+            self._proxy.set_status_visivel(self._status_por_id[id_botao])
+
+    def mostrar_pendentes(self) -> None:
+        """Ativa o filtro Pendentes (usado pela tela de Geração)."""
+        self.grupo_status.button(1).setChecked(True)
+        self._filtrar_status_id(1)
 
     def _popular_abas_sheet(self) -> None:
         """Uma aba por sheet distinta presente nos registros + "Tudo" (primeira).

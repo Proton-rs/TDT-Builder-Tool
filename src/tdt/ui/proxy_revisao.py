@@ -23,13 +23,14 @@ MARCADOR_FILTRO = " ▼*"
 class ProxyRevisao(QSortFilterProxyModel):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._esconder_decididos = False
+        self._status_visivel: str | None = None
         self._filtros_coluna: dict[int, str] = {}
         self._sheet: str | None = None
         self._filtros_coluna_valores: dict[int, set[str]] = {}
 
-    def setEsconderDecididos(self, ativo: bool) -> None:
-        self._esconder_decididos = ativo
+    def set_status_visivel(self, status: str | None) -> None:
+        """None = todos; "revisao"/"decidido" mostram só esse status."""
+        self._status_visivel = status
         self.invalidateFilter()
 
     def set_sheet(self, nome: str | None) -> None:
@@ -102,9 +103,9 @@ class ProxyRevisao(QSortFilterProxyModel):
             rec = self.sourceModel()._estado.registros[source_row]
             if sheet_origem(rec) != self._sheet:
                 return False
-        if self._esconder_decididos:
+        if self._status_visivel is not None:
             idx = self.sourceModel().index(source_row, _COL_STATUS, source_parent)
-            if self.sourceModel().data(idx) == "decidido":
+            if self.sourceModel().data(idx) != self._status_visivel:
                 return False
         for col, termo in self._filtros_coluna.items():
             idx = self.sourceModel().index(source_row, col, source_parent)
