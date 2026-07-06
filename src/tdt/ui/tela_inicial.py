@@ -5,6 +5,7 @@ ponytail: lê sheets com openpyxl read_only; worker injetável p/ teste.
 
 from __future__ import annotations
 
+from html import escape
 from pathlib import Path
 
 import openpyxl
@@ -24,6 +25,36 @@ from tdt.ui.worker import PipelineWorker
 _MODOS = [("Automático (detecta pelo header)", "auto"),
           ("Homogêneo", "homogeneo"),
           ("Não homogêneo", "nao-homogeneo")]
+
+_ROTULOS_FALTA = {
+    "input": "arquivo de input",
+    "template": "template DNP3",
+    "lista_padrao": "lista padrão ADMS",
+}
+
+_CORES_NIVEL = {"[ERRO]": "#e0604c", "[AVISO]": "#e0a83f", "[INFO]": "#9aa3b5"}
+
+
+def motivo_bloqueio(sigla: str, paths: dict) -> list[str]:
+    """Pendências que impedem executar, na ordem de exibição. Vazio = pode."""
+    faltas = []
+    if not sigla.strip():
+        faltas.append("sigla da SE")
+    for chave, rotulo in _ROTULOS_FALTA.items():
+        p = paths.get(chave, "")
+        if not p or not Path(p).exists():
+            faltas.append(rotulo)
+    return faltas
+
+
+def linha_log_html(texto: str) -> str:
+    """Linha de log com cor por nível, pronta para QTextEdit.append."""
+    cor = "#c6ccd9"
+    for prefixo, c in _CORES_NIVEL.items():
+        if texto.startswith(prefixo):
+            cor = c
+            break
+    return f'<span style="color:{cor}">{escape(texto)}</span>'
 
 
 def pode_executar(sigla_se: str, input_ok: bool) -> bool:
