@@ -9,8 +9,9 @@ import uuid
 from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
-    QButtonGroup, QCheckBox, QDialog, QDialogButtonBox, QHBoxLayout, QLabel,
+    QApplication, QButtonGroup, QCheckBox, QDialog, QDialogButtonBox, QHBoxLayout, QLabel,
     QLineEdit, QListWidget, QListWidgetItem, QMessageBox, QProgressBar,
     QPushButton, QSizePolicy, QTableView, QTabBar, QVBoxLayout, QWidget,
 )
@@ -176,6 +177,7 @@ class PareamentoDialog(QDialog):
 
 class TelaRevisao(QWidget):
     voltar = Signal()
+    desfazer_pedido = Signal()
 
     def __init__(self, estado: AppState):
         super().__init__()
@@ -184,19 +186,25 @@ class TelaRevisao(QWidget):
         self._selecao_filtro_coluna: dict[int, set[str]] = {}
 
         btn_voltar = QPushButton("← Voltar"); btn_voltar.clicked.connect(self.voltar.emit)
+        btn_desfazer = QPushButton("↶ Desfazer (Ctrl+Z)")
+        btn_desfazer.clicked.connect(self.desfazer_pedido.emit)
         btn_remover = QPushButton("Remover Sinal"); btn_remover.clicked.connect(self._remover_sinais)
         btn_adicionar = QPushButton("Adicionar Sinal"); btn_adicionar.clicked.connect(self._adicionar_sinal)
         btn_parear = QPushButton("Parear D+C"); btn_parear.clicked.connect(self._parear_sinais)
-        btn_gerar = QPushButton("aprovar / gerar TDT")
-        btn_gerar.setProperty("acao", "principal")
+        btn_gerar = QPushButton("Gerar TDT…")
         btn_gerar.clicked.connect(self._gerar)
+        self.btn_aprovar = QPushButton("Aprovar e ir ao próximo (Enter)")
+        self.btn_aprovar.setProperty("acao", "principal")
+        self.btn_aprovar.clicked.connect(lambda: self._aprovar_e_proximo())
 
         topo = QHBoxLayout()
         topo.addWidget(btn_voltar)
+        topo.insertWidget(1, btn_desfazer)
         topo.addStretch()
         topo.addWidget(btn_remover)
         topo.addWidget(btn_adicionar)
         topo.addWidget(btn_parear)
+        topo.addWidget(self.btn_aprovar)
         topo.addWidget(btn_gerar)
 
         # --- painel de detalhe ---
@@ -272,6 +280,19 @@ class TelaRevisao(QWidget):
         raiz.addWidget(self.abas_sheet)
         raiz.addLayout(barra_filtro)
         raiz.addLayout(corpo, 1)
+
+        # Atalhos de teclado
+        for tecla in (Qt.Key_Return, Qt.Key_Enter):
+            atalho = QShortcut(QKeySequence(tecla), self.tabela)
+            atalho.setContext(Qt.WidgetShortcut)
+            atalho.activated.connect(lambda: self._aprovar_e_proximo())
+        for n in range(1, 6):
+            atalho = QShortcut(QKeySequence(str(n)), self.tabela)
+            atalho.setContext(Qt.WidgetShortcut)
+            atalho.activated.connect(
+                lambda n=n: self._aprovar_e_proximo(n - 1))
+        atalho_busca = QShortcut(QKeySequence.Find, self)
+        atalho_busca.activated.connect(self.busca.setFocus)
 
     def carregar(self) -> None:
         self._modelo = ModeloSinais(self._estado)
@@ -559,3 +580,43 @@ class TelaRevisao(QWidget):
         """
         dialog = PareamentoDialog(acao, descricao, self)
         return dialog.exec() == QDialog.Accepted
+
+    def _proximo_pendente(self, apos_linha_proxy: int) -> int:
+        """Próxima linha visível no proxy com status "revisao" (com wrap)."""
+        total = self._proxy.rowCount()
+        if total == 0:
+            return -1
+        col_status = ModeloSinais.COLUNAS.index("Status")
+        for delta in range(1, total + 1):
+            linha = (apos_linha_proxy + delta) % total
+            if self._proxy.index(linha, col_status).data() == "revisao":
+                return linha
+        return -1
+
+    def _aprovar_e_proximo(self, indice_candidato: int | None = None) -> None:
+        if not hasattr(self, "_proxy"):
+            return
+        r = self._registro()
+        if r is None:
+            return
+        if indice_candidato is not None:
+            if indice_candidato >= len(r.candidatos):
+                QApplication.beep()
+                return
+            sigla = r.candidatos[indice_candidato].sigla
+        else:
+            item = self.lista_candidatos.currentItem()
+            sigla = item.data(Qt.UserRole) if item else None
+            if not sigla and r.candidatos:
+                sigla = r.candidatos[0].sigla
+        if not sigla:
+            QApplication.beep()
+            return
+        atual = self.tabela.selectionModel().currentIndex()
+        linha_proxy = atual.row() if atual.isValid() else -1
+        self._modelo.definir_sigla(self._linha, sigla)
+        proxima = self._proximo_pendente(linha_proxy)
+        if proxima >= 0:
+            self.tabela.selectRow(proxima)
+        else:
+            self._atualizar_painel()

@@ -3,7 +3,7 @@ from PySide6.QtWidgets import QDialog
 
 import pytest
 
-from tdt.contracts import Descricoes, Enderecamento, Modulo, SignalRecord, TipoSinal
+from tdt.contracts import Candidato, Descricoes, Enderecamento, Modulo, SignalRecord, TipoSinal
 from tdt.ui.delegate_sinal import DelegateCombo, DelegateModulo
 from tdt.ui.estado import AppState
 from tdt.ui.modelo_tabela import ModeloSinais
@@ -406,3 +406,47 @@ def test_limpar_todos_zera_filtros(qtbot):
     tela._limpar_filtros()
     assert tela._proxy.filtros_ativos() == 0
     assert tela._proxy.rowCount() == 2
+
+
+# --- aprovar e proximo + atalhos de teclado (Task 10) ---
+
+def _rec_cand(id_, bruta, status="revisao", candidatos=()):
+    return SignalRecord(
+        id=id_, modulo=Modulo("M1", "sheet_name"),
+        tipo_sinal=TipoSinal("Discrete", "SingleBit", "Input"),
+        enderecamento=Enderecamento("DNP3", (1,), ()),
+        descricoes=Descricoes(bruta, bruta), status=status,
+        candidatos=tuple(candidatos),
+    )
+
+
+def test_aprovar_e_proximo_define_sigla_e_move_selecao(qtbot):
+    tela = _tela_carregada(qtbot, [
+        _rec_cand("s:1", "A", candidatos=[Candidato("DJF1", 0.9, "tfidf")]),
+        _rec_cand("s:2", "B", status="decidido"),
+        _rec_cand("s:3", "C", candidatos=[Candidato("DJA1", 0.8, "tfidf")]),
+    ])
+    tela.tabela.selectRow(0)
+    tela._aprovar_e_proximo()
+    assert tela._estado.registros[0].sigla_sinal == "DJF1"
+    assert tela._estado.registros[0].status == "decidido"
+    linha_proxy = tela.tabela.selectionModel().currentIndex().row()
+    fonte = tela._proxy.mapToSource(tela._proxy.index(linha_proxy, 0)).row()
+    assert tela._estado.registros[fonte].id == "s:3"
+
+
+def test_aprovar_e_proximo_com_indice_usa_candidato_n(qtbot):
+    tela = _tela_carregada(qtbot, [
+        _rec_cand("s:1", "A", candidatos=[
+            Candidato("DJF1", 0.9, "tfidf"), Candidato("DJA1", 0.5, "tfidf")]),
+    ])
+    tela.tabela.selectRow(0)
+    tela._aprovar_e_proximo(1)
+    assert tela._estado.registros[0].sigla_sinal == "DJA1"
+
+
+def test_aprovar_sem_candidatos_e_noop(qtbot):
+    tela = _tela_carregada(qtbot, [_rec_cand("s:1", "A", candidatos=[])])
+    tela.tabela.selectRow(0)
+    tela._aprovar_e_proximo()
+    assert tela._estado.registros[0].status == "revisao"
