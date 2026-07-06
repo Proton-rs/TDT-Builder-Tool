@@ -310,3 +310,21 @@ def test_set_data_coluna_nao_editavel_retorna_false():
     m = ModeloSinais(st)
     ok = m.setData(m.index(0, _col("Status")), "decidido", Qt.EditRole)
     assert ok is False
+
+
+def test_cor_faixa_novas_cores():
+    from tdt.ui.modelo_tabela import cor_faixa
+    assert cor_faixa(0.9).name() == "#35c48f"
+    assert cor_faixa(0.5).name() == "#e0a83f"
+    assert cor_faixa(0.1).name() == "#e0604c"
+
+
+def test_font_role_monospace_so_em_colunas_de_dados(qtbot):
+    from PySide6.QtGui import QFont
+    st = _state(_rec())
+    m = ModeloSinais(st)
+    col_sinal = ModeloSinais.COLUNAS.index("Sinal")
+    fonte = m.data(m.index(0, col_sinal), Qt.FontRole)
+    assert fonte is not None and "Consolas" in fonte.family()
+    col_status = ModeloSinais.COLUNAS.index("Status")
+    assert m.data(m.index(0, col_status), Qt.FontRole) is None

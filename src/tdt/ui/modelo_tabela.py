@@ -6,7 +6,7 @@ ponytail: model fino que lê do AppState; sem cache, relê o registro a cada dat
 from __future__ import annotations
 
 from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt
-from PySide6.QtGui import QColor
+from PySide6.QtGui import QColor, QFont
 
 from tdt.contracts import SignalRecord
 from tdt.ui.estado import AppState
@@ -33,15 +33,20 @@ _MOTIVO_LABEL = {
 
 # Cores por faixa de confiança (texto). ponytail: faixas fixas; threshold de
 # decisão é outra coisa (config).
-COR_ALTO = QColor("#1d9e75")
-COR_MEDIO = QColor("#b07410")
-COR_BAIXO = QColor("#c0492a")
-COR_DECIDIDO = QColor("#1d9e75")
-COR_REVISAO = QColor("#c0492a")
+COR_ALTO = QColor("#35c48f")
+COR_MEDIO = QColor("#e0a83f")
+COR_BAIXO = QColor("#e0604c")
+COR_DECIDIDO = COR_ALTO
+COR_REVISAO = COR_BAIXO
 
 _EDITAVEIS = frozenset({
     "Sinal", "Tipo", "Fase", "Nível Tensão", "Barra", "Tipo Equip.",
     "Módulo", "Escala",
+})
+
+_COLUNAS_MONO = frozenset({
+    "Sinal", "Endereço", "Endereço Output", "Tokens",
+    "Score embedding", "Score tf-idf", "Score fuzzy",
 })
 
 
@@ -173,6 +178,8 @@ class ModeloSinais(QAbstractTableModel):
                 return cor_faixa(rec.candidatos[0].score if rec.candidatos else None)
         if role == Qt.ToolTipRole and nome in ("Sinal", "Descr. ADMS"):
             return self._adms(rec) or None
+        if role == Qt.FontRole and nome in _COLUNAS_MONO:
+            return QFont("Consolas")
         return None
 
     def setData(self, index, value, role=Qt.EditRole):
