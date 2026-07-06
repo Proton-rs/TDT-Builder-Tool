@@ -64,7 +64,9 @@ class AppState:
             return {}
         return {item.registro.id: item.motivo for item in self.resultado.revisao}
 
-    def definir_sigla(self, indice: int, sigla: str) -> None:
+    def definir_sigla(self, indice: int, sigla: str, *, snapshot: bool = True) -> None:
+        if snapshot:
+            self._snapshot()
         r = self.registros[indice]
         self.registros[indice] = replace(
             r, sigla_sinal=sigla, status="decidido",
@@ -75,6 +77,7 @@ class AppState:
         """Substitui atributos de um campo aninhado (Eletrico/TipoSinal/
         Modulo/GrandezasAnalogicas) via replace, sem tocar status/justificativa.
         """
+        self._snapshot()
         r = self.registros[indice]
         novo = replace(getattr(r, campo), **kwargs)
         self.registros[indice] = replace(r, **{campo: novo})

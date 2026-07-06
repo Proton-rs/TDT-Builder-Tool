@@ -143,3 +143,28 @@ def test_editar_campo_nao_muda_status_nem_justificativa():
     st.definir_fase(0, "A")
     assert st.registros[0].status == "revisao"
     assert st.registros[0].justificativa is None
+
+
+def test_undo_definir_sigla_restaura_sigla_e_status():
+    st = AppState()
+    st.registros = [_rec("a:1", None, "revisao")]
+    st.definir_sigla(0, "DJF1")
+    assert st.desfazer() is True
+    assert st.registros[0].sigla_sinal is None
+    assert st.registros[0].status == "revisao"
+
+
+def test_undo_editar_nested_restaura_campo():
+    st = AppState()
+    st.registros = [_rec("a:1", "DJF1", "decidido")]
+    st.definir_fase(0, "A")
+    assert st.registros[0].eletrico.fase == "A"
+    assert st.desfazer() is True
+    assert st.registros[0].eletrico.fase is None
+
+
+def test_definir_sigla_sem_snapshot_nao_cria_historico():
+    st = AppState()
+    st.registros = [_rec("a:1", None, "revisao")]
+    st.definir_sigla(0, "DJF1", snapshot=False)
+    assert len(st._historico) == 0
