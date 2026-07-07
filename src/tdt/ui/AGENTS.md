@@ -6,7 +6,7 @@ Interface gráfica PySide6 para configurar, executar e revisar o pipeline SP1. I
 ## Ownership
 - `app.py`: `MainWindow(QMainWindow)` — Sidebar retrátil + QStackedWidget (0 Entrada, 1 Revisão, 2 Config, 3 Análise, 4 Geração); navegação por chave via `_navegar`; undo global Ctrl+Z; gating de etapas pós-execução.
 - `tela_inicial.py`: `TelaInicial(QWidget)` — seleção de arquivos (input, template, lista, output), botão executar, barra de progresso.
-- `tela_revisao.py`: `TelaRevisao(QWidget)` — tabela de revisão com `ProxyRevisao` + `DelegateSinal` + `ModeloSinais`; filtro global + filtro por coluna; menu de módulo.
+- `tela_revisao.py`: `TelaRevisao(QWidget)` — tabela de revisão com `ProxyRevisao` + `DelegateSinal` + `ModeloSinais`; filtro de coluna unificado (popup com campo "contém" + valores estilo Excel); segmented de status (Todos/Pendentes/Decididos); fluxo de teclado aprovar-e-avançar (Enter/1-5).
 - `tela_config.py`: `TelaConfig(QWidget)` — knobs de configuração do pipeline (Config paths).
 - `tela_analise.py`: `TelaAnalise(QWidget)` — análise de qualidade do matching pós-pipeline.
 - `sidebar.py`: `Sidebar(QWidget)` — navegação retrátil (48/200px, persiste em QSettings("tdt","ui")); estados por item (disponivel/bloqueada/completa), badge de pendentes, contexto no rodapé.
@@ -15,7 +15,7 @@ Interface gráfica PySide6 para configurar, executar e revisar o pipeline SP1. I
 - `worker.py`: `PipelineWorker(QThread)` — isola o pipeline em QThread; cancelamento cooperativo via flag.
 - `modelo_tabela.py`: `ModeloSinais(QAbstractTableModel)` — tabela de revisão (colunas: Módulo, End., Sigla, Decisão, etc.). `flags()`/`setData()` habilitam edição em 8 colunas (Sinal + 7 campos de domínio), dispatchando pros setters do `AppState`.
 - `modelo_analise.py`: `ModeloAnalise(QAbstractTableModel)` — tabela de análise de qualidade.
-- `proxy_revisao.py`: `ProxyRevisao(QSortFilterProxyModel)` — filtra por coluna individual (AND com filtro global) + esconder decididos.
+- `proxy_revisao.py`: `ProxyRevisao(QSortFilterProxyModel)` — filtra por coluna com 2 mecanismos combinados em AND (texto "contém" + valores estilo Excel); `set_status_visivel(None|"revisao"|"decidido")` controla visibilidade por status.
 - `delegate_sinal.py`: `DelegateSinal(QStyledItemDelegate)` — editor combo da coluna Sinal (candidatos + busca ADMS). `DelegateCombo` — combo de opções fixas p/ colunas de domínio fechado (Tipo/Fase/Nível Tensão/Barra/Tipo Equip.). `DelegateModulo` — combo editável p/ Módulo, sugere nomes já presentes nos registros. Os 3 implementam `setEditorData` (pré-seleciona o valor atual da célula ao abrir; `_preselecionar` mapeia o sentinela de exibição "—" pra opção vazia "").
 - `busca_adms.py`: busca textual na lista padrão ADMS.
 - `exportar_analise.py`: exporta relatório de análise para `.xlsx`.

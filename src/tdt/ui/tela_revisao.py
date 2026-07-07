@@ -441,7 +441,6 @@ class TelaRevisao(QWidget):
             self._selecao_filtro_coluna[col] = novos
         self._atualizar_chip_filtros()
 
-
     def _atualizar_chip_filtros(self) -> None:
         n = self._proxy.filtros_ativos()
         self.btn_limpar_filtros.setText(f"Filtros ativos: {n} — limpar todos")

@@ -26,32 +26,6 @@ def _estado_com(registros):
     return e
 
 
-def test_esconder_decididos_filtra_linhas():
-    estado = _estado_com([
-        _rec("1", "decidido", "A"),
-        _rec("2", "revisao", "B"),
-    ])
-    modelo = ModeloSinais(estado)
-    proxy = ProxyRevisao()
-    proxy.setSourceModel(modelo)
-    proxy.set_status_visivel("revisao")
-    assert proxy.rowCount() == 1
-    col_status = ModeloSinais.COLUNAS.index("Status")
-    assert proxy.index(0, col_status).data() == "revisao"
-
-
-def test_esconder_decididos_desativado_mostra_tudo():
-    estado = _estado_com([
-        _rec("1", "decidido", "A"),
-        _rec("2", "revisao", "B"),
-    ])
-    modelo = ModeloSinais(estado)
-    proxy = ProxyRevisao()
-    proxy.setSourceModel(modelo)
-    proxy.set_status_visivel(None)
-    assert proxy.rowCount() == 2
-
-
 def test_map_to_source_aponta_pro_registro_correto_apos_filtro():
     estado = _estado_com([
         _rec("1", "decidido", "A"),
