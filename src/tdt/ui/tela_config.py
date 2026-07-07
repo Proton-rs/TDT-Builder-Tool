@@ -9,11 +9,12 @@ from dataclasses import replace
 from pathlib import Path
 
 from PySide6.QtWidgets import (
-    QComboBox, QDoubleSpinBox, QFileDialog, QFormLayout, QHBoxLayout,
+    QComboBox, QDoubleSpinBox, QFileDialog, QFormLayout, QGroupBox, QHBoxLayout,
     QLabel, QPushButton, QSpinBox, QVBoxLayout, QWidget,
 )
 from PySide6.QtCore import Signal
 
+from tdt.config import Config
 from tdt.defaults import DEFAULT_LISTA, DEFAULT_OUTPUT, DEFAULT_TEMPLATE
 from tdt.ui.config_io import salvar_config
 from tdt.ui.estado import AppState
@@ -22,6 +23,44 @@ _MODELOS = [
     "paraphrase-multilingual-MiniLM-L12-v2",
     "intfloat/multilingual-e5-base",
 ]
+
+_TOOLTIPS = {
+    "threshold_pct": ("Score mínimo para decidir sozinho",
+                      "Candidato nº 1 precisa de pelo menos este score. "
+                      "Maior = decide mais sozinho, mais risco de erro."),
+    "threshold_gap": ("Vantagem mínima sobre o 2º",
+                      "Diferença mínima entre 1º e 2º candidato. Maior = só "
+                      "decide quando a liderança é clara."),
+    "top_n_pct": ("Corte dos candidatos exibidos",
+                  "Score mínimo (relativo ao 1º) para um candidato aparecer "
+                  "na lista da revisão."),
+    "peso_tfidf": ("Peso do TF-IDF/BM25",
+                   "Peso do método lexical na mescla dos scores."),
+    "peso_vetorial": ("Peso do embedding",
+                      "Peso do método semântico (vetorial) na mescla."),
+    "peso_fuzzy": ("Peso do fuzzy",
+                   "Peso da similaridade de caracteres na mescla."),
+    "modelo_embedding": ("Modelo de embedding",
+                         "Modelo sentence-transformers usado no método "
+                         "vetorial. Trocar exige novo download/cache."),
+    "k_vizinhos": ("Candidatos por sinal (k)",
+                   "Quantos vizinhos o índice vetorial devolve por sinal."),
+}
+
+
+def _rotulo(chave: str) -> QWidget:
+    humano, tooltip = _TOOLTIPS[chave]
+    w = QWidget()
+    v = QVBoxLayout(w)
+    v.setContentsMargins(0, 0, 0, 0)
+    v.setSpacing(0)
+    lbl = QLabel(humano)
+    tec = QLabel(chave)
+    tec.setProperty("tipo", "tecnico")
+    v.addWidget(lbl)
+    v.addWidget(tec)
+    w.setToolTip(tooltip)
+    return w
 
 
 def _spin(maximo=1.0, passo=0.01):
@@ -54,43 +93,82 @@ class TelaConfig(QWidget):
         super().__init__()
         self._estado = estado
         self._config_path = Path(config_path)
-        form = QFormLayout()
-        form.setVerticalSpacing(6)
 
-        self._setup_paths(form)
+        layout = QVBoxLayout(self)
 
+        # Grupo 1: Caminhos padrão
+        group_caminhos = QGroupBox("Caminhos padrão")
+        form_caminhos = QFormLayout(group_caminhos)
+        form_caminhos.setVerticalSpacing(6)
+        self._setup_paths(form_caminhos)
+        layout.addWidget(group_caminhos)
+
+        # Grupo 2: Decisão automática
+        group_decisao = QGroupBox("Decisão automática")
+        form_decisao = QFormLayout(group_decisao)
+        form_decisao.setVerticalSpacing(6)
         self.spin_pct = _spin()
+        self.spin_pct.setToolTip(_TOOLTIPS["threshold_pct"][1])
         self.spin_gap = _spin()
+        self.spin_gap.setToolTip(_TOOLTIPS["threshold_gap"][1])
         self.spin_topn = _spin()
-        form.addRow("threshold_pct", self.spin_pct)
-        form.addRow("threshold_gap", self.spin_gap)
-        form.addRow("top_n_pct", self.spin_topn)
+        self.spin_topn.setToolTip(_TOOLTIPS["top_n_pct"][1])
+        form_decisao.addRow(_rotulo("threshold_pct"), self.spin_pct)
+        form_decisao.addRow(_rotulo("threshold_gap"), self.spin_gap)
+        form_decisao.addRow(_rotulo("top_n_pct"), self.spin_topn)
+        layout.addWidget(group_decisao)
 
+        # Grupo 3: Pesos do ensemble
+        group_pesos = QGroupBox("Pesos do ensemble")
+        form_pesos = QFormLayout(group_pesos)
+        form_pesos.setVerticalSpacing(6)
         self.spin_tfidf = _spin()
+        self.spin_tfidf.setToolTip(_TOOLTIPS["peso_tfidf"][1])
         self.spin_vet = _spin()
+        self.spin_vet.setToolTip(_TOOLTIPS["peso_vetorial"][1])
         self.spin_fuzzy = _spin()
-        form.addRow("peso_tfidf", self.spin_tfidf)
-        form.addRow("peso_vetorial", self.spin_vet)
-        form.addRow("peso_fuzzy", self.spin_fuzzy)
+        self.spin_fuzzy.setToolTip(_TOOLTIPS["peso_fuzzy"][1])
+        form_pesos.addRow(_rotulo("peso_tfidf"), self.spin_tfidf)
+        form_pesos.addRow(_rotulo("peso_vetorial"), self.spin_vet)
+        form_pesos.addRow(_rotulo("peso_fuzzy"), self.spin_fuzzy)
+        self.lbl_aviso_pesos = QLabel("")
+        self.lbl_aviso_pesos.setProperty("nivel", "aviso")
+        self.lbl_aviso_pesos.setVisible(False)
+        form_pesos.addRow(self.lbl_aviso_pesos)
+        for spin in (self.spin_tfidf, self.spin_vet, self.spin_fuzzy):
+            spin.valueChanged.connect(self._atualizar_aviso_pesos)
+        layout.addWidget(group_pesos)
 
+        # Grupo 4: Modelo semântico
+        group_modelo = QGroupBox("Modelo semântico")
+        form_modelo = QFormLayout(group_modelo)
+        form_modelo.setVerticalSpacing(6)
         self.combo_modelo = QComboBox()
         self.combo_modelo.addItems(_MODELOS)
+        self.combo_modelo.setToolTip(_TOOLTIPS["modelo_embedding"][1])
         self.spin_k = QSpinBox()
         self.spin_k.setRange(1, 50)
         self.spin_k.setFixedWidth(120)
-        form.addRow("modelo_embedding", self.combo_modelo)
-        form.addRow("k_vizinhos", self.spin_k)
+        self.spin_k.setToolTip(_TOOLTIPS["k_vizinhos"][1])
+        form_modelo.addRow(_rotulo("modelo_embedding"), self.combo_modelo)
+        form_modelo.addRow(_rotulo("k_vizinhos"), self.spin_k)
+        layout.addWidget(group_modelo)
 
+        # Botões
         btn_salvar = QPushButton("Salvar")
         btn_salvar.setProperty("acao", "principal")
         btn_salvar.clicked.connect(self.aplicar)
+        btn_restaurar = QPushButton("Restaurar padrões")
+        btn_restaurar.clicked.connect(self._restaurar_padroes)
         btn_voltar = QPushButton("Voltar")
         btn_voltar.clicked.connect(self.voltar.emit)
 
-        layout = QVBoxLayout(self)
-        layout.addLayout(form)
-        layout.addWidget(btn_salvar)
-        layout.addWidget(btn_voltar)
+        h_botoes = QHBoxLayout()
+        h_botoes.addWidget(btn_salvar)
+        h_botoes.addWidget(btn_restaurar)
+        h_botoes.addWidget(btn_voltar)
+        layout.addLayout(h_botoes)
+
         self.recarregar()
 
     def _setup_paths(self, form):
@@ -158,6 +236,28 @@ class TelaConfig(QWidget):
         self.spin_fuzzy.setValue(c.peso_fuzzy)
         i = self.combo_modelo.findText(c.modelo_embedding)
         self.combo_modelo.setCurrentIndex(i if i >= 0 else 0)
+        self.spin_k.setValue(c.k_vizinhos)
+        self._atualizar_aviso_pesos()
+
+    def _atualizar_aviso_pesos(self, *_args) -> None:
+        soma = (self.spin_tfidf.value() + self.spin_vet.value()
+                + self.spin_fuzzy.value())
+        divergente = abs(soma - 1.0) > 0.001
+        if divergente:
+            self.lbl_aviso_pesos.setText(
+                f"Os pesos somam {soma:.3f} — o esperado é 1.0")
+        self.lbl_aviso_pesos.setVisible(divergente)
+
+    def _restaurar_padroes(self) -> None:
+        c = Config()
+        self.spin_pct.setValue(c.threshold_pct)
+        self.spin_gap.setValue(c.threshold_gap)
+        self.spin_topn.setValue(c.top_n_pct)
+        self.spin_tfidf.setValue(c.peso_tfidf)
+        self.spin_vet.setValue(c.peso_vetorial)
+        self.spin_fuzzy.setValue(c.peso_fuzzy)
+        indice = self.combo_modelo.findText(c.modelo_embedding)
+        self.combo_modelo.setCurrentIndex(indice if indice >= 0 else 0)
         self.spin_k.setValue(c.k_vizinhos)
 
     def aplicar(self) -> None:
