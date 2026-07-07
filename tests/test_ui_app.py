@@ -66,3 +66,18 @@ def test_undo_global_restaura_e_refresca(qtbot):
     assert estado.registros[1].status == "decidido"
     win._desfazer()
     assert estado.registros[1].status == "revisao"
+
+
+def test_navegar_para_geracao_carrega_resumo(qtbot):
+    win = _win(qtbot, _estado_com_resultado())
+    win._navegar("geracao")
+    assert win.tela_geracao._cards["total"].text() == "2"
+
+
+def test_rever_pendentes_volta_para_revisao_filtrada(qtbot):
+    win = _win(qtbot, _estado_com_resultado())
+    win.tela_inicial.executou.emit()
+    win._navegar("geracao")
+    win.tela_geracao.rever_pendentes.emit()
+    assert win.stack.currentIndex() == 1
+    assert win.tela_revisao._proxy._status_visivel == "revisao"

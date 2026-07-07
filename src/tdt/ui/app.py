@@ -1,7 +1,6 @@
 """MainWindow: sidebar retrátil + QStackedWidget; navegação por chave.
 
-ponytail: mapeamento chave->índice fixo em _INDICE; tela Geração é placeholder
-até SP-UI-4 (Task 14 troca por TelaGeracao real).
+ponytail: mapeamento chave->índice fixo em _INDICE.
 """
 
 from __future__ import annotations
@@ -10,7 +9,7 @@ from pathlib import Path
 
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
-    QApplication, QHBoxLayout, QLabel, QMainWindow, QMessageBox,
+    QApplication, QHBoxLayout, QMainWindow, QMessageBox,
     QStackedWidget, QWidget,
 )
 
@@ -18,6 +17,7 @@ from tdt.ui.estado import AppState
 from tdt.ui.sidebar import Sidebar
 from tdt.ui.tela_analise import TelaAnalise
 from tdt.ui.tela_config import TelaConfig
+from tdt.ui.tela_geracao import TelaGeracao
 from tdt.ui.tela_inicial import TelaInicial
 from tdt.ui.tela_revisao import TelaRevisao
 
@@ -49,7 +49,7 @@ class MainWindow(QMainWindow):
         self.tela_revisao = TelaRevisao(estado)
         self.tela_config = TelaConfig(estado, config_path=config_path)
         self.tela_analise = TelaAnalise()
-        self.tela_geracao = self._criar_tela_geracao()
+        self.tela_geracao = TelaGeracao(estado)
 
         self.stack.addWidget(self.tela_inicial)   # 0
         self.stack.addWidget(self.tela_revisao)   # 1
@@ -70,6 +70,8 @@ class MainWindow(QMainWindow):
         self.tela_revisao.pendentes_mudaram.connect(
             lambda n: self.sidebar.atualizar_badge("revisao", n))
         self.tela_config.voltar.connect(self._voltar_config)
+        self.tela_geracao.rever_pendentes.connect(self._rever_pendentes)
+        self.tela_geracao.rever_duplicados.connect(self._rever_duplicados)
 
         container = QWidget()
         layout = QHBoxLayout(container)
@@ -86,16 +88,20 @@ class MainWindow(QMainWindow):
             with open(_TEMA, encoding="utf-8") as f:
                 self.setStyleSheet(f.read())
 
-    def _criar_tela_geracao(self) -> QWidget:
-        # ponytail: placeholder até SP-UI-4 (Task 14) — evita bloquear o shell.
-        w = QWidget()
-        lay = QHBoxLayout(w)
-        lay.addWidget(QLabel("Geração — em construção (SP-UI-4)"))
-        return w
-
     def _navegar(self, chave: str) -> None:
+        if chave == "geracao":
+            self.tela_geracao.carregar()
         self.stack.setCurrentIndex(_INDICE[chave])
         self.sidebar.definir_ativa(chave)
+
+    def _rever_pendentes(self) -> None:
+        self.tela_revisao.mostrar_pendentes()
+        self._navegar("revisao")
+
+    def _rever_duplicados(self, indices: list) -> None:
+        if indices:
+            self.tela_revisao.filtrar_endereco(str(indices[0]))
+        self._navegar("revisao")
 
     def _voltar_config(self) -> None:
         self.tela_inicial.recarregar()

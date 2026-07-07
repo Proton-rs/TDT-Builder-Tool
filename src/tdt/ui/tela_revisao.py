@@ -1,12 +1,12 @@
-"""Tela de Revisão: tabela rica + painel de detalhe; aprova e gera o TDT.
+"""Tela de Revisão: tabela rica + painel de detalhe; aprova sinais pendentes.
 
 ponytail: painel reflete a linha selecionada; edição vai pro AppState via modelo.
+Geração do TDT é responsabilidade exclusiva da TelaGeracao (SP-UI-4).
 """
 
 from __future__ import annotations
 
 import uuid
-from pathlib import Path
 
 from PySide6.QtCore import Qt, QSettings, Signal
 from PySide6.QtGui import QKeySequence, QShortcut
@@ -16,14 +16,12 @@ from PySide6.QtWidgets import (
     QPushButton, QSizePolicy, QSplitter, QTableView, QTabBar, QVBoxLayout, QWidget,
 )
 
-from tdt import pipeline
 from tdt.contracts import Descricoes, Enderecamento, Modulo, SignalRecord, TipoSinal
 from tdt.dc_pairer import fundir, separar
 from tdt.ui.busca_adms import buscar
 from tdt.ui.delegate_sinal import DelegateCombo, DelegateModulo, DelegateSinal
 from tdt.ui.estado import AppState
 from tdt.ui.modelo_tabela import ModeloSinais, cor_faixa
-from tdt.relatorio_revisao import gerar_relatorio_revisao
 from tdt.ui.proxy_revisao import ProxyRevisao
 
 _METODOS = (("emb", "vetorial"), ("tfidf", "tfidf"), ("fuzzy", "fuzzy"))
@@ -197,8 +195,6 @@ class TelaRevisao(QWidget):
         btn_remover = QPushButton("Remover Sinal"); btn_remover.clicked.connect(self._remover_sinais)
         btn_adicionar = QPushButton("Adicionar Sinal"); btn_adicionar.clicked.connect(self._adicionar_sinal)
         btn_parear = QPushButton("Parear D+C"); btn_parear.clicked.connect(self._parear_sinais)
-        btn_gerar = QPushButton("Gerar TDT…")
-        btn_gerar.clicked.connect(self._gerar)
         self.btn_aprovar = QPushButton("Aprovar e ir ao próximo (Enter)")
         self.btn_aprovar.setProperty("acao", "principal")
         self.btn_aprovar.clicked.connect(lambda: self._aprovar_e_proximo())
@@ -211,7 +207,6 @@ class TelaRevisao(QWidget):
         topo.addWidget(btn_adicionar)
         topo.addWidget(btn_parear)
         topo.addWidget(self.btn_aprovar)
-        topo.addWidget(btn_gerar)
 
         # --- painel de detalhe ---
         self.lbl_campos = QLabel("Selecione um sinal"); self.lbl_campos.setWordWrap(True)
@@ -526,30 +521,6 @@ class TelaRevisao(QWidget):
         if self._linha >= 0 and sigla:
             self._modelo.definir_sigla(self._linha, sigla)
             self._atualizar_painel()
-
-    def _gerar(self):
-        lp = self._estado.lista_padrao
-        template = self._estado.paths.get("template", "")
-        output = self._estado.paths.get("output", "")
-        if not lp or not template or not output:
-            QMessageBox.warning(self, "Erro", "Lista padrão, template e output são obrigatórios")
-            return
-        try:
-            wb = pipeline.gerar_tdt(
-                self._estado.registros, template, lp,
-                subestacao=self._estado.subestacao, aliases=self._estado.aliases,
-            )
-            out_path = Path(output) / "TDT.xlsx"
-            wb.save(str(out_path))
-            revisao = self._estado.resultado.revisao if self._estado.resultado else ()
-            diag = self._estado.resultado.diagnostico if self._estado.resultado else {}
-            gerar_relatorio_revisao(self._estado.registros, revisao, output, diagnostico=diag)
-            QMessageBox.information(
-                self, "Sucesso",
-                f"TDT gerado: {out_path}\nAuditoria: {Path(output) / 'Auditoria_Revisao.xlsx'}",
-            )
-        except Exception as e:  # ponytail: erro vira dialogo; sem retry
-            QMessageBox.critical(self, "Erro", f"Falha ao gerar TDT: {e}")
 
     def _remover_sinais(self):
         selecionadas = self.tabela.selectionModel().selectedRows()
