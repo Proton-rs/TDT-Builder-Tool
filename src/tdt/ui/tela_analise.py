@@ -8,7 +8,7 @@ consistente com ModeloAnalise (SRP).
 
 from __future__ import annotations
 
-from PySide6.QtCore import QSortFilterProxyModel, Qt
+from PySide6.QtCore import QSortFilterProxyModel, Qt, Signal
 from PySide6.QtWidgets import (
     QComboBox, QFileDialog, QGridLayout, QGroupBox, QHBoxLayout, QHeaderView,
     QLabel, QMessageBox, QPushButton, QTableView, QVBoxLayout, QWidget,
@@ -18,35 +18,60 @@ from tdt.contracts import ResultadoPipeline
 from tdt.ui.modelo_analise import COLUNAS, ModeloAnalise
 
 _COL_STATUS = COLUNAS.index("Status")
+_COL_MOTIVO = COLUNAS.index("Motivo Revisão")
+
+
+class LabelClicavel(QLabel):
+    clicado = Signal()
+
+    def __init__(self, texto="", parent=None):
+        super().__init__(texto, parent)
+        self.setCursor(Qt.PointingHandCursor)
+
+    def mousePressEvent(self, event):
+        self.clicado.emit()
+        super().mousePressEvent(event)
 
 
 class _ProxyStatus(QSortFilterProxyModel):
-    """Proxy com filtro por status exato (coluna "Status").
+    """Proxy com filtro por status exato (coluna "Status") + motivo (AND).
 
-    ponytail: filtro simples baseado num atributo `_status_filtro` (None =
-    sem filtro). QSortFilterProxyModel.setFilterFixedString não dá pra usar
-    aqui porque "decidido" e "revisao" não são substrings exclusivas entre si
-    nem das outras colunas — por isso o filterAcceptsRow dedicado.
+    ponytail: filtro simples baseado em atributos `_status_filtro`/`_motivo`
+    (None = sem filtro). QSortFilterProxyModel.setFilterFixedString não dá pra
+    usar aqui porque "decidido" e "revisao" não são substrings exclusivas
+    entre si nem das outras colunas — por isso o filterAcceptsRow dedicado.
     """
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._status_filtro: str | None = None
+        self._motivo: str | None = None
 
     def definir_filtro_status(self, status: str | None) -> None:
         self._status_filtro = status
         self.invalidateFilter()
 
+    def definir_filtro_motivo(self, motivo: str | None) -> None:
+        self._motivo = motivo
+        self.invalidateFilter()
+
     def filterAcceptsRow(self, source_row, source_parent):
-        if self._status_filtro is None:
-            return True
         modelo = self.sourceModel()
-        idx = modelo.index(source_row, _COL_STATUS, source_parent)
-        return modelo.data(idx) == self._status_filtro
+        if self._status_filtro is not None:
+            idx = modelo.index(source_row, _COL_STATUS, source_parent)
+            if modelo.data(idx) != self._status_filtro:
+                return False
+        if self._motivo is not None:
+            idx = modelo.index(source_row, _COL_MOTIVO, source_parent)
+            if modelo.data(idx) != self._motivo:
+                return False
+        return True
 
 
 class TelaAnalise(QWidget):
     """Tela de análise de qualidade do matching (Parte 2)."""
+
+    rever_sinal = Signal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -60,15 +85,25 @@ class TelaAnalise(QWidget):
             ("Total", "total"), ("Decididos", "decididos"),
             ("Revisão", "revisao"), ("Taxa de Decisão", "taxa"),
         ]):
-            label_val = QLabel("—")
+            label_val = LabelClicavel("—")
             label_val.setStyleSheet("font-size: 18pt; font-weight: bold;")
             stats_grid.addWidget(QLabel(nome), 0, i, Qt.AlignCenter)
             stats_grid.addWidget(label_val, 1, i, Qt.AlignCenter)
             self._stats_labels[chave] = label_val
 
+        self._stats_labels["total"].clicado.connect(
+            lambda: self._combo_status.setCurrentText("Todos"))
+        self._stats_labels["decididos"].clicado.connect(
+            lambda: self._combo_status.setCurrentText("Decididos"))
+        self._stats_labels["revisao"].clicado.connect(
+            lambda: self._combo_status.setCurrentText("Revisão"))
+
         stats_grid.addWidget(QLabel("Motivos de Revisão:"), 2, 0, 1, 1)
-        self._motivos_label = QLabel("—")
-        stats_grid.addWidget(self._motivos_label, 2, 1, 1, 3)
+        self._chips_box = QHBoxLayout()
+        self._chips_motivo: list[QPushButton] = []
+        chips_container = QWidget()
+        chips_container.setLayout(self._chips_box)
+        stats_grid.addWidget(chips_container, 2, 1, 1, 3)
         self._stats_group.setLayout(stats_grid)
         layout.addWidget(self._stats_group)
 
@@ -78,6 +113,9 @@ class TelaAnalise(QWidget):
         self._combo_status.addItems(["Todos", "Decididos", "Revisão"])
         self._combo_status.currentTextChanged.connect(self._filtrar)
         filter_layout.addWidget(self._combo_status)
+        self._btn_rever = QPushButton("Rever na Revisão →")
+        self._btn_rever.clicked.connect(self._emitir_rever)
+        filter_layout.addWidget(self._btn_rever)
         filter_layout.addStretch()
         self._btn_exportar = QPushButton("Exportar Relatório")
         self._btn_exportar.clicked.connect(self._exportar)
@@ -124,13 +162,26 @@ class TelaAnalise(QWidget):
         motivos: dict[str, int] = {}
         for ir in revisao:
             motivos[ir.motivo] = motivos.get(ir.motivo, 0) + 1
-        if motivos:
-            texto = ", ".join(
-                f"{k}: {v}" for k, v in sorted(motivos.items(), key=lambda x: -x[1])
-            )
-        else:
-            texto = "—"
-        self._motivos_label.setText(texto)
+
+        while self._chips_box.count():
+            w = self._chips_box.takeAt(0).widget()
+            if w is not None:
+                w.deleteLater()
+        self._chips_motivo = []
+        for motivo, n in sorted(motivos.items(), key=lambda x: -x[1]):
+            chip = QPushButton(f"{motivo}: {n}")
+            chip.setCheckable(True)
+            chip.clicked.connect(
+                lambda marcado, m=motivo: self._filtrar_motivo(m, marcado))
+            self._chips_box.addWidget(chip)
+            self._chips_motivo.append(chip)
+        self._chips_box.addStretch()
+
+    def _filtrar_motivo(self, motivo: str, marcado: bool) -> None:
+        for chip in self._chips_motivo:
+            if not chip.text().startswith(f"{motivo}:"):
+                chip.setChecked(False)
+        self._proxy.definir_filtro_motivo(motivo if marcado else None)
 
     def _filtrar(self, texto: str) -> None:
         if texto == "Decididos":
@@ -139,6 +190,14 @@ class TelaAnalise(QWidget):
             self._proxy.definir_filtro_status("revisao")
         else:
             self._proxy.definir_filtro_status(None)
+
+    def _emitir_rever(self) -> None:
+        idx = self._table.selectionModel().currentIndex()
+        if not idx.isValid():
+            return
+        id_ = self._proxy.index(idx.row(), 0).data()  # coluna 0 = "ID"
+        if id_:
+            self.rever_sinal.emit(str(id_))
 
     def _exportar(self) -> None:
         path, _ = QFileDialog.getSaveFileName(self, "Salvar Relatório", "", "Excel (*.xlsx)")

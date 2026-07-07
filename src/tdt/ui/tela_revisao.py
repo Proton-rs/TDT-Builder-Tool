@@ -383,6 +383,21 @@ class TelaRevisao(QWidget):
         self.grupo_status.button(1).setChecked(True)
         self._filtrar_status_id(1)
 
+    def selecionar_por_id(self, id_registro: str) -> bool:
+        """Seleciona e rola até o registro; limpa o filtro de status antes."""
+        if not hasattr(self, "_proxy"):
+            return False
+        self.grupo_status.button(0).setChecked(True)
+        self._filtrar_status_id(0)
+        for linha, r in enumerate(self._estado.registros):
+            if r.id == id_registro:
+                idx_proxy = self._proxy.mapFromSource(self._modelo.index(linha, 0))
+                if idx_proxy.isValid():
+                    self.tabela.selectRow(idx_proxy.row())
+                    self.tabela.scrollTo(idx_proxy)
+                    return True
+        return False
+
     def _popular_abas_sheet(self) -> None:
         """Uma aba por sheet distinta presente nos registros + "Tudo" (primeira).
 

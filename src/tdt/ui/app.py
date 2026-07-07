@@ -72,6 +72,7 @@ class MainWindow(QMainWindow):
         self.tela_config.voltar.connect(self._voltar_config)
         self.tela_geracao.rever_pendentes.connect(self._rever_pendentes)
         self.tela_geracao.rever_duplicados.connect(self._rever_duplicados)
+        self.tela_analise.rever_sinal.connect(self._rever_sinal)
 
         container = QWidget()
         layout = QHBoxLayout(container)
@@ -102,6 +103,10 @@ class MainWindow(QMainWindow):
         if indices:
             self.tela_revisao.filtrar_endereco(str(indices[0]))
         self._navegar("revisao")
+
+    def _rever_sinal(self, id_registro: str) -> None:
+        self._navegar("revisao")
+        self.tela_revisao.selecionar_por_id(id_registro)
 
     def _voltar_config(self) -> None:
         self.tela_inicial.recarregar()

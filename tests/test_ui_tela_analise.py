@@ -75,9 +75,9 @@ def test_estatisticas_motivos_agregados(qtbot):
         ),
     )
     tela.carregar(res)
-    texto = tela._motivos_label.text()
-    assert "score_baixo: 2" in texto
-    assert "sem_endereco: 1" in texto
+    textos = {chip.text() for chip in tela._chips_motivo}
+    assert "score_baixo: 2" in textos
+    assert "sem_endereco: 1" in textos
 
 
 def test_estatisticas_sem_registros(qtbot):
@@ -175,3 +175,39 @@ def test_exportar_com_falha_de_io_mostra_erro_amigavel(qtbot, monkeypatch, tmp_p
     )
     tela._exportar()  # não deve lançar — deve mostrar aviso amigável
     assert len(avisos) == 1
+
+
+def test_clicar_card_revisao_filtra_tabela(qtbot):
+    tela = TelaAnalise()
+    qtbot.addWidget(tela)
+    tela.carregar(_resultado_basico())
+    tela._stats_labels["revisao"].clicado.emit()
+    assert tela._combo_status.currentText() == "Revisão"
+
+
+def test_chip_motivo_filtra_e_desmarca_limpa(qtbot):
+    tela = TelaAnalise()
+    qtbot.addWidget(tela)
+    tela.carregar(_resultado_basico())
+    chips = [b for b in tela._chips_motivo if b.text().startswith("score_baixo")]
+    assert chips, "chip do motivo deveria existir"
+    # nota: `.clicked.emit(True)` não é aceito por este binding do PySide6
+    # (6.11.1) -- `clicked` é exposto como `clicked()` sem o overload(bool)
+    # acessível via emit direto. `.click()` simula o clique real (toggle do
+    # próprio botão + emissão do bool correspondente), que é o que o slot
+    # `_filtrar_motivo` recebe em produção.
+    chips[0].click()
+    assert tela._proxy._motivo == "score_baixo"
+    chips[0].click()
+    assert tela._proxy._motivo is None
+
+
+def test_rever_sinal_emite_id_da_linha_selecionada(qtbot):
+    tela = TelaAnalise()
+    qtbot.addWidget(tela)
+    tela.carregar(_resultado_basico())
+    tela._table.selectRow(0)
+    recebidos = []
+    tela.rever_sinal.connect(recebidos.append)
+    tela._btn_rever.click()
+    assert len(recebidos) == 1 and isinstance(recebidos[0], str)
