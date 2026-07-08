@@ -63,4 +63,4 @@ def main(input_path: str) -> None:
 
 
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else "docs/input_nao_homogeneo_1_GTD.xlsx")
+    main(sys.argv[1] if len(sys.argv) > 1 else "docs/input_nao_homogeneo_1_GTA.xlsx")

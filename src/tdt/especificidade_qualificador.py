@@ -20,7 +20,7 @@ decisões que JÁ elegeram um irmão específico (ex.: base ``25VT`` "TRIP
 DIFERENCA TENSAO" vs irmão ``25ER`` "FALHA SINCRONISMO") — nesses casos a
 palavra "SINCRONISMO"/"FALHA" é vocabulário comum da família ANSI-25 inteira,
 não um qualificador discriminante, e sinalizaria falso-positivo de
-ambiguidade (visto em dados reais: ``docs/input_nao_homogeneo_1_GTD.xlsx``,
+ambiguidade (visto em dados reais: ``docs/input_nao_homogeneo_1_GTA.xlsx``,
 casos "Sincronismo (25) - Falha por Diferença de Tensão/Ângulo").
 
 Família de irmãos identificada via ``motor_regras._numero_lider`` (mesmo

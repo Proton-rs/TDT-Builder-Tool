@@ -66,7 +66,7 @@ from tdt.config import Config
 from tdt.dados.encoder import criar_encoder
 from tdt.pipeline import executar
 
-_INPUT = "docs/input_nao_homogeneo_1_GTD.xlsx"
+_INPUT = "docs/input_nao_homogeneo_1_GTA.xlsx"
 _TEMPLATE = "docs/dnp3_template.xlsx"
 _LISTA_PADRAO = "docs/Pontos Padrao ADMS_v2.xlsx"
 _GAP_ZERO_LIMIAR = 0.005

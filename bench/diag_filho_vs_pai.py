@@ -45,7 +45,7 @@ from tdt.scoring.vetorial import pontuar as pontuar_vet
 from tdt import pipeline
 
 _NOSSO_TDT = "bench/_tdt_gerado_GTD.xlsx"
-_INPUT = "docs/input_nao_homogeneo_1_GTD.xlsx"
+_INPUT = "docs/input_nao_homogeneo_1_GTA.xlsx"
 _REAL_TDT = "docs/TDT/exportTDT_UTR_GTD_1_20260626.xlsx"
 _TEMPLATE = "docs/dnp3_template.xlsx"
 _LISTA = "docs/Pontos Padrao ADMS_v2.xlsx"

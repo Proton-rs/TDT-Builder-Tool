@@ -22,7 +22,7 @@ def main() -> None:
     cfg = Config()
     enc = criar_encoder(cfg.modelo_embedding)
     res, _ = executar(
-        str(_ROOT / "docs" / "input_nao_homogeneo_1_GTD.xlsx"),
+        str(_ROOT / "docs" / "input_nao_homogeneo_1_GTA.xlsx"),
         str(_ROOT / "docs" / "dnp3_template.xlsx"),
         str(_ROOT / "docs" / "Pontos Padrao ADMS_v2.xlsx"),
         config=cfg, encoder=enc, subestacao="GTD", modo="nao-homogeneo",
