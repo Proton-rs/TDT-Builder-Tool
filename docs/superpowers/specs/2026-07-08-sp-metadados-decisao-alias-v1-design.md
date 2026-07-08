@@ -1,7 +1,7 @@
 # SP Metadados da Lista Padrão na Decisão + ALIAS da v1
 
 **Data:** 2026-07-08
-**Status:** Proposto
+**Status:** Implementado parcialmente (2026-07-08) — §1 (ALIAS v1) e §2 (loader `type_severidade`) mantidos; §3 (r8_direcao, r9_type_severidade) e §5 (corpus vetorial) implementados, gatearam abaixo do baseline (`gate_tdt_real`) e foram revertidos (ver `bench/resultados/spMET_baseline_gate.txt`); §4 (classe MODO) idem, revertido. Detalhe em `.superpowers/sdd/progress.md`.
 **Origem:** Dois pontos levantados pelo usuário: (1) as colunas da lista padrão além da descrição (`SIGNAL TYPE`, `DIRECTION`, `TYPE SEVERIDADE`, `MM`) carregam informação discriminante que o matching hoje ignora ou usa parcialmente — mesmo quando descrições empatam, essas colunas diferem; (2) na TDT gerada, a coluna `Signal Alias` deve conter a descrição do sinal da **lista padrão v1** (a original), não a descrição bruta da lista do cliente.
 **Escopo:** Regras estruturadas de desempate (direction, type severidade), ampliação do vocabulário de estados do MM, `TYPE SEVERIDADE` no corpus vetorial (embeddings apenas), e `Signal Alias` sourceado da v1. Abordagem C escolhida em brainstorm (regras + corpus vetorial, bench separado).
 **Relacionada:** SP-G/SP-H (motor de regras, BM25), SP-E (semântica de estados D1–D5).
