@@ -3,3 +3,4 @@ pos-MODO (Task 1, commit a2d5511): comum=953 iguais=634 pct=66.53 -- REGRIDIU (b
   Investigacao: 15 enderecos sigla=79 corretos no baseline sumiram do output (foram p/ revisao),
   so 5 novos apareceram (4 corretos: CDLM/CDRA). Perda liquida de 11 acertos -- nao e reclassificacao
   melhor, e perda de cobertura real. Revertido por completo (commit b4591ba). MODO descartado.
+pos-r8 (Task 3, commit b7a63f4): comum=964 iguais=645 pct=66.91 -- igual ao baseline, sem regressao. Mantido.
