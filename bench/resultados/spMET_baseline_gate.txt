@@ -8,3 +8,8 @@ pos-r9 (Task 4, commit 90b4072): comum=948 iguais=633 pct=66.77 -- REGRIDIU (bas
   Mesmo padrao da Task 1 (MODO): os mesmos 15 enderecos sigla=79 (religador, corretos) sumiram do
   output (foram p/ revisao) porque r9 penaliza a classe TYPE SEVERIDADE deles; so 3 novos corretos
   (25FT) apareceram. Perda liquida de 12 acertos. Revertido por completo (commit 9e87d4b).
+pos-corpus (Task 5, commit 6918f72): comum=916 iguais=603 pct=65.83 -- REGRIDIU forte (baseline 66.91).
+  Investigacao: 99 enderecos sumiram do output (so 23 novos entraram). 47 dos sumidos eram corretos,
+  so 5 dos novos sao corretos. Perda liquida de 42 acertos -- pior regressao das 3 tentativas desta
+  spec. Confirma a licao N6 citada na propria spec: enriquecer corpus vetorial poluiu embeddings.
+  Revertido por completo (commit 97afae9).
