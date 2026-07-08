@@ -39,6 +39,13 @@ COR_BAIXO = QColor("#e0604c")
 COR_DECIDIDO = COR_ALTO
 COR_REVISAO = COR_BAIXO
 
+# Cor de texto por faixa — necessária pq o fundo (::chunk da QProgressBar)
+# muda de cor conforme a faixa, mas o texto era fixo e ficava ilegível
+# sobre verde/âmbar claros.
+COR_ALTO_TEXTO = QColor("#0d2e21")
+COR_MEDIO_TEXTO = QColor("#2c2005")
+COR_BAIXO_TEXTO = QColor("#e8ebf2")
+
 _EDITAVEIS = frozenset({
     "Sinal", "Tipo", "Fase", "Nível Tensão", "Barra", "Tipo Equip.",
     "Módulo", "Escala",
@@ -69,6 +76,16 @@ def cor_faixa(score) -> QColor | None:
     return COR_BAIXO
 
 
+def texto_faixa(score) -> QColor | None:
+    if score is None:
+        return None
+    if score >= 0.70:
+        return COR_ALTO_TEXTO
+    if score >= 0.45:
+        return COR_MEDIO_TEXTO
+    return COR_BAIXO_TEXTO
+
+
 def _score(rec, sigla, metodo):
     diag = rec.diagnostico
     if diag is None or sigla is None:
@@ -94,7 +111,7 @@ class ModeloSinais(QAbstractTableModel):
         if role == Qt.DisplayRole and orientacao == Qt.Horizontal:
             nome = COLUNAS[secao]
             return f"{nome} ✎" if nome in _EDITAVEIS else nome
-        return None
+        return super().headerData(secao, orientacao, role)
 
     def flags(self, index):
         base = super().flags(index)

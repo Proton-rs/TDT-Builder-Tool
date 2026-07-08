@@ -339,3 +339,16 @@ def test_pendentes_por_sheet_conta_so_revisao(qtbot):
     ]
     modelo = ModeloSinais(st)
     assert modelo.pendentes_por_sheet() == {"SAN2": 1, "TRAFO": 1}
+
+
+def test_texto_faixa_cores():
+    from tdt.ui.modelo_tabela import texto_faixa
+    assert texto_faixa(0.9).name() == "#0d2e21"
+    assert texto_faixa(0.5).name() == "#2c2005"
+    assert texto_faixa(0.1).name() == "#e8ebf2"
+    assert texto_faixa(None) is None
+
+
+def test_header_data_vertical_mostra_numero_da_linha(qtbot):
+    m = ModeloSinais(_state(_rec()))
+    assert m.headerData(0, Qt.Vertical, Qt.DisplayRole) == 1
