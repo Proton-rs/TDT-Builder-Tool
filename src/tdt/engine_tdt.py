@@ -19,7 +19,6 @@ from pathlib import Path
 
 import openpyxl
 from openpyxl.utils import get_column_letter
-from openpyxl.worksheet.datavalidation import DataValidation
 
 from tdt.contracts import ListaHomogenea, SignalRecord
 from tdt.dados.lista_padrao import ListaPadraoADMS
@@ -32,23 +31,6 @@ COLUNAS_ESPERADAS_ANALOG = 61
 PRIMEIRA_LINHA_DADOS = 5
 
 _DIRECAO = {"Input": "Read", "Output": "Write", "InputOutput": "ReadWrite"}
-
-_DV_LISTAS: dict[str, tuple[str, ...]] = {
-    "Phases": FASES,
-    "Direction": tuple(_DIRECAO.values()),
-    "Remote Point Type": ("Status", "Analog"),
-}
-
-
-def _adicionar_dv_lista(ws, colunas: dict[str, int], ultima_linha: int) -> None:
-    for display, valores in _DV_LISTAS.items():
-        col = colunas.get(display)
-        if col is None:
-            continue
-        letra = get_column_letter(col)
-        dv = DataValidation(type="list", formula1=f'"{",".join(valores)}"', allow_blank=True)
-        dv.add(f"{letra}{PRIMEIRA_LINHA_DADOS}:{letra}{ultima_linha}")
-        ws.add_data_validation(dv)
 
 
 def _mapa_colunas(ws) -> dict[str, int]:
@@ -145,6 +127,16 @@ def _coords_comando(indices: tuple[int, ...], duplo: bool = True) -> str:
     return ";".join(str(i) for i in indices)
 
 
+def _output_data_type(coords_saida: str | None) -> str | None:
+    """Domínio DNP3OutputType (DMSMatchingTemplateInfo): ``SingleCoord`` quando
+    o comando escreve numa coordenada só (``i;i`` ou índice único),
+    ``MultiCoord`` quando escreve em duas distintas (trip;close)."""
+    if not coords_saida:
+        return None
+    partes = coords_saida.split(";")
+    return "SingleCoord" if len(set(partes)) == 1 else "MultiCoord"
+
+
 def _fase_saida(fase: str | None) -> str:
     """Fase para a coluna TDT ``Phases``: default ``ABC`` quando vazia, e
     fallback ``ABC`` para qualquer valor fora do domínio ``FASES`` (guard de
@@ -194,7 +186,7 @@ def _valores(rec: SignalRecord, subestacao: str | None, padrao: ListaPadraoADMS,
         "Message Mapping": sp.mm if sp else None,
         "Input Data Type": rec.tipo_sinal.datatype,
         "Input Coordinates": coords_entrada,
-        "Output Data Type": "SingleBit" if tem_comando else None,
+        "Output Data Type": _output_data_type(coords_saida) if tem_comando else None,
         "Output Coordinates": coords_saida if tem_comando and coords_saida else None,
         "Remote Unit": remote_unit,
         "Remote Point Custom ID": rp_custom,
@@ -219,6 +211,23 @@ def _measurement_type(sp) -> str | None:
 # ponytail: tabela cobre os 5 tipos confirmados no export real; ampliar quando aparecer outro tipo de medicao real nos dados.
 
 
+_SIGNAL_TYPE_ANALOG_PT_EN: dict[str, str] = {
+    "VALOR MEDIDO": "MeasuredValue",
+    "GRAVADOR DE FALHA": "FaultRecorder",
+    "CONTAGEM DE OPERAÇÃO": "Custom",  # AnalogSignalType não tem OperationCount
+}
+
+
+def _signal_type_analog(sp) -> str:
+    """Domínio AnalogSignalType (DMSMatchingTemplateInfo) a partir do tipo PT
+    da lista padrão — o ADMS rejeita valor fora do domínio no import."""
+    if sp is None or not sp.signal_type:
+        return "Custom"
+    st = sp.signal_type.strip()
+    return _SIGNAL_TYPE_ANALOG_PT_EN.get(st.upper(), st)
+# ponytail: cobre os 4 valores da lista padrão v2; valor novo passa reto (teste de domínio pega).
+
+
 def _valores_analog(rec: SignalRecord, subestacao: str | None, padrao: ListaPadraoADMS,
                      alias_v1: "dict[str, str] | None" = None) -> dict:
     sp = padrao.por_sigla(rec.sigla_sinal) if rec.sigla_sinal else None
@@ -235,7 +244,7 @@ def _valores_analog(rec: SignalRecord, subestacao: str | None, padrao: ListaPadr
     return {
         "Signal Name": nome,
         "Signal Alias": _signal_alias(rec, alias_v1),
-        "Signal Type": sp.signal_type if sp else "Custom",
+        "Signal Type": _signal_type_analog(sp),
         "Phases": _fase_saida(rec.eletrico.fase),
         "Direction": "Read",
         "Input Coordinates": coords,
@@ -294,7 +303,6 @@ def _escrever_sheet(ws, sheet_nome, colunas_esperadas, registros, valores_fn, su
     if ultima >= PRIMEIRA_LINHA_DADOS:
         _expandir_cf(ws, ultima_linha=ultima)
         _expandir_dv(ws, ultima_linha=ultima)
-        _adicionar_dv_lista(ws, colunas, ultima_linha=ultima)
 
 
 def _expandir_tabela(ws, sheet_nome: str, ultima_linha: int) -> None:
@@ -307,13 +315,18 @@ def _expandir_tabela(ws, sheet_nome: str, ultima_linha: int) -> None:
 
 
 def _expandir_range_row5(sqref: str, até_linha: int) -> str:
-    """Expande range que começa na row 5 para até a linha dada.
+    """Expande range(s) que começam na row 5 para até a linha dada.
 
-    Ex: 'A5' -> 'A5:A{n}', 'AP5:AQ5' -> 'AP5:AQ{n}'.
+    Ex: 'A5' -> 'A5:A{n}', 'AP5:AQ5' -> 'AP5:AQ{n}',
+    'B5 Y5' (multi-range da TDT real) -> 'B5:B{n} Y5:Y{n}'.
     """
-    m = re.match(r'^([A-Z]+)5(?::([A-Z]+)5)?$', sqref)
+    return " ".join(_expandir_token_row5(t, até_linha) for t in sqref.split())
+
+
+def _expandir_token_row5(token: str, até_linha: int) -> str:
+    m = re.match(r'^([A-Z]+)5(?::([A-Z]+)5)?$', token)
     if not m:
-        return sqref
+        return token
     col1 = m.group(1)
     col2 = m.group(2)
     if col2:

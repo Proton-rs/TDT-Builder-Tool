@@ -24,23 +24,10 @@ from tdt.engine_tdt import (
     _normal_value,
     _alias_hoje,
     _coords_comando,
-    _adicionar_dv_lista,
     _measurement_type,
     _fase_saida,
+    _output_data_type,
 )
-
-
-def test_adicionar_dv_lista_cria_data_validation_nas_colunas_esperadas():
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    colunas = {"Phases": 1, "Direction": 2, "Remote Point Type": 3, "Outra": 4}
-    _adicionar_dv_lista(ws, colunas, ultima_linha=10)
-    dvs = list(ws.data_validations.dataValidation)
-    assert len(dvs) == 3
-    alvos = {str(dv.sqref) for dv in dvs}
-    assert any("A5:A10" in a for a in alvos)
-    formulas = {dv.formula1 for dv in dvs}
-    assert any("Read" in f and "Write" in f for f in formulas)
 
 
 def test_coords_comando_duplica_indice_unico():
@@ -132,7 +119,8 @@ def test_readwrite_escreve_output_coords(template_dnp3_path, lista_padrao_path, 
     col = {ws.cell(4, c).value: c for c in range(1, ws.max_column + 1)}
     assert ws.cell(5, col["Direction"]).value == "ReadWrite"
     assert ws.cell(5, col["Output Coordinates"]).value == "0;0"  # comando simples duplica o indice
-    assert ws.cell(5, col["Output Data Type"]).value == "SingleBit"
+    # dominio DNP3OutputType (DMSMatchingTemplateInfo): coords iguais -> SingleCoord
+    assert ws.cell(5, col["Output Data Type"]).value == "SingleCoord"
 
 
 def test_output_orfao_escreve_output_coords_nao_input(template_dnp3_path, lista_padrao_path, tmp_path):
@@ -191,6 +179,8 @@ def test_output_orfao_multiplos_indices_nao_duplica(template_dnp3_path, lista_pa
     ws = gerar(lista, template_dnp3_path, lp)["DNP3_DiscreteSignals"]
     col = {ws.cell(4, c).value: c for c in range(1, ws.max_column + 1)}
     assert ws.cell(5, col["Output Coordinates"]).value == "42;43"
+    # coords distintas (trip;close) -> MultiCoord
+    assert ws.cell(5, col["Output Data Type"]).value == "MultiCoord"
 
 
 def test_double_bit_preserva_dois_indices(template_dnp3_path, lista_padrao_path, tmp_path):
@@ -234,11 +224,90 @@ def test_dv_expandido_para_todas_linhas(template_dnp3_path, lista_padrao_path, t
     wb = gerar(_lista(), template_dnp3_path, lp)
     ws = wb["DNP3_DiscreteSignals"]
     sqrefs = [str(dv.sqref) for dv in ws.data_validations.dataValidation]
-    assert len(sqrefs) == 7  # 4 numericas pre-existentes + 3 de lista (Phases/Direction/Remote Point Type)
+    assert len(sqrefs) == 15  # DVs do template restaurado (4 numericas + 11 de lista)
     for sq in sqrefs:
-        assert "6" in sq, f"DV sqref {sq} não cobre row 6"
-    # AP5:AQ5 → AP5:AQ6
-    assert any(sq == "AP5:AQ6" for sq in sqrefs), f"Nenhum DV com AP5:AQ6: {sqrefs}"
+        for token in sq.split():
+            assert token.endswith("6"), f"DV sqref {sq} não cobre row 6"
+
+
+def test_dv_lista_referencia_sheet_oculta(template_dnp3_path, lista_padrao_path):
+    """Dropdowns vêm da DMSMatchingTemplateInfo (não de listas inline)."""
+    lp = ListaPadraoADMS.carregar(lista_padrao_path)
+    wb = gerar(_lista(), template_dnp3_path, lp)
+    ws = wb["DNP3_DiscreteSignals"]
+    col = {ws.cell(4, c).value: c for c in range(1, ws.max_column + 1)}
+    listas = [dv for dv in ws.data_validations.dataValidation if dv.type == "list"]
+    assert listas, "nenhuma DV de lista na sheet gerada"
+    assert all("DMSMatchingTemplateInfo!" in dv.formula1 for dv in listas)
+    # colunas-chave têm dropdown cobrindo as linhas de dados
+    from openpyxl.utils import get_column_letter
+    cobertas = set()
+    for dv in listas:
+        for token in str(dv.sqref).split():
+            cobertas.add(token.split(":")[0].rstrip("0123456789"))
+    for nome in ("Phases", "Direction", "Signal Type", "Measurement Type", "Output Data Type"):
+        assert get_column_letter(col[nome]) in cobertas, f"{nome} sem dropdown"
+
+
+def _dominios_dv(wb, sheet):
+    """{índice de coluna: valores permitidos} das DVs de lista da sheet."""
+    from openpyxl.utils import column_index_from_string
+    info = wb["DMSMatchingTemplateInfo"]
+    ws = wb[sheet]
+    dominios = {}
+    for dv in ws.data_validations.dataValidation:
+        if dv.type != "list":
+            continue
+        m = re.fullmatch(
+            r"DMSMatchingTemplateInfo!\$([A-Z]+)\$(\d+):\$[A-Z]+\$(\d+)", dv.formula1
+        )
+        assert m, f"formula de DV inesperada: {dv.formula1}"
+        ci = column_index_from_string(m.group(1))
+        permitidos = {
+            info.cell(r, ci).value for r in range(int(m.group(2)), int(m.group(3)) + 1)
+        }
+        for token in str(dv.sqref).split():
+            col = column_index_from_string(token.split(":")[0].rstrip("0123456789"))
+            dominios[col] = permitidos
+    return dominios
+
+
+def test_valores_escritos_dentro_do_dominio_das_dvs(template_dnp3_path, lista_padrao_path):
+    """Todo valor escrito numa coluna com dropdown pertence ao domínio da
+    DMSMatchingTemplateInfo — pega bugs tipo Output Data Type = 'SingleBit'
+    (valor de Input) que o ADMS rejeita no import."""
+    from dataclasses import replace
+
+    base = _rec("LT3:1", "DJ", [5], direcao="InputOutput")
+    rw = replace(base, enderecamento=replace(base.enderecamento, indices_saida=(0,)))
+    cmd = _rec("LT3:3", "ABRIR2", [42, 43], direcao="Output")
+    lista = ListaHomogenea(
+        subestacao="IMA", protocolo="DNP3",
+        registros=_lista().registros + (rw, cmd) + _lista_analog().registros,
+    )
+    lp = ListaPadraoADMS.carregar(lista_padrao_path)
+    wb = gerar(lista, template_dnp3_path, lp)
+    for sheet in ("DNP3_DiscreteSignals", "DNP3_AnalogSignals"):
+        ws = wb[sheet]
+        dominios = _dominios_dv(wb, sheet)
+        for row in range(5, ws.max_row + 1):
+            for col, permitidos in dominios.items():
+                v = ws.cell(row, col).value
+                if v is None or v == "":
+                    continue
+                if isinstance(v, bool):  # TRUE/FALSE como boolean nativo (igual à TDT real)
+                    continue
+                assert v in permitidos, (
+                    f"{sheet} row {row} col {col}: {v!r} fora do domínio {sorted(map(str, permitidos))}"
+                )
+
+
+def test_output_data_type_dominio():
+    assert _output_data_type(None) is None
+    assert _output_data_type("") is None
+    assert _output_data_type("1504") == "SingleCoord"
+    assert _output_data_type("2501;2501") == "SingleCoord"
+    assert _output_data_type("650;651") == "MultiCoord"
 
 
 # ── Tarefa 4: nome hierárquico ──────────────────────────────────────────────
@@ -299,6 +368,12 @@ def test_expandir_range_range():
 
 def test_expandir_range_nao_row5():
     assert _expandir_range_row5("A1", 10) == "A1"  # sem mudança
+
+
+def test_expandir_range_multiplos_tokens():
+    # sqref multi-range (ex.: 'B5 Y5' da TDT real) expande cada token
+    assert _expandir_range_row5("B5 Y5", 10) == "B5:B10 Y5:Y10"
+    assert _expandir_range_row5("AG5 AH5 AN5", 8) == "AG5:AG8 AH5:AH8 AN5:AN8"
 
 
 # ── Tarefa 3: campos derivados ──────────────────────────────────────────────
@@ -404,6 +479,8 @@ def test_escreve_sheet_analogica(template_dnp3_path, lista_padrao_path, tmp_path
     # IN61 = "Corrente"/"A" na Lista Padrao -> Measurement Type/Display Unit
     assert ws.cell(5, col["Measurement Type"]).value == "Current"
     assert ws.cell(5, col["Display Unit"]).value == "A"
+    # signal_type PT da lista padrao ("Valor Medido") -> dominio EN AnalogSignalType
+    assert ws.cell(5, col["Signal Type"]).value == "MeasuredValue"
     # table ref começa em A4
     assert ws.tables["DNP3_AnalogSignals"].ref.startswith("A4:")
 
