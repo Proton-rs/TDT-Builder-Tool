@@ -670,3 +670,22 @@ def test_equipamento_ambiguo_sem_comando_vai_pra_tdt(
     motivos = {it.motivo for it in resultado.revisao}
     assert "equipamento_ambiguo" not in motivos
     assert any(r.sigla_sinal for r in resultado.lista.registros)
+
+
+def test_corpus_enriquecido_inclui_type_severidade():
+    from tdt.config import Config
+    from tdt.dados.lista_padrao import ListaPadraoADMS, SinalPadrao
+    from tdt.pipeline import _corpus_enriquecido
+
+    lp = ListaPadraoADMS(
+        discretos=(
+            SinalPadrao("SGFT", "TRIP SGF", "RelayTrip", "Read", None, "Discrete",
+                        type_severidade="PROT"),
+        ),
+        analogicos=(),
+    )
+    corpus = _corpus_enriquecido(lp, Config(), "Discrete")
+    assert len(corpus) == 1
+    sigla, texto = corpus[0]
+    assert sigla == "SGFT"
+    assert "PROT" in texto  # canonizar expande PROT->PROTECAO; aceitar ambos
