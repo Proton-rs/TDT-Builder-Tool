@@ -15,7 +15,6 @@ reescrevendo. SP2 (LLM) pluga via Avaliador, não aqui.
 
 from __future__ import annotations
 
-import unicodedata
 from dataclasses import dataclass, replace
 
 from tdt.config import Config
@@ -393,56 +392,6 @@ def r8_direcao(
     return AjusteRegra(-peso, "direcao: comando mas candidato so-leitura (Read)")
 
 
-# --- R9: TYPE SEVERIDADE (desempate fraco) ------------------------------------
-
-_TS_PROT = "PROT"
-
-# classe (ASCII upper) -> tokens-pista no texto canônico. Tabela É dado
-# (padrão _PARES_OPOSTOS): podada por bench/diag_type_severidade.py
-# (pureza >= 90%, hits >= 5 na lista padrão). PROT também aceita número ANSI
-# no texto (_numeros_no_texto), tratado em _classe_ts_do_texto.
-_PISTAS_TS: tuple[tuple[str, frozenset[str]], ...] = (
-    (_TS_PROT, frozenset({"TRIP"})),
-    ("FALHAS FCOM/VCA/VCC", frozenset({"VCA", "VCC"})),
-    ("FUNCOES/43/PARALELISMO", frozenset({"43"})),
-)
-
-
-def _ascii_upper(s: str) -> str:
-    return unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode().upper()
-
-
-def _classe_ts_do_texto(tokens: frozenset[str]) -> str | None:
-    """Classe TYPE SEVERIDADE sugerida pelo texto; None sem pista ou ambíguo."""
-    achadas = {classe for classe, pistas in _PISTAS_TS if tokens & pistas}
-    if _numeros_no_texto(tokens):
-        achadas.add(_TS_PROT)
-    return achadas.pop() if len(achadas) == 1 else None
-
-
-def r9_type_severidade(
-    rec: SignalRecord, cand: Candidato, ctx: Contexto, cfg: Config
-) -> AjusteRegra:
-    """Pista lexical do texto × classe TYPE SEVERIDADE do candidato. Peso
-    fraco: desempata descrições parecidas, nunca decide sozinha. Comparação
-    em ASCII upper (a coluna real tem acento: "FUNÇÕES/43/PARALELISMO")."""
-    if ctx.lista_padrao is None:
-        return _ZERO
-    classe_texto = _classe_ts_do_texto(ctx.tokens)
-    if classe_texto is None:
-        return _ZERO
-    sp = ctx.lista_padrao.por_sigla(cand.sigla)
-    ts = _ascii_upper(sp.type_severidade) if sp and sp.type_severidade else ""
-    if not ts:
-        return _ZERO
-    peso = cfg.pesos_regras["type_severidade"]
-    if ts == classe_texto:
-        return AjusteRegra(peso, f"type_severidade: candidato e texto em {classe_texto}")
-    return AjusteRegra(
-        -peso, f"type_severidade: candidato em {ts} diverge de {classe_texto}"
-    )
-
-
 # Registro de regras — adicione funções aqui para crescer (SRP, sem reescrita).
 _REGRAS = (
     r1_numero_protecao,
@@ -454,7 +403,6 @@ _REGRAS = (
     r6_lado_tensao,
     r7_estado_compativel,
     r8_direcao,
-    r9_type_severidade,
 )
 
 

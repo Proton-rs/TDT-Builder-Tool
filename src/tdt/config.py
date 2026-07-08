@@ -78,7 +78,6 @@ class Config:
             "lado_tensao": 0.08,
             "estado": 0.15,
             "direcao": 0.10,
-            "type_severidade": 0.05,
         }
     )
     # Análise — e5 assimétrico + consenso + gap dinâmico + calibração
