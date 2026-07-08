@@ -318,3 +318,49 @@ def test_r8_sem_lista_padrao_e_noop():
     cands = [Candidato("AUTA", 0.70, "mesclado"), Candidato("AUTC", 0.69, "mesclado")]
     out = aplicar(rec, cands, _CFG)  # sem lista_padrao
     assert out[0].sigla == "AUTA"
+
+
+def _lp_ts():
+    return ListaPadraoADMS(
+        discretos=(
+            SinalPadrao("SGFT", "TRIP SOBRECORRENTE", "RelayTrip", "Read",
+                        "null@null___NORMAL@ATUADO___RelayTrip_S_TS_SA", "Discrete",
+                        type_severidade="PROT"),
+            SinalPadrao("FVCC", "FALHA VCC", "Custom", "Read",
+                        "null@null___NORMAL@FALHA___Custom_S_TS_SA", "Discrete",
+                        type_severidade="FALHAS FCOM/VCA/VCC"),
+        ),
+        analogicos=(),
+    )
+
+
+# --- R9: type severidade ------------------------------------------------------
+
+
+def test_r9_trip_favorece_classe_prot():
+    rec = _rec("TRIP SOBRECORRENTE INSTANTANEO")
+    cands = [Candidato("FVCC", 0.70, "mesclado"), Candidato("SGFT", 0.70, "mesclado")]
+    out = aplicar(rec, cands, _CFG, lista_padrao=_lp_ts())
+    assert out[0].sigla == "SGFT"  # PROT casa; FALHAS diverge
+
+
+def test_r9_vcc_favorece_classe_falhas():
+    rec = _rec("FALHA VCC PAINEL")
+    cands = [Candidato("SGFT", 0.70, "mesclado"), Candidato("FVCC", 0.70, "mesclado")]
+    out = aplicar(rec, cands, _CFG, lista_padrao=_lp_ts())
+    assert out[0].sigla == "FVCC"
+
+
+def test_r9_pista_ambigua_e_noop():
+    # TRIP (PROT) + VCC (FALHAS) no mesmo texto -> duas classes -> não decide
+    rec = _rec("TRIP FALHA VCC")
+    cands = [Candidato("FVCC", 0.70, "mesclado"), Candidato("SGFT", 0.70, "mesclado")]
+    out = aplicar(rec, cands, _CFG, lista_padrao=_lp_ts())
+    assert out[0].sigla == "FVCC"  # empate preservado (nenhum ajuste r9)
+
+
+def test_r9_sem_lista_padrao_e_noop():
+    rec = _rec("TRIP SOBRECORRENTE")
+    cands = [Candidato("FVCC", 0.72, "mesclado"), Candidato("SGFT", 0.70, "mesclado")]
+    out = aplicar(rec, cands, _CFG)
+    assert out[0].sigla == "FVCC"
