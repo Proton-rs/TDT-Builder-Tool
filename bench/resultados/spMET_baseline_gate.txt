@@ -1,0 +1,1 @@
+baseline spMET: comum=964 iguais=645 pct=66.91
