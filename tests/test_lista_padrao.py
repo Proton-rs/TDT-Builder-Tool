@@ -1,5 +1,6 @@
 from tdt.defaults import DEFAULT_LISTA
 from tdt.dados.lista_padrao import ListaPadraoADMS
+from tdt.dados.lista_padrao import descricoes_por_sigla
 
 
 def test_default_lista_aponta_para_v2_com_djf1_enriquecido():
@@ -95,3 +96,13 @@ def test_le_type_severidade_dos_discretos(lista_padrao_path):
 def test_analogico_sem_type_severidade(lista_padrao_path):
     lp = ListaPadraoADMS.carregar(lista_padrao_path)
     assert lp.por_sigla("IN61").type_severidade is None
+
+
+def test_descricoes_por_sigla_le_v1(docs):
+    m = descricoes_por_sigla(str(docs / "Pontos Padrao ADMS_v1.xlsx"))
+    assert m["TEA"] == "49 - ALARME TEMPERATURA ENROLAMENTO"
+    assert "IN61" in m  # analógicos também entram
+
+
+def test_descricoes_por_sigla_arquivo_ausente_devolve_vazio(tmp_path):
+    assert descricoes_por_sigla(str(tmp_path / "nao_existe.xlsx")) == {}

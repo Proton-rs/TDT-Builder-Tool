@@ -8,6 +8,7 @@ vazia / ``#N/A``) são ignoradas.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 
 import openpyxl
@@ -146,3 +147,21 @@ class ListaPadraoADMS:
         """Todas as siglas (discretos + analógicos), normalizadas maiúsculas —
         usado pela detecção de coluna de sigla em listas não-homogêneas."""
         return frozenset(s.sigla.upper() for s in (*self.discretos, *self.analogicos))
+
+
+@lru_cache(maxsize=4)
+def descricoes_por_sigla(path: str) -> dict[str, str]:
+    """Mapa sigla UPPER -> descrição de uma lista padrão (Signal Alias da v1).
+
+    Arquivo ausente/ilegível -> {} : a geração de TDT nunca quebra por causa
+    do alias (fallback = descrição bruta do cliente, comportamento antigo).
+    """
+    try:
+        lp = ListaPadraoADMS.carregar(path)
+    except Exception:
+        return {}
+    return {
+        s.sigla.upper(): s.descricao
+        for s in (*lp.discretos, *lp.analogicos)
+        if s.descricao
+    }

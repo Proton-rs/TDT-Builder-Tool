@@ -129,6 +129,16 @@ def _alias_hoje() -> str:
     return date.today().strftime("%m%d%Y")
 
 
+def _signal_alias(rec: SignalRecord, alias_v1: "dict[str, str] | None") -> str:
+    """Descrição da lista padrão v1 quando a sigla está no mapa; senão a
+    descrição bruta do cliente (Custom/sem sigla/mapa ausente)."""
+    if alias_v1 and rec.sigla_sinal:
+        desc = alias_v1.get(rec.sigla_sinal.upper())
+        if desc:
+            return desc
+    return rec.descricoes.bruta
+
+
 def _coords_comando(indices: tuple[int, ...], duplo: bool = True) -> str:
     if len(indices) == 1:
         return f"{indices[0]};{indices[0]}" if duplo else str(indices[0])
@@ -142,7 +152,8 @@ def _fase_saida(fase: str | None) -> str:
     return fase if fase in FASES else "ABC"
 
 
-def _valores(rec: SignalRecord, subestacao: str | None, padrao: ListaPadraoADMS) -> dict:
+def _valores(rec: SignalRecord, subestacao: str | None, padrao: ListaPadraoADMS,
+             alias_v1: "dict[str, str] | None" = None) -> dict:
     sp = padrao.por_sigla(rec.sigla_sinal) if rec.sigla_sinal else None
     nome = _nome_hierarquico(
         subestacao, rec.modulo.nome, rec.eletrico.nome_equipamento,
@@ -169,7 +180,7 @@ def _valores(rec: SignalRecord, subestacao: str | None, padrao: ListaPadraoADMS)
         )
     return {
         "Signal Name": nome,
-        "Signal Alias": rec.descricoes.bruta,
+        "Signal Alias": _signal_alias(rec, alias_v1),
         "Measurement Type": "Status",  # ponytail: default; refinar por signal_type
         "Signal Type": sp.signal_type if sp else "Custom",
         "Side": "None",
@@ -208,7 +219,8 @@ def _measurement_type(sp) -> str | None:
 # ponytail: tabela cobre os 5 tipos confirmados no export real; ampliar quando aparecer outro tipo de medicao real nos dados.
 
 
-def _valores_analog(rec: SignalRecord, subestacao: str | None, padrao: ListaPadraoADMS) -> dict:
+def _valores_analog(rec: SignalRecord, subestacao: str | None, padrao: ListaPadraoADMS,
+                     alias_v1: "dict[str, str] | None" = None) -> dict:
     sp = padrao.por_sigla(rec.sigla_sinal) if rec.sigla_sinal else None
     nome = _nome_hierarquico(
         subestacao, rec.modulo.nome, rec.eletrico.nome_equipamento,
@@ -222,7 +234,7 @@ def _valores_analog(rec: SignalRecord, subestacao: str | None, padrao: ListaPadr
     rp_custom = f"{nome}_{remote_unit}" if remote_unit else None
     return {
         "Signal Name": nome,
-        "Signal Alias": rec.descricoes.bruta,
+        "Signal Alias": _signal_alias(rec, alias_v1),
         "Signal Type": sp.signal_type if sp else "Custom",
         "Phases": _fase_saida(rec.eletrico.fase),
         "Direction": "Read",
@@ -242,18 +254,23 @@ def _valores_analog(rec: SignalRecord, subestacao: str | None, padrao: ListaPadr
 
 
 def gerar(
-    lista: ListaHomogenea, template_path: str | Path, lista_padrao: ListaPadraoADMS
+    lista: ListaHomogenea,
+    template_path: str | Path,
+    lista_padrao: ListaPadraoADMS,
+    alias_v1: "dict[str, str] | None" = None,
 ) -> openpyxl.Workbook:
     wb = openpyxl.load_workbook(template_path)  # mantém fórmulas/estilos
     _escrever_sheet(
         wb[SHEET_DISCRETOS], SHEET_DISCRETOS, COLUNAS_ESPERADAS,
         [r for r in lista.registros if r.tipo_sinal.categoria == "Discrete"],
-        _valores, lista.subestacao, lista_padrao,
+        lambda rec, sub, padrao: _valores(rec, sub, padrao, alias_v1),
+        lista.subestacao, lista_padrao,
     )
     _escrever_sheet(
         wb[SHEET_ANALOGICOS], SHEET_ANALOGICOS, COLUNAS_ESPERADAS_ANALOG,
         [r for r in lista.registros if r.tipo_sinal.categoria == "Analog"],
-        _valores_analog, lista.subestacao, lista_padrao,
+        lambda rec, sub, padrao: _valores_analog(rec, sub, padrao, alias_v1),
+        lista.subestacao, lista_padrao,
     )
     return wb
 

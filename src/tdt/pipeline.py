@@ -32,7 +32,8 @@ from tdt.cache_scorers import carregar_ou_construir
 from tdt.config import Config
 from tdt.contracts import Diagnostico, ItemRevisao, ResultadoPipeline, SignalRecord
 from tdt.dados.indice_vetorial import IndiceVetorial
-from tdt.dados.lista_padrao import ListaPadraoADMS
+from tdt.dados.lista_padrao import ListaPadraoADMS, descricoes_por_sigla
+from tdt.defaults import DEFAULT_LISTA_ALIAS
 from tdt.normalizacao.estruturador import estruturar
 from tdt.normalizacao.estruturador_homogeneo import detectar_header, estruturar_homogeneo
 from tdt.identidade_modulo import aplicar_identidade, particionar_por_confianca
@@ -501,7 +502,9 @@ def gerar_tdt(registros, template_path, lp, subestacao=None, aliases=None, confi
     pareados, _rev = dc_pairer.parear(lst, config)
     corrigidos, _rev2 = corrigir(list(pareados), _whitelist_posicao(lp, config))
     lista = criador_lista_homogenea.montar(list(corrigidos), subestacao=subestacao)
-    return engine_tdt.gerar(lista, template_path, lp)
+    return engine_tdt.gerar(
+        lista, template_path, lp, alias_v1=descricoes_por_sigla(DEFAULT_LISTA_ALIAS)
+    )
 
 
 def executar(
@@ -679,7 +682,14 @@ def executar(
         revisao.extend(rev_estrut)
 
         lista = criador_lista_homogenea.montar(list(corrigidos), subestacao=subestacao)
-        wb_out = engine_tdt.gerar(lista, template_path, lp)
+        alias_v1 = descricoes_por_sigla(DEFAULT_LISTA_ALIAS)
+        if not alias_v1:
+            aud.evento(
+                "pipeline",
+                f"lista v1 ausente ({DEFAULT_LISTA_ALIAS}): Signal Alias usa descrição do cliente",
+                "WARN",
+            )
+        wb_out = engine_tdt.gerar(lista, template_path, lp, alias_v1=alias_v1)
 
     aud.evento(
         "pipeline",

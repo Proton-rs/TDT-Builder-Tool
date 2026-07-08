@@ -74,6 +74,25 @@ def _lista():
     )
 
 
+def test_signal_alias_usa_descricao_do_mapa_v1(template_dnp3_path, lista_padrao_path):
+    lp = ListaPadraoADMS.carregar(lista_padrao_path)
+    wb = gerar(_lista(), template_dnp3_path, lp,
+               alias_v1={"DJ": "DISJUNTOR DE LINHA"})
+    ws = wb["DNP3_DiscreteSignals"]
+    col = {ws.cell(4, c).value: c for c in range(1, ws.max_column + 1)}
+    assert ws.cell(5, col["Signal Alias"]).value == "DISJUNTOR DE LINHA"
+    # SECC fora do mapa -> mantém descrição bruta do cliente
+    assert ws.cell(6, col["Signal Alias"]).value == "SECC BRUTO"
+
+
+def test_signal_alias_sem_mapa_mantem_bruta(template_dnp3_path, lista_padrao_path):
+    lp = ListaPadraoADMS.carregar(lista_padrao_path)
+    wb = gerar(_lista(), template_dnp3_path, lp)  # alias_v1 default None
+    ws = wb["DNP3_DiscreteSignals"]
+    col = {ws.cell(4, c).value: c for c in range(1, ws.max_column + 1)}
+    assert ws.cell(5, col["Signal Alias"]).value == "DJ BRUTO"
+
+
 def test_preserva_43_colunas_e_tabela(template_dnp3_path, lista_padrao_path, tmp_path):
     lp = ListaPadraoADMS.carregar(lista_padrao_path)
     wb = gerar(_lista(), template_dnp3_path, lp)
