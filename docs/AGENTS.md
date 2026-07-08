@@ -36,5 +36,24 @@ Materiais de origem (pipeline, inputs, templates, lista padrão) e specs do proj
 - Fontes de verdade de dados: `Pontos Padrao ADMS_v2.xlsx` (lista padrão de **ANÁLISE/matching**, **default** — descrições da v1 + fixes de campo + DJF1 enriquecido; descrições limpas, sem diluição). `Pontos Padrao ADMS_v5.xlsx` = mesma base v2 com a coluna `DESCRIÇÃO NOVA` **enriquecida** (append-only, ANSI C37.2 + domínio) para **DESCRIÇÕES/referência humana** — NÃO usar para matching (o texto compartilhado dilui a discriminação; comprovado por regressão no benchmark: acc 82→68%, prec 95→68%). v1/v3/v4 = histórico, não editar. `dnp3_template.xlsx` (template TDT), `input_*.xlsx` (exemplos), `Export_base_Full*.xlsx` (base real com multiplas Subestações e padrões de escrita diferentes, 97MB — não abrir inteiro).
 - Não editar os `.xlsx` de origem; são insumos.
 
+## Ledger de decisões arquiteturais
+Decisão registrada ≠ estado do código. Antes de afirmar "foi decidido X, então o código faz X", conferir aqui. Atualizar no closeout de cada SP (junto com o DOX pass): toda decisão de spec ganha uma linha com status `implementado | pendente | revertido | superado`.
+
+| Decisão | Spec/commit | Status no código |
+|---|---|---|
+| B2: motor de regras como filtro bounded (clamp+renormaliza, deltas em [0,1], recalibrar thresholds) | spB 26jun §B2 | **pendente** — spec "aguardando revisão", nunca virou plano; deltas seguem unbounded. Parcialmente superado: E4 (calibrador platt pós-mescla) + clamp de exibição no boundary do pipeline (08jul) cobrem o critério "confiança exibida ≤ 1.0" |
+| Remoção de candidatos contraditórios | filtro_preciso (F1, SP-G Task 6) | implementado — módulo próprio; motor_regras nunca remove |
+| TFIDF → BM25 | SP-H 03jul | implementado (com fix de dedup de sigla duplicada) |
+| type_severidade no corpus vetorial | SP-METADADOS Task 5 | **revertido** (36c2b68) — regrediu o gate |
+| Stemmer N6 | 26jun | **gateado off** — regrediu bench |
+| Lista v5 (descrições enriquecidas) para matching | 26jun | **rejeitado** — diluição comprovada (acc 82→68%); matching usa v2 |
+| B1: confiança de decisão por regra (candidatos=() → UI vazia) | spB 26jun §B1 | implementado 08jul (display-only: "1.00 (regra)" em modelo_tabela/tela_revisao) |
+| Gate `equipamento_ambiguo` (C2) | spC2 26jun | **superado** — Spec C: dc_pairer arbitra (sem-comando→TDT, comando→pareamento_ambiguo); teste garante que o motivo NÃO aparece |
+| e5/reranker (troca de embedding) | spE 26jun / spD3 01jul | **rejeitado** (3ª rodada, empate com MiniLM e modelo 1GB maior); capacidade dorme em `dados/encoder`+`indice_vetorial` (param `prefixo`); `config.e5_prefixos` é o knob dormente (bench/diag usa) — não remover |
+| `matchers/cross_encoder.rerank` | SP-G | **dormente** — implementado, só teste usa; wiring pendente de decisão (mesma família do e5) |
+| 7 regras SE/ENTÃO propostas (79LO/86, SF6 estágios, 50BF, mola→BB*, CDC/OLTC, SECG, sincronismo) | conhecimento_sinais.md §"Itens acionáveis" | **pendente** — cada uma é mudança de scoring: exige ciclo próprio com gate (proibido lote) |
+| `f_posicao` fora do registro `_FILTROS` | SP-G Task 6 | **deliberado** — aplicado separado (filtro_preciso:226); registrar duplicaria aplicação |
+| spC3 (mineração full base), spC4 (contexto sheet), spD (gate FP/corpus adversarial), spE2 (mescla probabilística/pesos aprendidos) | specs 26jun | **pendente** — nunca viraram plano; specs grandes, cada uma exige ciclo spec→plano→gate |
+
 ## Verification
 Specs revisadas pelo usuário antes de implementar.
