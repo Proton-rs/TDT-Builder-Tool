@@ -3,7 +3,11 @@ from PySide6.QtWidgets import QDialog
 
 import pytest
 
-from tdt.contracts import Candidato, Descricoes, Enderecamento, Modulo, SignalRecord, TipoSinal
+from dataclasses import replace
+
+from tdt.contracts import (
+    Candidato, Descricoes, Diagnostico, Enderecamento, Modulo, SignalRecord, TipoSinal,
+)
 from tdt.ui.delegate_sinal import DelegateCombo, DelegateModulo
 from tdt.ui.estado import AppState
 from tdt.ui.modelo_tabela import ModeloSinais
@@ -499,3 +503,25 @@ def test_header_marca_colunas_editaveis(qtbot):
     assert "✎" in modelo.headerData(col_sinal, Qt.Horizontal, Qt.DisplayRole)
     col_status = ModeloSinais.COLUNAS.index("Status")
     assert "✎" not in modelo.headerData(col_status, Qt.Horizontal, Qt.DisplayRole)
+
+
+def test_barra_score_alto_usa_texto_escuro(qtbot):
+    rec = replace(
+        _rec("1", "SE1", "A"),
+        sigla_sinal="DJF1",
+        diagnostico=Diagnostico({"DJF1": {"vetorial": 0.9, "tfidf": 0.9, "fuzzy": 0.9}}),
+    )
+    tela = _tela_carregada(qtbot, [rec])
+    tela.tabela.selectRow(0)
+    assert "color: #0d2e21" in tela.barras[0].styleSheet()
+
+
+def test_barra_score_baixo_mantem_texto_claro(qtbot):
+    rec = replace(
+        _rec("1", "SE1", "A"),
+        sigla_sinal="DJF1",
+        diagnostico=Diagnostico({"DJF1": {"vetorial": 0.1, "tfidf": 0.1, "fuzzy": 0.1}}),
+    )
+    tela = _tela_carregada(qtbot, [rec])
+    tela.tabela.selectRow(0)
+    assert "color: #e8ebf2" in tela.barras[0].styleSheet()

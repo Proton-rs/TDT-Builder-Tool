@@ -21,7 +21,7 @@ from tdt.dc_pairer import fundir, separar
 from tdt.ui.busca_adms import buscar
 from tdt.ui.delegate_sinal import DelegateCombo, DelegateModulo, DelegateSinal
 from tdt.ui.estado import AppState
-from tdt.ui.modelo_tabela import ModeloSinais, cor_faixa
+from tdt.ui.modelo_tabela import ModeloSinais, cor_faixa, texto_faixa
 from tdt.ui.proxy_revisao import ProxyRevisao
 
 _METODOS = (("emb", "vetorial"), ("tfidf", "tfidf"), ("fuzzy", "fuzzy"))
@@ -493,8 +493,14 @@ class TelaRevisao(QWidget):
             barra.setValue(pct)
             barra.setFormat(f"{v:.2f}" if v is not None else "—")
             cor = cor_faixa(v)
+            cor_texto = texto_faixa(v)
             if cor is not None:
-                barra.setStyleSheet(f"QProgressBar::chunk {{ background-color: {cor.name()}; }}")
+                barra.setStyleSheet(
+                    f"QProgressBar {{ color: {cor_texto.name()}; }}"
+                    f"QProgressBar::chunk {{ background-color: {cor.name()}; }}"
+                )
+            else:
+                barra.setStyleSheet("")
 
     def _atualizar_candidatos(self, r):
         self.lista_candidatos.clear()
