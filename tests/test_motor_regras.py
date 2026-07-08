@@ -271,3 +271,50 @@ def test_aplicar_rastreado_thread_lista_padrao_para_sgft():
     assert out[0].sigla == "SGFT"
     motivos = " | ".join(a.motivo for a in ajustes)
     assert "estado" in motivos
+
+
+def _rec_dir(desc_norm, direcao):
+    return SignalRecord(
+        id="LT3:9",
+        modulo=Modulo("3", "sheet_name"),
+        tipo_sinal=TipoSinal("Discrete", "SingleBit", direcao),
+        enderecamento=Enderecamento("DNP3", (17,)),
+        descricoes=Descricoes(desc_norm, desc_norm),
+    )
+
+
+def _lp_dir():
+    return ListaPadraoADMS(
+        discretos=(
+            SinalPadrao("AUTC", "REARME AUTOMATISMO", "Custom", "ReadWrite",
+                        None, "Discrete"),
+            SinalPadrao("AUTA", "REARME AUTOMATISMO ALARME", "Custom", "Read",
+                        None, "Discrete"),
+        ),
+        analogicos=(),
+    )
+
+
+# --- R8: direção -------------------------------------------------------------
+
+
+def test_r8_comando_favorece_candidato_de_escrita():
+    rec = _rec_dir("REARME AUTOMATISMO", "Output")
+    cands = [Candidato("AUTA", 0.70, "mesclado"), Candidato("AUTC", 0.70, "mesclado")]
+    out = aplicar(rec, cands, _CFG, lista_padrao=_lp_dir())
+    assert out[0].sigla == "AUTC"  # ReadWrite boost; AUTA (Read) penalizado
+
+
+def test_r8_input_puro_e_noop():
+    rec = _rec_dir("REARME AUTOMATISMO", "Input")
+    cands = [Candidato("AUTA", 0.70, "mesclado"), Candidato("AUTC", 0.70, "mesclado")]
+    out = aplicar(rec, cands, _CFG, lista_padrao=_lp_dir())
+    # sem comando no input, r8 não mexe — ordem original preservada
+    assert out[0].sigla == "AUTA"
+
+
+def test_r8_sem_lista_padrao_e_noop():
+    rec = _rec_dir("REARME AUTOMATISMO", "Output")
+    cands = [Candidato("AUTA", 0.70, "mesclado"), Candidato("AUTC", 0.69, "mesclado")]
+    out = aplicar(rec, cands, _CFG)  # sem lista_padrao
+    assert out[0].sigla == "AUTA"

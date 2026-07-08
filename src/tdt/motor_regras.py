@@ -368,6 +368,30 @@ def r7_estado_compativel(
     )
 
 
+# --- R8: direção (comando exige escrita) --------------------------------------
+
+
+def r8_direcao(
+    rec: SignalRecord, cand: Candidato, ctx: Contexto, cfg: Config
+) -> AjusteRegra:
+    """Input com comando (Output/InputOutput) favorece candidato ReadWrite/Write
+    e penaliza Read puro. ASSIMÉTRICA de propósito: input só-leitura é no-op —
+    status de equipamento manobrável (DJ) casa sigla ReadWrite legitimamente
+    (par comando+status resolvido pelo dc_pairer); penalizar quebraria esse
+    caminho. Requer ctx.lista_padrao (ausente = no-op, contrato da r7)."""
+    if ctx.lista_padrao is None:
+        return _ZERO
+    if rec.tipo_sinal.direcao not in ("Output", "InputOutput"):
+        return _ZERO
+    sp = ctx.lista_padrao.por_sigla(cand.sigla)
+    if sp is None or not sp.direction:
+        return _ZERO
+    peso = cfg.pesos_regras["direcao"]
+    if sp.direction in ("ReadWrite", "Write"):
+        return AjusteRegra(peso, f"direcao: comando casa candidato {sp.direction}")
+    return AjusteRegra(-peso, "direcao: comando mas candidato so-leitura (Read)")
+
+
 # Registro de regras — adicione funções aqui para crescer (SRP, sem reescrita).
 _REGRAS = (
     r1_numero_protecao,
@@ -378,6 +402,7 @@ _REGRAS = (
     r_equipamento,
     r6_lado_tensao,
     r7_estado_compativel,
+    r8_direcao,
 )
 
 
