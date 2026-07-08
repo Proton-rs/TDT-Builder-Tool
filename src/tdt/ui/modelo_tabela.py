@@ -133,7 +133,11 @@ class ModeloSinais(QAbstractTableModel):
         if nome == "Sinal":
             return sigla or "—"
         if nome == "Confiança":
-            return f"{topo:.2f}" if topo is not None else ""
+            if topo is not None:
+                return f"{topo:.2f}"
+            if rec.status == "decidido":
+                return "1.00 (regra)"
+            return ""
         if nome == "Status":
             return rec.status
         if nome == "Motivo":
@@ -193,7 +197,11 @@ class ModeloSinais(QAbstractTableModel):
             if nome == "Status":
                 return COR_DECIDIDO if rec.status == "decidido" else COR_REVISAO
             if nome == "Confiança":
-                return cor_faixa(rec.candidatos[0].score if rec.candidatos else None)
+                if rec.candidatos:
+                    return cor_faixa(rec.candidatos[0].score)
+                if rec.status == "decidido":
+                    return cor_faixa(1.0)
+                return cor_faixa(None)
         if role == Qt.ToolTipRole and nome in ("Sinal", "Descr. ADMS"):
             return self._adms(rec) or None
         if role == Qt.FontRole and nome in _COLUNAS_MONO:

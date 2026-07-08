@@ -466,7 +466,12 @@ class TelaRevisao(QWidget):
         r = self._registro()
         if r is None:
             return
-        conf = f"{r.candidatos[0].score:.2f}" if r.candidatos else "—"
+        if r.candidatos:
+            conf = f"{r.candidatos[0].score:.2f}"
+        elif r.status == "decidido":
+            conf = "1.00 (regra)"
+        else:
+            conf = "—"
         end_in = ";".join(str(i) for i in r.enderecamento.indices) or "—"
         end_out = ";".join(str(i) for i in r.enderecamento.indices_saida) or "—"
         self.lbl_campos.setText(
