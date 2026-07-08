@@ -1,9 +1,9 @@
 from tdt.contracts import Candidato, Descricoes, Enderecamento, Modulo, SignalRecord, TipoSinal
 from tdt.dados.lista_padrao import ListaPadraoADMS, SinalPadrao
 from tdt.semantica_estados import (
-    ATIVACAO, EVENTO, FUNCAO, INDEFINIDO, LOCAL_REMOTO, MODO, POSICAO,
-    EstadoDetectado, classe_do_mm, compatibilidade_texto, compativel,
-    detectar_estado, filtrar_por_estado,
+    ATIVACAO, EVENTO, FUNCAO, INDEFINIDO, LOCAL_REMOTO, POSICAO,
+    classe_do_mm, compatibilidade_texto, compativel, detectar_estado,
+    filtrar_por_estado,
 )
 
 
@@ -156,23 +156,3 @@ def test_filtro_neutro_sem_estado_detectado():
     cands = [Candidato("SGF", 0.9, "mesclado")]
     mantidos, zerou = filtrar_por_estado(_rec("TRIP FASE A"), cands, _lp_stub())
     assert mantidos == cands and zerou is False
-
-
-def test_classe_do_mm_manual_automatico_e_modo():
-    assert classe_do_mm("null@null___MANUAL@AUTOMATICO___Custom_S_TS_SS") == MODO
-
-
-def test_detectar_estado_manual_e_modo():
-    est = detectar_estado("SELETORA MANUAL")
-    assert est is not None and est.classe == MODO
-
-
-def test_detectar_estado_automatismo_nao_e_modo():
-    # AUTOMATISMO (função de proteção) não pode colidir com AUTOMATICO (modo)
-    est = detectar_estado("AUTOMATISMO ATUADO")
-    assert est is not None and est.classe == "evento"
-
-
-def test_compativel_modo_com_modo():
-    assert compativel(EstadoDetectado(MODO), MODO)
-    assert not compativel(EstadoDetectado(MODO), "evento")

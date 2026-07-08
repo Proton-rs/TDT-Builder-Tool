@@ -18,7 +18,6 @@ POSICAO = "posicao"          # aberto/fechado, ligado/desligado (SwitchStatus)
 FUNCAO = "funcao"            # incluído/excluído (Enabled/ReclosingEnabled/Local)
 ATIVACAO = "ativacao"        # ativado/desativado, habilitado/desabilitado
 LOCAL_REMOTO = "local_remoto"
-MODO = "modo"                # manual/automático (seleção de modo de operação)
 EVENTO = "evento"            # atuado, falha, defeito, falta, bloqueio
 INDEFINIDO = "indefinido"    # transit de posição — nunca vira ponto (D3)
 
@@ -43,10 +42,6 @@ _LEXICO: tuple[tuple[str, str, str | None], ...] = (
     ("ATUAD", EVENTO, None), ("FALHA", EVENTO, None),
     ("DEFEITO", EVENTO, None), ("FALTA", EVENTO, None),
     ("BLOQUE", EVENTO, None), ("LIBERA", EVENTO, None),
-    # MODO: prefixo "AUTOMATIC" cobre AUTOMATICO/AUTOMATICA sem colidir com
-    # AUTOMATISMO ("AUTOMATIS..." difere no 9º char); "MANUAL" não colide com
-    # MANUTENCAO ("MANUT...").
-    ("MANUAL", MODO, None), ("AUTOMATIC", MODO, None),
     ("INDEFINID", INDEFINIDO, None),
 )
 
