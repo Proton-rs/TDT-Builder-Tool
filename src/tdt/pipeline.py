@@ -355,6 +355,32 @@ def _gap(rec: SignalRecord) -> float:
     return cs[0].score - cs[1].score
 
 
+def _limitar_confianca(rec: SignalRecord) -> SignalRecord:
+    """Normaliza scores dos candidatos para [0,1] no boundary do pipeline.
+
+    O motor de regras soma deltas ao score calibrado (``motor_regras.
+    aplicar_rastreado``) e o resultado pode passar de 1.0 — correto para
+    ranquear/rotear, errado como confiança exibida (a UI mostra percentual).
+    Aplicar só na saída preserva o roteamento (gap/desempate usam o score cru).
+    """
+    if not rec.candidatos or all(0.0 <= c.score <= 1.0 for c in rec.candidatos):
+        return rec
+    return replace(rec, candidatos=tuple(
+        replace(c, score=min(1.0, max(0.0, c.score))) for c in rec.candidatos
+    ))
+
+
+def _limitar_confianca_item(item: ItemRevisao) -> ItemRevisao:
+    registro = _limitar_confianca(item.registro)
+    sugeridos = tuple(
+        replace(c, score=min(1.0, max(0.0, c.score)))
+        for c in item.candidatos_sugeridos
+    )
+    if registro is item.registro and sugeridos == item.candidatos_sugeridos:
+        return item
+    return replace(item, registro=registro, candidatos_sugeridos=sugeridos)
+
+
 def _desempatar_ambiguo(d_disc, d_ana, disc: "_Scorers", ana: "_Scorers", descricao: str):
     """Quando os dois bundles decidem, tenta resolver por gap (mais confiante)
     e, se os gaps forem próximos, pelo centroide do corpus (a quem a
@@ -681,6 +707,8 @@ def executar(
         revisao.extend(rev_pair)
         revisao.extend(rev_estrut)
 
+        corrigidos = [_limitar_confianca(r) for r in corrigidos]
+        revisao = [_limitar_confianca_item(it) for it in revisao]
         lista = criador_lista_homogenea.montar(list(corrigidos), subestacao=subestacao)
         alias_v1 = descricoes_por_sigla(DEFAULT_LISTA_ALIAS)
         if not alias_v1:

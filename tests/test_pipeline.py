@@ -670,3 +670,35 @@ def test_equipamento_ambiguo_sem_comando_vai_pra_tdt(
     motivos = {it.motivo for it in resultado.revisao}
     assert "equipamento_ambiguo" not in motivos
     assert any(r.sigla_sinal for r in resultado.lista.registros)
+
+
+# --- Confiança normalizada [0,1] no boundary do pipeline ---------------------
+
+
+def test_limitar_confianca_clampa_score_acima_de_1():
+    from tdt.pipeline import _limitar_confianca
+
+    rec = _rec_com_candidatos(1.25, 0.95, -0.10)
+    norm = _limitar_confianca(rec)
+    assert [c.score for c in norm.candidatos] == [1.0, 0.95, 0.0]
+    # ordem e siglas preservadas
+    assert [c.sigla for c in norm.candidatos] == [c.sigla for c in rec.candidatos]
+
+
+def test_limitar_confianca_sem_estouro_devolve_o_mesmo_registro():
+    from tdt.pipeline import _limitar_confianca
+
+    rec = _rec_com_candidatos(0.90, 0.40)
+    assert _limitar_confianca(rec) is rec
+
+
+def test_limitar_confianca_item_revisao_clampa_registro_e_sugeridos():
+    from tdt.contracts import ItemRevisao
+    from tdt.pipeline import _limitar_confianca_item
+
+    rec = _rec_com_candidatos(1.30, 0.80)
+    item = ItemRevisao(rec, motivo="score_baixo", candidatos_sugeridos=rec.candidatos)
+    norm = _limitar_confianca_item(item)
+    assert norm.registro.candidatos[0].score == 1.0
+    assert norm.candidatos_sugeridos[0].score == 1.0
+    assert norm.motivo == "score_baixo"
