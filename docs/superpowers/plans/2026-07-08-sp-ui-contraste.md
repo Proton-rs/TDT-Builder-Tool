@@ -197,13 +197,13 @@ Adicionar ao final de `tests/test_ui_modelo_tabela.py`:
 ```python
 def test_header_data_vertical_mostra_numero_da_linha(qtbot):
     m = ModeloSinais(_state(_rec()))
-    assert m.headerData(0, Qt.Vertical, Qt.DisplayRole) == "1"
+    assert m.headerData(0, Qt.Vertical, Qt.DisplayRole) == 1
 ```
 
 - [ ] **Step 2: Rodar o teste e confirmar que falha**
 
 Run: `pytest tests/test_ui_modelo_tabela.py::test_header_data_vertical_mostra_numero_da_linha -v`
-Expected: FAIL — retorna `None` em vez de `"1"`
+Expected: FAIL — retorna `None` em vez de `1` (Qt retorna int, não string, no fallback padrão)
 
 - [ ] **Step 3: Implementar**
 
@@ -264,7 +264,7 @@ _TEMA = Path(__file__).parent.parent / "src" / "tdt" / "ui" / "tema.qss"
 def test_texto_apagado_usa_cor_com_contraste_suficiente():
     conteudo = _TEMA.read_text(encoding="utf-8")
     assert "#5f6880" not in conteudo, "cor antiga de baixo contraste ainda presente"
-    assert conteudo.count("#838aa0") == 4, "esperado nas 4 regras: comentario, tipo=tecnico, disabled, bloqueado"
+    assert conteudo.count("#838aa0") == 5, "esperado no comentario + 4 regras (tipo=tecnico, disabled, sidebarContexto, bloqueado)"
 ```
 
 - [ ] **Step 2: Rodar o teste e confirmar que falha**

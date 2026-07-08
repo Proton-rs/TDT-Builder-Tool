@@ -1,6 +1,6 @@
 /* SP-UI-0 — tema grafite.
    fundo #14161d · painel #1e2430 · painel-2 #232a38 · borda #2b3242 · borda forte #3a4356
-   texto #e8ebf2 · secundário #9aa3b5 · apagado #5f6880
+   texto #e8ebf2 · secundário #9aa3b5 · apagado #838aa0
    acento #4f8cff (hover #6ba0ff · pressed #3d74d9 · sobre acento #0b1526) · seleção #243456
    ok #35c48f (#173226) · aviso #e0a83f (#2a2118 / texto #2c2005) · erro #e0604c (#3a1d18) */
 
@@ -31,7 +31,7 @@ QLabel { color: #e8ebf2; background: transparent; }
 QLabel[nivel="ok"] { color: #35c48f; }
 QLabel[nivel="aviso"] { color: #e0a83f; }
 QLabel[nivel="erro"] { color: #e0604c; }
-QLabel[tipo="tecnico"] { color: #5f6880; font-size: 11px; }
+QLabel[tipo="tecnico"] { color: #838aa0; font-size: 11px; }
 
 QPushButton {
     background-color: #232a38;
@@ -42,7 +42,7 @@ QPushButton {
 }
 QPushButton:hover { background-color: #2b3446; }
 QPushButton:pressed { background-color: #1a1f29; }
-QPushButton:disabled { background-color: #1e2430; color: #5f6880; }
+QPushButton:disabled { background-color: #1e2430; color: #838aa0; }
 QPushButton:focus { border: 1px solid #4f8cff; }
 QPushButton:checked { background-color: #243456; border: 1px solid #4f8cff; }
 
@@ -58,7 +58,7 @@ QPushButton[acao="principal"]:pressed { background-color: #3d74d9; }
 QPushButton[acao="principal"]:disabled { background-color: #31394a; color: #8b93a6; }
 
 #sidebar { background-color: #191d26; border-right: 1px solid #2b3242; }
-#sidebarContexto { color: #5f6880; font-family: Consolas, monospace; font-size: 11px; }
+#sidebarContexto { color: #838aa0; font-family: Consolas, monospace; font-size: 11px; }
 QPushButton[item="normal"], QPushButton[item="ativo"], QPushButton[item="bloqueado"] {
     background: transparent;
     border: none;
@@ -69,7 +69,7 @@ QPushButton[item="normal"], QPushButton[item="ativo"], QPushButton[item="bloquea
 QPushButton[item="normal"] { color: #9aa3b5; }
 QPushButton[item="normal"]:hover { background-color: #232a38; }
 QPushButton[item="ativo"] { background-color: #243456; color: #e8ebf2; font-weight: bold; }
-QPushButton[item="bloqueado"] { color: #5f6880; }
+QPushButton[item="bloqueado"] { color: #838aa0; }
 
 QFrame[estado="ok"] { background-color: #1e2430; border: 1px solid #2b3242; border-radius: 8px; }
 QFrame[estado="faltando"] { background-color: #2a2118; border: 1px solid #e0a83f; border-radius: 8px; }
