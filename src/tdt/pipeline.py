@@ -94,8 +94,6 @@ def _corpus_enriquecido(lp: ListaPadraoADMS, config: Config, categoria: str = "D
             partes.append(s.unidade_exibicao)
         if s.direction:
             partes.append(s.direction)
-        if s.type_severidade:
-            partes.append(s.type_severidade)
         saida.append((s.sigla, canonizar(" ".join(partes), config)))
     return saida
 
