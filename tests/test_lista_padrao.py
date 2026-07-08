@@ -83,3 +83,15 @@ def test_le_tipo_medicao_e_unidade_exibicao_de_analog_signals(lista_padrao_path)
     in61 = lp.por_sigla("IN61")
     assert in61.tipo_medicao == "Corrente"
     assert in61.unidade_exibicao == "A"
+
+
+def test_le_type_severidade_dos_discretos(lista_padrao_path):
+    lp = ListaPadraoADMS.carregar(lista_padrao_path)
+    assert lp.por_sigla("TEA").type_severidade == "PROT"
+    assert lp.por_sigla("DJF1").type_severidade == "DJ"
+    assert lp.por_sigla("CMDE").type_severidade == "ALARMES PREDIAIS/VF/GRUPO"
+
+
+def test_analogico_sem_type_severidade(lista_padrao_path):
+    lp = ListaPadraoADMS.carregar(lista_padrao_path)
+    assert lp.por_sigla("IN61").type_severidade is None

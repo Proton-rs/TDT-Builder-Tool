@@ -27,6 +27,7 @@ class SinalPadrao:
     valores_scada: tuple[int, ...] = ()
     tipo_medicao: str | None = None  # "Corrente", "Tensão", ... (lista padrão, PT)
     unidade_exibicao: str | None = None  # "A", "kV", "Grau", "-", ...
+    type_severidade: str | None = None  # "PROT", "FALHAS FCOM/VCA/VCC", ... (só discretos)
 
 
 def _val(v) -> str | None:
@@ -82,6 +83,7 @@ def _ler_sheet(ws, categoria: str, mapa: dict[str, str]) -> list[SinalPadrao]:
                 valores_scada=valores,
                 tipo_medicao=get("tipo_medicao"),
                 unidade_exibicao=get("unidade_exibicao"),
+                type_severidade=get("type_severidade"),
             )
         )
     return sinais
@@ -109,6 +111,7 @@ class ListaPadraoADMS:
                     "valores": "VALOR",
                     "tipo_medicao": None,
                     "unidade_exibicao": None,
+                    "type_severidade": "TYPE SEVERIDADE",
                 },
             )
             ana = _ler_sheet(
@@ -124,6 +127,7 @@ class ListaPadraoADMS:
                     "valores": None,
                     "tipo_medicao": "TIPO DE MEDIÇÃO",
                     "unidade_exibicao": "UNIDADE DE EXIBIÇÃO",
+                    "type_severidade": None,
                 },
             )
         finally:
