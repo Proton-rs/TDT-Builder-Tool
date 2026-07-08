@@ -1,13 +1,27 @@
-- o que funciona melhor, scores normalizados ou como estava antes com scores brutos?
-- ocorre algum erro na analise que impede do motor de regras trabalhar corretamente, sinais com estagio como o 81 não estão sendo classificados corretamente, o que eu acho que acontece, o motor de regras atualmente é usado apenas como filtro porém se os candidatos passados pra ele não contiverem o os estágios ele não pode fazer nada. tenho uma sugestão, pegar os candidatos e expandir-los se tiverem childs, então quando chega no motor de regra ele consegue realizar o trabalho de aplicar as regras e descobrir os sinal que melhor se qualifica;
-- seguindo no ponto acima, percebi que o embedding não é capaz de fazer a distinção pois a lista padrão ADMS, descreve o 81E1 - "81 - TRIP SOBRE FREQUENCIA E1". para o embedding E1 não significa nada, seria interessante expandir abreviações para melhorar o embedding;
-- está sendo feita uma normalização dos tokens para o infinitivo? sinto que seria interessante, para o motor de regras e possivelmente outros métodos da analise. poderia ser feito na lista padrão também para normalizar os embeddings gerados;
-- observado DJA1 onde deveria ser DJF1, falso positivo;
-- analisar se caracteres como ()/- podem estar prejudicando o embedding da lista padrão;
-- sinais pendentes sem motivo, tokens bons para avaliação;
-- descrição, "desligamento local" transformada em "religamneto local", erro claro, podem haver outros erros como esse;
-- sem colunas, endereço input e coluna endereço output;
+Erros observados:
+- Mesmo após as ultimas alterações 79 bem sucedido ainda não é corretamente classificado;
+- classificação DJA1 incorreta
+- descrição bruta contêm: "secc. etc" token: "etc", token perde seccionadora
+- descrição bruta contêm: "fase A" token: "fase", token perde a 'A', 'B', 'C'
+- verificar sinais que vão para revisão com confiança alta mas gap 0.0, porque o gap é zero? comportamento correto ir para revisão?
+- verificar sinais com GAP baixo != 0, ver se motor de regras não poderia resolver esses casos
+- sinais de comando(output) sem pair
+- coluna não indica que está sobre efeito de filtro por palavra.
+- SGF - atuado, agora não é incorretamente classificado como SGF, mas também não é classificado como SGFT
+- tela inicial sistema de selecionar sheets para analise não está funcionando, conferir se renomear sheet na tela inicial está funcionando também
 
-analise os pontos comentados e gere uma ou mais specs abordando todos os pontos, faça a analise dos outputs em 'C:\Users\vinic\Documents\programing\projetoTDT v2\output', tem 2 pastas, uma com resultados de agora e outra com resultados usando scores brutos. documente os pontos e causas de onde a probabilística errou e adicione a spec se necessário
+Sugestões:
+- pesquisar na internet informações sobre os sinais, diferentes nomenclaturas para o mesmo sinal, etc. criar um compilado separado com explicações para cada sinal, como funcionam em uma subestação real, regras sobre o funcionamento e exeções. o objetivo é criar um entendimento melhor sobre o que pode e o que não pode, assim sendo capaz de criar regras melhores para o motor de regras entre outras coisas. sugiro também atualizar a skill especialita-ADMS e especialista-TDT, tirando informações que já não são mais relevantes ou que foram provadas ser diferentes, sempre usando conhecimento baseado em arquivos real de TDT e regras descobertas durante desenvolvimento do projeto.
+- analisar o goal de melhorar confiança e taxa de decisão. sugiro uma leve alteração para primeiramente priorizar sinais gerados de forma correta na TDT usando de base a TDT real da GTD, ou seja, primeiramente melhorar a classificação e corretude do sistema e depois que o sistema melhorar nesse aspecto buscar levantar a taxa de assertividade, mas acho que o primeiro querendo ou não aumenta o segundo.
+- após resolver um "erro" ou comportamento errado, conferir se não há mais erros e anotar o encontrado para o próximo prompt
+- revisar pesos dos métodos, tentar outras alternativas de peso. eu sugiro aumentar a do embedding e diminuir a dos demais. ou fazer um sistema de pesos dinâmico (mais complexo e pode não apresentar resultados tão melhores), poderíamos criar um sistema parecido com Machine learning pros pesos, dessa forma os pesos se auto treinam por todas as listas.
+- melhorar sistema de aquisição dos endereços para blindar contra ruídos, analisar todas as listas por números que podem ser confundidos por endereço dnp3;
 
-encontrei alguns erros na spec, primeiramente não gostei da estratégia de adição/subtração de score pelo motor de regras, não sei se ele funcionava assim antes, se sim, deve ser criado um novo motor de regras que funcione come filtro, ele deve ser preciso, se tokens: 81 ESTAGIO 1 ele filtra precisamente até o sinal, sem fazer, ESTAGIO -> +0.3 para 81E1 e E2 ele apenas. sem dinamica de pontos. não entendi o 4 passo da spec, explique melhor. o passo 7 da spec está equivocado, desligamento local é a descrição do input e o programa "corrige para religamento", essa mudança muda totalmente a dinamica da analise e daria resultados errados e até falsos posistivos. passo 8 da spec está equivocado tambem, o problema não é na TDT e sim na UI da revisão, não existem colunas para os dois tipos de endereço, output e input. por ultimo achei a spec pouco detalahada e por falta de perguntas dirigidas a mim ela ficou com pontos extremamente equivocados
++tarefas:
+- melhorar sistema de filtragem da tabela na revisão, copiar sistema de filtro excel
+- melhorar auditoria, conter o máximo de informações possível para analise
+- remover filtro de  todas colunas, na posição que ele ocupava colocar habas para revisar por sheet do excel de input e uma com tudo junto
+- na tela inicial fazer check para ver se o usuário adicionou a sigla da SE, caso não tenha, não permitir executar.
+
+perguntas:
+- você acha que tem algum jeito de melhorar o funcionamento da analise por métodos sem usar IA além dos embeddings? algum método novo ou uma alteração dos atuais?
