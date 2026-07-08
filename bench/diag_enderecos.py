@@ -78,7 +78,7 @@ _INT = re.compile(r"^-?\d+$")
 # SAÍDA/ground-truth, não entrada), e arquivos não-.xlsx).
 ARQUIVOS_PADRAO = [
     "docs/input_homogeneo_IMA.xlsx",
-    "docs/input_nao_homogeneo_1_GTD.xlsx",
+    "docs/input_nao_homogeneo_1_GTA.xlsx",
     "docs/input_nao_homogeneo_2_FWB.xlsx",
     "docs/input_nao_homogeneo_3_GPR.xlsx",
     "docs/input_nao_homogeneo_4_GAU.xlsx",

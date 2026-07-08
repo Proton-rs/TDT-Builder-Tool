@@ -51,7 +51,7 @@ def checar_casos(nosso_tdt: str, casos: list[Caso]) -> list[tuple[Caso, str, boo
 
 # Pares (input real, TDT real) — a fonte de verdade da validação de fechamento.
 _PARES = [
-    ("GTD", "docs/input_nao_homogeneo_1_GTD.xlsx",
+    ("GTD", "docs/input_nao_homogeneo_1_GTA.xlsx",
      "docs/TDT/exportTDT_UTR_GTD_1_20260626.xlsx"),
 ]
 _TEMPLATE = "docs/dnp3_template.xlsx"

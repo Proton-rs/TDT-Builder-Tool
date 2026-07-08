@@ -77,7 +77,7 @@ def main() -> None:
     cfg = Config()
     enc = criar_encoder(cfg.modelo_embedding)
     res, _ = executar(
-        "docs/input_nao_homogeneo_1_GTD.xlsx", DEFAULT_TEMPLATE,
+        "docs/input_nao_homogeneo_1_GTA.xlsx", DEFAULT_TEMPLATE,
         "docs/Pontos Padrao ADMS_v2.xlsx", config=cfg, encoder=enc,
         subestacao="GTD", modo="nao-homogeneo",
     )

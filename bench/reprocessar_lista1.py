@@ -3,7 +3,7 @@
 Uso: PYTHONPATH=src python bench/reprocessar_lista1.py
 
 Gera output/LISTA 1 - GTD/TDT.xlsx a partir de
-docs/input_nao_homogeneo_1_GTD.xlsx, usando o pipeline real
+docs/input_nao_homogeneo_1_GTA.xlsx, usando o pipeline real
 (tdt.pipeline.executar), para servir de base a bench.gate_tdt_real.comparar
 contra o TDT real (docs/TDT/exportTDT_UTR_GTD_1_20260626.xlsx).
 
@@ -24,7 +24,7 @@ from tdt.config import Config
 from tdt.dados.encoder import criar_encoder
 from tdt.pipeline import executar
 
-_INPUT = "docs/input_nao_homogeneo_1_GTD.xlsx"
+_INPUT = "docs/input_nao_homogeneo_1_GTA.xlsx"
 _TEMPLATE = "docs/dnp3_template.xlsx"
 _LISTA_PADRAO = "docs/Pontos Padrao ADMS_v2.xlsx"
 _OUT_DIR = Path("output/LISTA 1 - GTD")

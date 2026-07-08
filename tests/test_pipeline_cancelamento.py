@@ -9,13 +9,13 @@ DOCS = Path("docs")
 
 
 @pytest.mark.skipif(
-    not (DOCS / "input_nao_homogeneo_1_GTD.xlsx").exists(),
+    not (DOCS / "input_nao_homogeneo_1_GTA.xlsx").exists(),
     reason="fixture de input ausente",
 )
 def test_cancelamento_para_cedo():
     aud = Auditoria()
     resultado, _wb = pipeline.executar(
-        DOCS / "input_nao_homogeneo_1_GTD.xlsx",
+        DOCS / "input_nao_homogeneo_1_GTA.xlsx",
         DOCS / "dnp3_template.xlsx",
         DOCS / "Pontos Padrao ADMS_v1.xlsx",
         config=Config(),
