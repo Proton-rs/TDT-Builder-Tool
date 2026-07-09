@@ -413,9 +413,17 @@ def test_normal_value():
     assert _normal_value(sp_sem) is None
 
 
-def test_alias_hoje_formato_eua_sem_barras():
-    assert re.fullmatch(r"\d{8}", _alias_hoje())
-    assert _alias_hoje() == date.today().strftime("%m%d%Y")
+def test_alias_hoje_formato_yyyymmdd(monkeypatch):
+    import tdt.engine_tdt as eng
+    from datetime import date
+    class _FakeDate(date):
+        @classmethod
+        def today(cls):
+            return cls(2026, 7, 9)
+    monkeypatch.setattr(eng, "date", _FakeDate)
+    # TDT real (GTD DNP3_DiscreteAnalog) usa 20260204 — YYYYMMDD, nao MMDDYYYY
+    assert eng._alias_hoje() == "20260709"
+    assert eng._alias_hoje() != "07092026"
 
 
 def _rec_analog(rid, sigla, indices):

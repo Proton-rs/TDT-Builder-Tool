@@ -108,7 +108,7 @@ def _normal_value(sp: "SinalPadrao | None") -> int | None:
 
 
 def _alias_hoje() -> str:
-    return date.today().strftime("%m%d%Y")
+    return date.today().strftime("%Y%m%d")
 
 
 def _signal_alias(rec: SignalRecord, alias_v1: "dict[str, str] | None") -> str:
