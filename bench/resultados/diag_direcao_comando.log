@@ -1,0 +1,93 @@
+# diag_direcao_comando — SP-Unificado Fase 8 (2026-07-08)
+
+comandos reais (Write/ReadWrite): 243
+
+## cruzamento (direção real × direção nossa) por endereço:
+  ReadWrite -> Input      : 156
+  ReadWrite -> InputOutput : 48
+  ReadWrite -> Output     : 22
+  ReadWrite -> AUSENTE    : 17
+
+acerto de direção (Output/InputOutput): 70/243
+
+## amostra de comandos reais que NÃO marcamos como comando:
+  addr=   13 real=ReadWrite nossa=Input      nome=GTD_LTGTA_89-2_SECC          texto='Secc. 89-2 (01Q1 Barra)  - Aberta'
+    mm=ABRIR@FECHAR___ABERTO@FECHADO___SwitchStatus_D_TC_SO
+  addr=   18 real=ReadWrite nossa=Input      nome=GTD_LTGTA_89-4_SECF          texto='Secc. 89-4 (01Q2 Linha)  - Aberta'
+    mm=ABRIR@FECHAR___ABERTO@FECHADO___SwitchStatus_D_TC_SO
+  addr=   23 real=ReadWrite nossa=Input      nome=GTD_LTGTA_89-6_SECB          texto='Secc. 89-6 (01Q3 Contorno)  - Aberta'
+    mm=ABRIR@FECHAR___ABERTO@FECHADO___SwitchStatus_D_TC_SO
+  addr=   51 real=ReadWrite nossa=Input      nome=GTD_LTGTA_LTGTA_AJG2         texto='Grupo de Ajustes 2 - Ativo'
+    mm=DESATIVAR@ATIVAR___DESATIVADO@ATIVADO___Custom_S_TC_SV
+  addr=   85 real=ReadWrite nossa=Input      nome=GTD_LTGTA_LTGTA_79           texto='Religamento Automático (79) - Excluido'
+    mm=INCLUIR@EXCLUIR___INCLUIDO@EXCLUIDO___ReclosingEnabled___admsINV_S_TC_SS
+  addr=   90 real=ReadWrite nossa=Input      nome=GTD_LTGTA_LTGTA_25           texto='Sincronismo (25) - Bloqueado'
+    mm=INCLUIR@EXCLUIR___INCLUIDO@EXCLUIDO___Enabled___admsINV_S_TC_SS
+  addr=  213 real=ReadWrite nossa=Input      nome=GTD_LTKGC_89-14_SECC         texto='Secc. 89-14 (02Q1 Barra)  - Aberta'
+    mm=ABRIR@FECHAR___ABERTO@FECHADO___SwitchStatus_D_TC_SO
+  addr=  218 real=ReadWrite nossa=Input      nome=GTD_LTKGC_89-16_SECF         texto='Secc. 89-16 (02Q2 Linha)  - Aberta'
+    mm=ABRIR@FECHAR___ABERTO@FECHADO___SwitchStatus_D_TC_SO
+  addr=  223 real=ReadWrite nossa=Input      nome=GTD_LTKGC_89-18_SECB         texto='Secc. 89-18 (02Q3 Contorno)  - Aberta'
+    mm=ABRIR@FECHAR___ABERTO@FECHADO___SwitchStatus_D_TC_SO
+  addr=  251 real=ReadWrite nossa=Input      nome=GTD_LTKGC_LTKGC_AJG2         texto='Grupo de Ajustes 2 - Ativo'
+    mm=DESATIVAR@ATIVAR___DESATIVADO@ATIVADO___Custom_S_TC_SV
+  addr=  285 real=ReadWrite nossa=Input      nome=GTD_LTKGC_LTKGC_79           texto='Religamento Automático (79) - Excluido'
+    mm=INCLUIR@EXCLUIR___INCLUIDO@EXCLUIDO___ReclosingEnabled___admsINV_S_TC_SS
+  addr=  290 real=ReadWrite nossa=Input      nome=GTD_LTKGC_LTKGC_25           texto='Sincronismo (25) - Bloqueado'
+    mm=INCLUIR@EXCLUIR___INCLUIDO@EXCLUIDO___Enabled___admsINV_S_TC_SS
+  addr=  405 real=ReadWrite nossa=Input      nome=GTD_TRF03_24-3_DJF1          texto='Disj. 24-3 (05Q0)  - Desligado'
+    mm=DESLIGAR@LIGAR___DESLIGADO@LIGADO___SwitchStatus_D_TC_SE
+  addr=  418 real=ReadWrite nossa=Input      nome=GTD_TRF03_89-20_SECF         texto='Secc. 89-20 (05Q1 Barra P)  - Aberta'
+    mm=ABRIR@FECHAR___ABERTO@FECHADO___SwitchStatus_D_TC_SO
+  addr=  423 real=ReadWrite nossa=Input      nome=GTD_TRF03_89-22_SECF         texto='Secc. 89-22 (05Q2 Barra T)  - Aberta'
+    mm=ABRIR@FECHAR___ABERTO@FECHADO___SwitchStatus_D_TC_SO
+  addr=  477 real=ReadWrite nossa=Input      nome=GTD_TRF03_TRF03_79           texto='Religamento Automático (79) - Excluido'
+    mm=INCLUIR@EXCLUIR___INCLUIDO@EXCLUIDO___ReclosingEnabled___admsINV_S_TC_SS
+  addr=  482 real=ReadWrite nossa=Input      nome=GTD_TRF03_TRF03_25           texto='Sincronismo (25) - Bloqueado'
+    mm=INCLUIR@EXCLUIR___INCLUIDO@EXCLUIDO___Enabled___admsINV_S_TC_SS
+  addr=  613 real=ReadWrite nossa=Input      nome=GTD_TR1AT_89-8_SECF          texto='Secc. 89-8 (06Q1 Barra)  - Aberta'
+    mm=ABRIR@FECHAR___ABERTO@FECHADO___SwitchStatus_D_TC_SO
+  addr=  618 real=ReadWrite nossa=Input      nome=GTD_TR1AT_89-10_SECB         texto='Secc. 89-10 (06Q2 TR)  - Aberta'
+    mm=ABRIR@FECHAR___ABERTO@FECHADO___SwitchStatus_D_TC_SO
+  addr=  623 real=ReadWrite nossa=Input      nome=GTD_TR1AT_89-12_SECC         texto='Indicação do TAP Atual '
+    mm=ABRIR@FECHAR___ABERTO@FECHADO___SwitchStatus_D_TC_SO
+  addr=  628 real=ReadWrite nossa=Input      nome=GTD_TR1BT_52-10_DJF1         texto='Disj. 52-10 (06Q4)  - Desligado'
+    mm=DESLIGAR@LIGAR___DESLIGADO@LIGADO___SwitchStatus_D_TC_SE
+  addr=  643 real=ReadWrite nossa=Input      nome=GTD_TR1BT_89-104_SECB        texto='Secc. 89-104 (06Q7 Contorno)  - Aberta'
+    mm=ABRIR@FECHAR___ABERTO@FECHADO___SwitchStatus_D_TC_SO
+  addr=  659 real=ReadWrite nossa=Input      nome=GTD_TR1_TR1_AJG2             texto='Grupo de Ajustes 2 - Ativo'
+    mm=DESATIVAR@ATIVAR___DESATIVADO@ATIVADO___Custom_S_TC_SV
+  addr=  682 real=ReadWrite nossa=Input      nome=GTD_TR1_TR1_VF               texto='Ventilação Forçada Transformador- Ligada'
+    mm=DESLIGAR@LIGAR___DESLIGADO@LIGADO___Custom_S_TC_SV
+  addr=  697 real=ReadWrite nossa=Input      nome=GTD_TR1_TR1_P_87             texto='Proteção - Diferencial (87) Bloqueado'
+    mm=INCLUIR@EXCLUIR___INCLUIDO@EXCLUIDO___Enabled___admsINV_S_TC_SS
+  addr=  787 real=ReadWrite nossa=AUSENTE    nome=GTD_TR1_TR1_A_87             texto='—'
+    mm=INCLUIR@EXCLUIR___INCLUIDO@EXCLUIDO___Enabled___admsINV_S_TC_SS
+  addr=  817 real=ReadWrite nossa=AUSENTE    nome=GTD_TR1BT_TR1BT_A_81         texto='—'
+    mm=INCLUIR@EXCLUIR___INCLUIDO@EXCLUIDO___Enabled___admsINV_S_TC_SS
+  addr=  819 real=ReadWrite nossa=AUSENTE    nome=GTD_TR1BT_TR1BT_A_81U1       texto='—'
+    mm=null@ATIVAR___DESATIVADO@ATIVADO___Custom_S_TC_SS
+  addr=  820 real=ReadWrite nossa=AUSENTE    nome=GTD_TR1BT_TR1BT_A_81U2       texto='—'
+    mm=null@ATIVAR___DESATIVADO@ATIVADO___Custom_S_TC_SS
+  addr=  821 real=ReadWrite nossa=AUSENTE    nome=GTD_TR1BT_TR1BT_A_81U3       texto='—'
+    mm=null@ATIVAR___DESATIVADO@ATIVADO___Custom_S_TC_SS
+  addr=  822 real=ReadWrite nossa=AUSENTE    nome=GTD_TR1BT_TR1BT_A_81U4       texto='—'
+    mm=null@ATIVAR___DESATIVADO@ATIVADO___Custom_S_TC_SS
+  addr=  823 real=ReadWrite nossa=AUSENTE    nome=GTD_TR1BT_TR1BT_A_81U5       texto='—'
+    mm=null@ATIVAR___DESATIVADO@ATIVADO___Custom_S_TC_SS
+  addr=  860 real=ReadWrite nossa=Input      nome=GTD_TR1_TR1_MEST             texto='TR1 em Modo Mestre'
+    mm=null@INDIVIDUAL___DESATIVADO@ATIVADO___Custom_S_TC_SS
+  addr=  863 real=ReadWrite nossa=Input      nome=GTD_TR1_TR1_R90              texto='TR1 Relé 90 - Regulação em automático'
+    mm=INCLUIR@EXCLUIR___INCLUIDO@EXCLUIDO___Enabled___INV___admsINV_S_TC_SS
+  addr=  865 real=ReadWrite nossa=Input      nome=GTD_TR1_TR1_INDI             texto='TR1 em Modo Individual (Lógica PAS)'
+    mm=null@MESTRE___DESATIVADO@ATIVADO___Custom_S_TC_SS
+  addr=  913 real=ReadWrite nossa=Input      nome=GTD_TR2AT_89-38_SECF         texto='Secc. 89-38 (07Q1 Barra)  - Aberta'
+    mm=ABRIR@FECHAR___ABERTO@FECHADO___SwitchStatus_D_TC_SO
+  addr=  918 real=ReadWrite nossa=Input      nome=GTD_TR2AT_89-40_SECB         texto='Secc. 89-40 (07Q2 TR)  - Aberta'
+    mm=ABRIR@FECHAR___ABERTO@FECHADO___SwitchStatus_D_TC_SO
+  addr=  923 real=ReadWrite nossa=Input      nome=GTD_TR2AT_89-42_SECC         texto='Secc. 89-42 (07Q3 Contorno)  - Aberta'
+    mm=ABRIR@FECHAR___ABERTO@FECHADO___SwitchStatus_D_TC_SO
+  addr=  928 real=ReadWrite nossa=Input      nome=GTD_TR2BT_52-20_DJF1         texto='Disj. 52-20 (07Q4)  - Desligado'
+    mm=DESLIGAR@LIGAR___DESLIGADO@LIGADO___SwitchStatus_D_TC_SE
+  addr=  943 real=ReadWrite nossa=Input      nome=GTD_TR2BT_89-204_SECB        texto='Secc. 89-204 (07Q7 Contorno)  - Aberta'
+    mm=ABRIR@FECHAR___ABERTO@FECHADO___SwitchStatus_D_TC_SO

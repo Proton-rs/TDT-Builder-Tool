@@ -1,0 +1,19 @@
+Task 1 — spM (robustez deteccao endereco) — 2026-07-08
+
+ACHADO: a deteccao de coluna de endereco (analise_colunas._col_indice) JA e robusta
+ao ruido que a spM pedia (tensao 138/69/23, corrente 600). O score usa ponderacao por
+monotonicidade (score = frac * (0.5 + 0.5*mono)):
+  - tensao 138/69/23 repetida  -> mono ~0.33 -> score ~0.667
+  - corrente constante 600      -> mono 0     -> score 0.50
+  - endereco DNP3 denso crescente -> mono ~1.0 -> score ~1.0  (vence)
+Alem disso ja existem: veto de contador-de-posicao (_e_contador_de_posicao) e bonus de
+rotulo de endereco. diag_enderecos (log em resultados/diag_enderecos.log) NAO mostra
+nenhuma coluna nao-endereco vencendo na base real.
+
+DECISAO: nenhum guard de cardinalidade adicionado. Um guard de cardinalidade ingenuo
+REGREDIRIA o caso B ja coberto (test_indice_prefere_header_de_endereco_sobre_terminal_fisico_do_ied):
+enderecos que reiniciam por bloco (1,2,3,1,2,3) tem cardinalidade/mono baixos de proposito
+e seriam penalizados junto com o ruido. mono ja discrimina o ruido de medida sem esse risco.
+
+Teste de nao-regressao adicionado: test_coluna_ruido_nao_e_classificada_como_endereco.
+Producao inalterada -> gate == baseline (66.9%).

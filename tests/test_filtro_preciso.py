@@ -194,6 +194,49 @@ def test_f_r6_candidato_generico_sem_marca_mantem():
     assert f_r6(_cand("V"), ctx) is True
 
 
+# --- F_sf6: alarme (baixa pressão) × bloqueio (item 3) -------------------------
+
+
+def test_sf6_baixa_pressao_remove_candidato_de_bloqueio():
+    rec = _rec("SF6 baixa pressao", "SF6 BAIXA PRESSAO")
+    out = filtrar(rec, [_cand("SF6"), _cand("SF6B")], Config())
+    assert [c.sigla for c in out] == ["SF6"]  # SF6B (bloqueio) removido
+
+
+def test_sf6_bloqueio_remove_candidato_de_alarme():
+    rec = _rec("SF6 bloqueio abertura", "SF6 BLOQUEIO ABERTURA")
+    out = filtrar(rec, [_cand("SF6"), _cand("SF6B")], Config())
+    siglas = [c.sigla for c in out]
+    assert "SF6B" in siglas and "SF6" not in siglas
+
+
+# --- F_79lo: lockout religador × bloqueio 86 (item 6) -------------------------
+
+
+def test_religamento_lockout_prefere_79lo_sobre_86():
+    rec = _rec("religamento lockout", "RELIGAMENTO LOCKOUT")
+    out = filtrar(rec, [_cand("86"), _cand("79LO")], Config())
+    siglas = [c.sigla for c in out]
+    assert "79LO" in siglas and "86" not in siglas
+
+
+# --- F_50bf: start de falha × bloqueio BF* (item 1) ---------------------------
+
+
+def test_falha_disjuntor_sem_bloqueio_mantem_50bf_nao_bf():
+    rec = _rec("falha de disjuntor", "FALHA DISJUNTOR")
+    out = filtrar(rec, [_cand("50BF"), _cand("BFAT")], Config())
+    siglas = [c.sigla for c in out]
+    assert "50BF" in siglas and "BFAT" not in siglas
+
+
+def test_falha_disjuntor_com_bloqueio_nao_remove_bf():
+    # "bloqueio" presente → é o bloqueio consequente, não só o start: mantém BF*
+    rec = _rec("falha de disjuntor bloqueio", "FALHA DISJUNTOR BLOQUEIO")
+    out = filtrar(rec, [_cand("50BF"), _cand("BFAT")], Config())
+    assert "BFAT" in [c.sigla for c in out]
+
+
 # --- filtrar(): integração, cascata em ordem -----------------------------------
 
 

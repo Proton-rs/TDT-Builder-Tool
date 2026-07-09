@@ -181,6 +181,7 @@ ABREVIACOES_EXTRA: dict[str, str] = {
     "REL": "RELE",
     "CDC": "COMUTADOR DERIVACAO CARGA",
     "COMUT": "COMUTADOR",
+    "MOLA": "BOBINA",  # item 2: campo usa "mola"≈"bobina"; LP só tem BB*="BOBINA"
     "TENS": "TENSAO",
     "CORR": "CORRENTE",
     "POT": "POTENCIA",

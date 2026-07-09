@@ -192,6 +192,64 @@ def f_posicao(cand: Candidato, rec: SignalRecord) -> bool:
     return eh_texto_de_posicao(rec.descricoes.normalizada)
 
 
+# --- F_sf6: SF6 alarme (baixa pressão) × bloqueio ---------------------------
+#
+# conhecimento_sinais item 3: com "SF6" no texto, "baixa pressão" isolada é
+# alarme (família SF6); "bloqueio"/"bloqueado" é a família de bloqueio
+# (SF6B/SFAB/SFFC). Remove o candidato da família errada. Lê ``ctx.tokens``
+# (não existe ``ctx.texto``); "baixa pressao" é o par de tokens BAIXA+PRESSAO.
+_SF6_BLOQUEIO = frozenset({"SF6B", "SFAB", "SFFC"})
+
+
+def f_sf6(cand: Candidato, ctx: Contexto) -> bool:
+    """Remove candidato da família SF6 errada (alarme vs bloqueio)."""
+    toks = ctx.tokens
+    if "SF6" not in toks:
+        return True
+    tem_bloqueio = "BLOQUEIO" in toks or "BLOQUEADO" in toks
+    tem_alarme = ("BAIXA" in toks and "PRESSAO" in toks) and not tem_bloqueio
+    sig = cand.sigla.upper()
+    if sig in _SF6_BLOQUEIO and tem_alarme:
+        return False  # texto é alarme isolado, candidato é bloqueio → remove
+    if sig == "SF6" and tem_bloqueio:
+        return False  # texto é bloqueio, candidato é alarme → remove
+    return True
+
+
+# --- F_79lo: lockout do religador × bloqueio geral 86 (item 6) --------------
+#
+# conhecimento_sinais item 6: "religamento" no texto → o conceito é o lockout
+# do religador (79LO), não o bloqueio geral (86/86BF/86AT/86BT). Remove os
+# 86* quando há "religamento".
+_BLOQUEIO_GERAL = frozenset({"86", "86BF", "86AT", "86BT"})
+
+
+def f_79lo(cand: Candidato, ctx: Contexto) -> bool:
+    """Remove bloqueio geral 86* quando o texto fala de religamento."""
+    if "RELIGAMENTO" not in ctx.tokens:
+        return True
+    return cand.sigla.upper() not in _BLOQUEIO_GERAL
+
+
+# --- F_50bf: start de falha de disjuntor × bloqueio consequente BF* (item 1) -
+#
+# conhecimento_sinais item 1: "falha de disjuntor"/"breaker failure" isolado
+# (sem "bloqueio") é o START (50BF), não o bloqueio consequente (BF*/62BF).
+# Remove os BF*/62BF quando o texto é só o start.
+_BF_BLOQUEIO = frozenset({"BFAT", "BFBT", "BFP1", "BFP2", "BFP3", "62BF"})
+
+
+def f_50bf(cand: Candidato, ctx: Contexto) -> bool:
+    """Remove bloqueio BF*/62BF quando o texto é só o start de falha (sem bloqueio)."""
+    toks = ctx.tokens
+    falha = ("FALHA" in toks and "DISJUNTOR" in toks) or (
+        "BREAKER" in toks and "FAILURE" in toks
+    )
+    if falha and "BLOQUEIO" not in toks:
+        return cand.sigla.upper() not in _BF_BLOQUEIO
+    return True
+
+
 # Registro de filtros — adicione funções aqui para crescer.
 _FILTROS = (
     f_r1,
@@ -201,6 +259,9 @@ _FILTROS = (
     f_r5,
     f_equip,
     f_r6,
+    f_sf6,
+    f_79lo,
+    f_50bf,
 )
 
 

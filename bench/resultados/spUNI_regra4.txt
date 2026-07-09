@@ -1,0 +1,8 @@
+Task 7 SECG terra (item 4) — 2026-07-08
+ACHADO: SECG e um STATUS. No TDT real (exportTDT_UTR_GTD_1) SECG/DSEC/SECB/SECC/SECF
+estao todos em DNP3_DiscreteSignals (SECG addr "28;29" = doublebit status), nao em
+comandos. Logo no pipeline SECG e Input; um Input sozinho ja cai em `if not outputs`
+-> saida (test_status_sozinho_passa). O ramo comando_sem_discreto so morde Output orfao,
+que SECG nunca e. Nenhum guard necessario -- ja tratado.
+Teste-trava adicionado: test_secg_terra_status_sem_comando_nao_vira_gap.
+Producao inalterada -> gate == 67.4
