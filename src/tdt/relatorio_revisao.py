@@ -11,6 +11,7 @@ import openpyxl
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
 from tdt.contracts import ItemRevisao, SignalRecord
+from tdt.nomes_saida import nome_saida
 from tdt.semantica_estados import detectar_estado
 
 _CODIGO_RE = re.compile(r"^[A-Z0-9_/-]+$")
@@ -99,6 +100,7 @@ def gerar_relatorio_revisao(
     revisao: tuple[ItemRevisao, ...],
     destino: str | Path,
     diagnostico: "dict[str, dict] | None" = None,
+    subestacao: str | None = None,
 ) -> Path:
     """``diagnostico``: dict opcional ``id -> {chaves}`` com contexto de decisão
     que não mora no ``SignalRecord`` (regras aplicadas, gap/gap exigido, etapa
@@ -130,7 +132,7 @@ def gerar_relatorio_revisao(
         ws.append(linha)
     _formatar_cabecalho(ws)
     _ajustar_largura_colunas(ws)
-    saida = Path(destino) / "Auditoria_Revisao.xlsx"
+    saida = nome_saida("Auditoria", subestacao, destino)
     wb.save(str(saida))
     return saida
 

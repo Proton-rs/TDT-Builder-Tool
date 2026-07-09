@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 )
 
 from tdt import pipeline
+from tdt.nomes_saida import nome_saida
 from tdt.relatorio_revisao import gerar_relatorio_revisao
 from tdt.ui.estado import AppState
 
@@ -114,8 +115,7 @@ class TelaGeracao(QWidget):
         pend_lbl.style().polish(pend_lbl)
         self._montar_avisos(pendentes)
         out = self._estado.paths.get("output", "")
-        self.lbl_saida.setText(
-            f"TDT.xlsx · Auditoria_Revisao.xlsx → {out or '—'}")
+        self.lbl_saida.setText(f"TDT + Auditoria → {out or '—'}")
         self.lbl_resultado.setVisible(False)
         self.btn_abrir_pasta.setVisible(False)
 
@@ -183,7 +183,7 @@ class TelaGeracao(QWidget):
         if pendentes and not self._confirmar(
                 "Pendências", f"Gerar com {pendentes} sinais ainda pendentes?"):
             return
-        out_path = Path(output) / "TDT.xlsx"
+        out_path = nome_saida("TDT", self._estado.subestacao, output)
         if out_path.exists() and not self._confirmar(
                 "Sobrescrever", f"{out_path} já existe. Sobrescrever?"):
             return
@@ -198,11 +198,11 @@ class TelaGeracao(QWidget):
                        if self._estado.resultado else ())
             diag = (self._estado.resultado.diagnostico
                     if self._estado.resultado else {})
-            gerar_relatorio_revisao(
-                self._estado.registros, revisao, output, diagnostico=diag)
+            aud_path = gerar_relatorio_revisao(
+                self._estado.registros, revisao, output, diagnostico=diag,
+                subestacao=self._estado.subestacao)
             self.lbl_resultado.setText(
-                f"TDT gerado:\n{out_path}\n"
-                f"{Path(output) / 'Auditoria_Revisao.xlsx'}")
+                f"TDT gerado:\n{out_path}\n{aud_path}")
             self.lbl_resultado.setVisible(True)
             self.btn_abrir_pasta.setVisible(True)
         except Exception as e:  # ponytail: erro vira dialogo; sem retry
