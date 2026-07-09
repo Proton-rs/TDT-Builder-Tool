@@ -34,3 +34,10 @@ Classe (a) Faltando na Lista Padrão v6 (10 siglas, 36 ocorrências):
 Checagem de variantes de grafia (b):
   Nenhuma variante de grafia próxima (token_sort_ratio ≥ 85) foi detectada. A script percorreu
   todas as 12 siglas pendentes contra a lista padrão v6 (529 siglas) — lookup bug não encontrado.
+
+--- HIPOTESE DE NOMENCLATURA (usuario, 09jul) ---
+Parte das 10 siglas "faltando" pode ser ERRO DE NOMENCLATURA NA ORIGEM, nao sigla nova:
+  FGOO (23 ocorr., "FALHA GOOSE") provavelmente deveria ser GOOS/GOOSE.
+A checagem (b) nao pegou porque comparou contra a lista padrao (que tambem nao tem GOOSE),
+nao contra o vocabulario canonico esperado. Decisao por sigla (normalizar entrada FGOO->GOOSE
+vs adicionar FGOO a lista) depende de confirmacao do proprietario. Ver ledger docs/AGENTS.md.
