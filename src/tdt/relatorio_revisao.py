@@ -1,4 +1,5 @@
-"""Gera Auditoria_Revisao.xlsx: uma linha por sinal com status, sigla
+"""Gera Auditoria_<SUB>_<YYYYMMDD>.xlsx (nome via ``nomes_saida.nome_saida``,
+sufixo ``_vN`` em colisão): uma linha por sinal com status, sigla
 decidida, scores por método e os candidatos descartados — para cruzar com
 a TDT na auditoria pós-classificação."""
 
