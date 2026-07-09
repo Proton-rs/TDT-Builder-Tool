@@ -126,6 +126,17 @@ class SignalRecord:
 
 
 @dataclass(frozen=True)
+class Pareamento:
+    """Par D(status)+C(comando) resolvido, para a UI de revisão exibir a
+    relação sem reconstruí-la por string. Lógica de pareamento vive em
+    dc_pairer; isto é só o contrato tipado do resultado."""
+
+    status_rec: "SignalRecord"
+    comando_rec: "SignalRecord | None"
+    tipo: str  # "completo" | "status_orfao" | "comando_orfao"
+
+
+@dataclass(frozen=True)
 class ListaHomogenea:
     subestacao: str | None
     protocolo: str  # "DNP3"
