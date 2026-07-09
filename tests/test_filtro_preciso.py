@@ -220,6 +220,23 @@ def test_religamento_lockout_prefere_79lo_sobre_86():
     assert "79LO" in siglas and "86" not in siglas
 
 
+# --- F_50bf: start de falha × bloqueio BF* (item 1) ---------------------------
+
+
+def test_falha_disjuntor_sem_bloqueio_mantem_50bf_nao_bf():
+    rec = _rec("falha de disjuntor", "FALHA DISJUNTOR")
+    out = filtrar(rec, [_cand("50BF"), _cand("BFAT")], Config())
+    siglas = [c.sigla for c in out]
+    assert "50BF" in siglas and "BFAT" not in siglas
+
+
+def test_falha_disjuntor_com_bloqueio_nao_remove_bf():
+    # "bloqueio" presente → é o bloqueio consequente, não só o start: mantém BF*
+    rec = _rec("falha de disjuntor bloqueio", "FALHA DISJUNTOR BLOQUEIO")
+    out = filtrar(rec, [_cand("50BF"), _cand("BFAT")], Config())
+    assert "BFAT" in [c.sigla for c in out]
+
+
 # --- filtrar(): integração, cascata em ordem -----------------------------------
 
 

@@ -231,6 +231,25 @@ def f_79lo(cand: Candidato, ctx: Contexto) -> bool:
     return cand.sigla.upper() not in _BLOQUEIO_GERAL
 
 
+# --- F_50bf: start de falha de disjuntor × bloqueio consequente BF* (item 1) -
+#
+# conhecimento_sinais item 1: "falha de disjuntor"/"breaker failure" isolado
+# (sem "bloqueio") é o START (50BF), não o bloqueio consequente (BF*/62BF).
+# Remove os BF*/62BF quando o texto é só o start.
+_BF_BLOQUEIO = frozenset({"BFAT", "BFBT", "BFP1", "BFP2", "BFP3", "62BF"})
+
+
+def f_50bf(cand: Candidato, ctx: Contexto) -> bool:
+    """Remove bloqueio BF*/62BF quando o texto é só o start de falha (sem bloqueio)."""
+    toks = ctx.tokens
+    falha = ("FALHA" in toks and "DISJUNTOR" in toks) or (
+        "BREAKER" in toks and "FAILURE" in toks
+    )
+    if falha and "BLOQUEIO" not in toks:
+        return cand.sigla.upper() not in _BF_BLOQUEIO
+    return True
+
+
 # Registro de filtros — adicione funções aqui para crescer.
 _FILTROS = (
     f_r1,
@@ -242,6 +261,7 @@ _FILTROS = (
     f_r6,
     f_sf6,
     f_79lo,
+    f_50bf,
 )
 
 
