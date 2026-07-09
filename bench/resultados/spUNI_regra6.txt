@@ -1,0 +1,4 @@
+Task 4 f_79lo (item 6) — 2026-07-08
+baseline anterior pct=67.4
+pct=67.4 (sem mudanca; regra nao dispara no set GTD, sem regressao)
+mantido: desambiguacao valida, sem dano

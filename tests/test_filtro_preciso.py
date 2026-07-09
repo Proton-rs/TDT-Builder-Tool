@@ -210,6 +210,16 @@ def test_sf6_bloqueio_remove_candidato_de_alarme():
     assert "SF6B" in siglas and "SF6" not in siglas
 
 
+# --- F_79lo: lockout religador × bloqueio 86 (item 6) -------------------------
+
+
+def test_religamento_lockout_prefere_79lo_sobre_86():
+    rec = _rec("religamento lockout", "RELIGAMENTO LOCKOUT")
+    out = filtrar(rec, [_cand("86"), _cand("79LO")], Config())
+    siglas = [c.sigla for c in out]
+    assert "79LO" in siglas and "86" not in siglas
+
+
 # --- filtrar(): integração, cascata em ordem -----------------------------------
 
 

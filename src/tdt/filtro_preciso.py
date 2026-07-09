@@ -216,6 +216,21 @@ def f_sf6(cand: Candidato, ctx: Contexto) -> bool:
     return True
 
 
+# --- F_79lo: lockout do religador × bloqueio geral 86 (item 6) --------------
+#
+# conhecimento_sinais item 6: "religamento" no texto → o conceito é o lockout
+# do religador (79LO), não o bloqueio geral (86/86BF/86AT/86BT). Remove os
+# 86* quando há "religamento".
+_BLOQUEIO_GERAL = frozenset({"86", "86BF", "86AT", "86BT"})
+
+
+def f_79lo(cand: Candidato, ctx: Contexto) -> bool:
+    """Remove bloqueio geral 86* quando o texto fala de religamento."""
+    if "RELIGAMENTO" not in ctx.tokens:
+        return True
+    return cand.sigla.upper() not in _BLOQUEIO_GERAL
+
+
 # Registro de filtros — adicione funções aqui para crescer.
 _FILTROS = (
     f_r1,
@@ -226,6 +241,7 @@ _FILTROS = (
     f_equip,
     f_r6,
     f_sf6,
+    f_79lo,
 )
 
 
