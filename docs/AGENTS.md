@@ -41,7 +41,7 @@ Decisão registrada ≠ estado do código. Antes de afirmar "foi decidido X, ent
 
 | Decisão | Spec/commit | Status no código |
 |---|---|---|
-| B2: motor de regras como filtro bounded (clamp+renormaliza, deltas em [0,1], recalibrar thresholds) | spB 26jun §B2 | **pendente** — spec "aguardando revisão", nunca virou plano; deltas seguem unbounded. Parcialmente superado: E4 (calibrador platt pós-mescla) + clamp de exibição no boundary do pipeline (08jul) cobrem o critério "confiança exibida ≤ 1.0" |
+| B2: motor de regras como filtro bounded (clamp+renormaliza, deltas em [0,1], recalibrar thresholds) | spB 26jun §B2 | **pendente por decisão** — SP-Unificado 08jul: usuário optou por pular a Fase 5 (alto risco de regressão; sintoma >100% já resolvido pelo clamp de exibição). Deltas seguem unbounded. Parcialmente superado: E4 (calibrador platt pós-mescla) + clamp de exibição no boundary (08jul) |
 | Remoção de candidatos contraditórios | filtro_preciso (F1, SP-G Task 6) | implementado — módulo próprio; motor_regras nunca remove |
 | TFIDF → BM25 | SP-H 03jul | implementado (com fix de dedup de sigla duplicada) |
 | type_severidade no corpus vetorial | SP-METADADOS Task 5 | **revertido** (36c2b68) — regrediu o gate |
@@ -51,9 +51,13 @@ Decisão registrada ≠ estado do código. Antes de afirmar "foi decidido X, ent
 | Gate `equipamento_ambiguo` (C2) | spC2 26jun | **superado** — Spec C: dc_pairer arbitra (sem-comando→TDT, comando→pareamento_ambiguo); teste garante que o motivo NÃO aparece |
 | e5/reranker (troca de embedding) | spE 26jun / spD3 01jul | **rejeitado** (3ª rodada, empate com MiniLM e modelo 1GB maior); capacidade dorme em `dados/encoder`+`indice_vetorial` (param `prefixo`); `config.e5_prefixos` é o knob dormente (bench/diag usa) — não remover |
 | `matchers/cross_encoder.rerank` | SP-G | **dormente** — implementado, só teste usa; wiring pendente de decisão (mesma família do e5) |
-| 7 regras SE/ENTÃO propostas (79LO/86, SF6 estágios, 50BF, mola→BB*, CDC/OLTC, SECG, sincronismo) | conhecimento_sinais.md §"Itens acionáveis" | **pendente** — cada uma é mudança de scoring: exige ciclo próprio com gate (proibido lote) |
+| 7 regras SE/ENTÃO propostas (79LO/86, SF6 estágios, 50BF, mola→BB*, CDC/OLTC, SECG, sincronismo) | conhecimento_sinais.md §"Itens acionáveis" / SP-Unificado 08jul | **fechadas** — item 3 (f_sf6, gate 66.9→67.4), item 6 (f_79lo), item 1 (f_50bf), item 2 (mola→bobina) implementados individualmente com gate ≥ baseline; item 4 (SECG) já coberto (status sozinho não é gap), item 5 (CDC/OLTC) já coberto (normalizador), item 7 (sincronismo) já coberto (especificidade_qualificador) |
 | `f_posicao` fora do registro `_FILTROS` | SP-G Task 6 | **deliberado** — aplicado separado (filtro_preciso:226); registrar duplicaria aplicação |
-| spC3 (mineração full base), spC4 (contexto sheet), spD (gate FP/corpus adversarial), spE2 (mescla probabilística/pesos aprendidos) | specs 26jun | **pendente** — nunca viraram plano; specs grandes, cada uma exige ciclo spec→plano→gate |
+| spC3 (mineração full base), spE2 (mescla probabilística/pesos aprendidos) | specs 26jun | **pendente** — nunca viraram plano; specs grandes, cada uma exige ciclo spec→plano→gate |
+| spC4 (contexto de topo da sheet no corpus) | spC4 26jun / SP-Unificado 08jul | **testada, revertida** — implementada e medida; contexto constante por sheet dilui embedding: gate 67.4→50.1. Arquivada (bench/resultados/spUNI_spC4.txt) |
+| spD (corpus adversarial anti-FP) | spD 26jun / SP-Unificado 08jul | **implementado** — tests/corpus_adversarial.py trava invariantes de normalização (religamento≠desligamento, SGF/ATUADO, fase A, mola→bobina); 50F1/51N1 truncadas ficam xfail (gate real: casos_travados.csv) |
+| Dataclass `Pareamento` (contrato tipado D+C p/ UI) | SP-REVISAO-UI / SP-Unificado 08jul | **implementado** — contracts.py (frozen); lógica de pareamento segue em dc_pairer (não alterado) |
+| Classificação de direção/comando | D1-D4 / SP-Unificado Fase 8 | **bloqueada por dado** — diagnóstico 08jul: entrada não sinaliza direção textualmente (156/243 comandos reais têm texto de puro status). Direção é propriedade de família de Message Mapping, não regra de texto. Decisão de design pendente do usuário (docs/superpowers/specs/2026-07-08-direcao-comando-diagnostico.md) |
 
 ## Verification
 Specs revisadas pelo usuário antes de implementar.
