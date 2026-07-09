@@ -40,6 +40,11 @@ def test_nao_quebra_sigla():
     assert normalizar("67N", CFG) == "67N"
 
 
+def test_mola_normaliza_para_bobina():
+    # item 2: "mola" (carregada/descarregada) é sinônimo de campo p/ família BB*
+    assert "BOBINA" in canonizar("mola carregada", CFG).split()
+
+
 def test_remove_stopwords():
     assert normalizar("DJ DE BC", CFG) == "DISJUNTOR BANCO CAPACITORES"
 

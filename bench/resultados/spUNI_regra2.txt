@@ -1,0 +1,4 @@
+Task 6 mola->bobina (item 2) — 2026-07-08
+baseline anterior pct=67.4
+pct=67.4 (neutro; iguais=650 igual). Sem regressao (nenhuma colisao na LP no set GTD).
+mantido: sinonimo de dominio valido de conhecimento_sinais.
