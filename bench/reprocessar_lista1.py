@@ -31,7 +31,14 @@ _OUT_DIR = Path("output/LISTA 1 - GTD")
 
 
 def main() -> None:
-    cfg = Config()
+    import os
+    _pesos = os.environ.get("TDT_PESOS")  # "0.70,0.25,0.05"
+    if _pesos:
+        _t, _v, _f = (float(x) for x in _pesos.split(","))
+        cfg = Config(peso_tfidf=_t, peso_vetorial=_v, peso_fuzzy=_f,
+                     peso_tfidf_analog=_t, peso_vetorial_analog=_v, peso_fuzzy_analog=_f)
+    else:
+        cfg = Config()
     aud = Auditoria()
     resultado, wb_out = executar(
         _INPUT, _TEMPLATE, _LISTA_PADRAO,
