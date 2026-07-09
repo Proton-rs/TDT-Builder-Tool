@@ -1,10 +1,12 @@
+from pathlib import Path
+
 from tdt.defaults import DEFAULT_LISTA
 from tdt.dados.lista_padrao import ListaPadraoADMS
 from tdt.dados.lista_padrao import descricoes_por_sigla
 
 
-def test_default_lista_aponta_para_v2_com_djf1_enriquecido():
-    assert "v2" in DEFAULT_LISTA
+def test_default_lista_aponta_para_v7_com_djf1_enriquecido():
+    assert Path(DEFAULT_LISTA).name == "Pontos Padrao ADMS_v7.xlsx"
     lp = ListaPadraoADMS.carregar(DEFAULT_LISTA)
     sp = lp.por_sigla("DJF1")
     assert sp is not None
@@ -108,8 +110,8 @@ def test_descricoes_por_sigla_arquivo_ausente_devolve_vazio(tmp_path):
     assert descricoes_por_sigla(str(tmp_path / "nao_existe.xlsx")) == {}
 
 
-def test_carrega_aba_discrete_analog():
-    lp = ListaPadraoADMS.carregar("docs/Pontos Padrao ADMS_v7.xlsx")
+def test_carrega_aba_discrete_analog(docs):
+    lp = ListaPadraoADMS.carregar(docs / "Pontos Padrao ADMS_v7.xlsx")
     tap = lp.por_sigla("TAP")
     assert tap is not None
     assert tap.categoria == "DiscreteAnalog"
@@ -121,7 +123,7 @@ def test_carrega_aba_discrete_analog():
     assert "TAP" in lp.siglas
 
 
-def test_lista_v2_sem_aba_nova_carrega_vazio():
-    lp = ListaPadraoADMS.carregar("docs/Pontos Padrao ADMS_v2.xlsx")
+def test_lista_v2_sem_aba_nova_carrega_vazio(lista_padrao_path):
+    lp = ListaPadraoADMS.carregar(lista_padrao_path)
     assert lp.discrete_analog == ()
     assert lp.por_sigla("TAP") is None
