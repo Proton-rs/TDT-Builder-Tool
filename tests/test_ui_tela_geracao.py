@@ -60,7 +60,7 @@ def test_gerar_com_pendentes_pergunta_e_respeita_nao(qtbot, monkeypatch):
         lambda *a, **k: QMessageBox.StandardButton.No)
     chamado = {}
     monkeypatch.setattr(
-        "tdt.ui.tela_geracao.pipeline.gerar_tdt",
+        "tdt.pipeline.gerar_tdt",
         lambda *a, **k: chamado.setdefault("gerou", True))
     tela._gerar()
     assert "gerou" not in chamado

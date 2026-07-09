@@ -8,7 +8,7 @@ def test_importar_ui_app_nao_puxa_transformers():
     code = (
         "import sys; import tdt.ui.app; "
         "pesados = sorted(m for m in sys.modules "
-        "if m == 'transformers' or m == 'sentence_transformers'); "
+        "if m in ('transformers', 'sentence_transformers', 'sklearn')); "
         "assert not pesados, pesados"
     )
     r = subprocess.run(

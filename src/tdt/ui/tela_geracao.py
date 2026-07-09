@@ -14,7 +14,6 @@ from PySide6.QtWidgets import (
     QPushButton, QVBoxLayout, QWidget,
 )
 
-from tdt import pipeline
 from tdt.nomes_saida import nome_saida
 from tdt.relatorio_revisao import gerar_relatorio_revisao
 from tdt.ui.estado import AppState
@@ -188,6 +187,7 @@ class TelaGeracao(QWidget):
                 "Sobrescrever", f"{out_path} já existe. Sobrescrever?"):
             return
         try:
+            from tdt import pipeline
             wb = pipeline.gerar_tdt(
                 self._estado.registros, template, lp,
                 subestacao=self._estado.subestacao,
