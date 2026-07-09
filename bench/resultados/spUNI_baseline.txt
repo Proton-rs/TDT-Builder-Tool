@@ -1,0 +1,7 @@
+baseline spUNI — 2026-07-08
+pct=66.9
+comum=964 iguais=645
+commit=c04ff70
+gate: PYTHONPATH=src python -m bench.regressao
+nota: bench/gate_tdt_real.py é biblioteca (sem __main__); o gate real é bench/regressao.py,
+que gera o nosso TDT via pipeline e compara por endereço. 6 casos_travados falham (conhecidos).
