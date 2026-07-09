@@ -457,6 +457,24 @@ def test_measurement_type_none_sem_tipo_medicao():
     assert _measurement_type(sp) is None
 
 
+def test_kmdf_comprimento_vira_unitless():
+    sp = SinalPadrao(sigla="KMDF", descricao="d", signal_type="MeasuredValue",
+                     direction=None, mm=None, categoria="Analog", tipo_medicao="Comprimento")
+    assert _measurement_type(sp) == "Unitless"
+
+
+def test_todos_tipos_da_lista_padrao_v6_tem_traducao():
+    def sp(t):
+        return SinalPadrao(sigla="X", descricao="d", signal_type="MeasuredValue",
+                           direction=None, mm=None, categoria="Analog", tipo_medicao=t)
+    # os 12 tipos reais da aba AnalogSignals da lista padrao v6
+    tipos = ["Corrente", "Tensão", "Potência Ativa", "Potência Reativa", "Temperatura",
+             "Comprimento", "Frequência", "Fator de Potência", "Potência Aparente",
+             "Ângulo de Tensão", "Umidade", "Discreto"]
+    sem = [t for t in tipos if _measurement_type(sp(t)) is None]
+    assert sem == [], f"tipos sem traducao: {sem}"
+
+
 def test_fase_saida_default_abc_para_none():
     assert _fase_saida(None) == "ABC"
 

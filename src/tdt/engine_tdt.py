@@ -201,6 +201,15 @@ _MEASUREMENT_TYPE_PT_EN: dict[str, str] = {
     "POTÊNCIA ATIVA": "ActivePower",
     "POTÊNCIA REATIVA": "ReactivePower",
     "TEMPERATURA": "Temperature",
+    # auditoria 09jul (lista padrao v6) — todos confirmados no dominio
+    # MeasurementType do DMSMatchingTemplateInfo:
+    "COMPRIMENTO": "Unitless",      # KMDF: distancia de defeito e unitless no ADMS (decisao do usuario; o dominio tem "Length" mas usamos Unitless)
+    "FREQUÊNCIA": "Frequency",
+    "FATOR DE POTÊNCIA": "CosPhi",  # fator de potencia = cos(phi); o dominio usa CosPhi, NAO PowerFactor
+    "POTÊNCIA APARENTE": "ApparentPower",
+    "ÂNGULO DE TENSÃO": "VoltageAngle",
+    "UMIDADE": "Humidity",
+    "DISCRETO": "Discrete",
 }
 
 
@@ -208,7 +217,7 @@ def _measurement_type(sp) -> str | None:
     if sp is None or not sp.tipo_medicao:
         return None
     return _MEASUREMENT_TYPE_PT_EN.get(sp.tipo_medicao.strip().upper())
-# ponytail: tabela cobre os 5 tipos confirmados no export real; ampliar quando aparecer outro tipo de medicao real nos dados.
+# ponytail: tabela cobre os 12 tipos da lista padrao v6; expandir se novos tipos forem adicionados ao dominio MeasurementType do DMSMatchingTemplateInfo.
 
 
 _SIGNAL_TYPE_ANALOG_PT_EN: dict[str, str] = {
