@@ -132,16 +132,18 @@ REAL = "docs/TDT/exportTDT_UTR_GTD_1_20260626.xlsx"
 NOSSO = "output/LISTA 1 - GTD/TDT.xlsx"
 candidatos = []
 for _, _, _, pesos in resultados:
-    if pesos not in candidatos:
+    if pesos not in candidatos and pesos != ATUAL:
         candidatos.append(pesos)
     if len(candidatos) >= 3:
         break
-if ATUAL not in candidatos:
-    candidatos.append(ATUAL)
 
 log("\n=== ESTAGIO 2: gate real (reprocessa pipeline por combo) ===")
 gate = {}
-for pesos in candidatos:
+# ATUAL roda SEMPRE por ultimo (incondicional): o output/LISTA 1 - GTD/TDT.xlsx
+# que sobra no disco deve refletir os pesos vigentes, senao envenena qualquer
+# gate/regressao posterior que assuma o TDT commitado como sendo o atual.
+ordem = [*candidatos, ATUAL]
+for pesos in ordem:
     env = dict(os.environ, TDT_PESOS=",".join(str(p) for p in pesos), PYTHONPATH="src")
     subprocess.run([sys.executable, "bench/reprocessar_lista1.py"], env=env, check=True,
                    stdout=subprocess.DEVNULL)
@@ -150,7 +152,7 @@ for pesos in candidatos:
     tag = " (ATUAL)" if pesos == ATUAL else ""
     log(f"gate pesos={pesos}{tag}: comum={r.comum} iguais={r.iguais} pct={r.pct:.2f}")
 
-melhor = max(candidatos, key=lambda p: gate[p][1])  # mais 'iguais' no gate
+melhor = max(ordem, key=lambda p: gate[p][1])  # mais 'iguais' no gate
 log(f"\nMELHOR no gate: {melhor} -> iguais={gate[melhor][1]} pct={gate[melhor][2]:.2f}")
 if gate[melhor][1] > gate[ATUAL][1]:
     log(f"RECOMENDA atualizar Config: {ATUAL} -> {melhor} (gate {gate[ATUAL][2]:.2f}% -> {gate[melhor][2]:.2f}%)")

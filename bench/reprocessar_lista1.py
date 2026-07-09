@@ -11,6 +11,7 @@ Nao reusa nenhum TDT.xlsx pre-existente copiado no worktree.
 """
 from __future__ import annotations
 
+import os
 import warnings
 import logging
 
@@ -31,7 +32,6 @@ _OUT_DIR = Path("output/LISTA 1 - GTD")
 
 
 def main() -> None:
-    import os
     _pesos = os.environ.get("TDT_PESOS")  # "0.70,0.25,0.05"
     if _pesos:
         _t, _v, _f = (float(x) for x in _pesos.split(","))
