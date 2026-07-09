@@ -11,23 +11,30 @@ from dataclasses import dataclass
 
 import openpyxl
 
-# Input Coordinates 0-based por sheet. DiscreteSignals=31 correto; AnalogSignals
-# mantido em 31 para preservar o comportamento vigente do gate (o índice real de
-# AnalogSignals é 47 — analógicos hoje são silenciosamente excluídos; corrigir
-# muda o baseline do gate e é FOLLOW-UP fora do escopo desta SP). DiscreteAnalog=34
-# (índice real, medido no template e no export real).
+# Input Coordinates 0-based por sheet — índices REAIS, medidos no template e no
+# export real: DiscreteSignals=31, AnalogSignals=47, DiscreteAnalog=34. A chave
+# de comparação é (sheet, endereço), não só o endereço: discreto/analógico/
+# discreteanalog compartilham o keyspace de endereços DNP3 (todos começam em 0),
+# então chavear só por int faria um discreto colidir com um analógico de mesmo
+# índice. Chavear por (sheet, addr) compara cada categoria isoladamente e inclui
+# os analógicos (antes silenciosamente excluídos por lerem a coluna 31 errada).
 _SHEETS_INCOORDS = {
     "DNP3_DiscreteSignals": 31,
-    "DNP3_AnalogSignals": 31,
+    "DNP3_AnalogSignals": 47,
     "DNP3_DiscreteAnalog": 34,
 }
 _COL_NOME = 0
 _PRIMEIRA_LINHA_DADOS = 5  # 1-based; rows 1-4 são cabeçalho
 
 
-def carregar_siglas_por_endereco(caminho: str) -> dict[int, tuple[str, str]]:
+def carregar_siglas_por_endereco(caminho: str) -> dict[tuple[str, int], tuple[str, str]]:
+    """Devolve ``{(sheet, endereço): (nome, sigla)}``.
+
+    Chave composta por (sheet, endereço) — ver nota em ``_SHEETS_INCOORDS``:
+    endereços DNP3 não são únicos entre categorias, só dentro de cada sheet.
+    """
     wb = openpyxl.load_workbook(caminho, read_only=True, data_only=True)
-    out: dict[int, tuple[str, str]] = {}
+    out: dict[tuple[str, int], tuple[str, str]] = {}
     for sn, col_ic in _SHEETS_INCOORDS.items():
         if sn not in wb.sheetnames:
             continue
@@ -38,7 +45,7 @@ def carregar_siglas_por_endereco(caminho: str) -> dict[int, tuple[str, str]]:
             if not nome or not isinstance(addr, int):
                 continue
             sigla = str(nome).split("_")[-1]
-            out[addr] = (str(nome), sigla)
+            out[(sn, addr)] = (str(nome), sigla)
     wb.close()
     return out
 
@@ -57,12 +64,13 @@ def comparar(nosso: str, real: str) -> Resultado:
     comuns = sorted(set(d_nosso) & set(d_real))
     iguais = 0
     divergencias: list[tuple[int, str, str, str]] = []
-    for a in comuns:
-        nome_real, sig_real = d_real[a]
-        _, sig_nosso = d_nosso[a]
+    for chave in comuns:
+        _sheet, addr = chave
+        nome_real, sig_real = d_real[chave]
+        _, sig_nosso = d_nosso[chave]
         if sig_real.upper() == sig_nosso.upper():
             iguais += 1
         else:
-            divergencias.append((a, sig_real, sig_nosso, nome_real))
+            divergencias.append((addr, sig_real, sig_nosso, nome_real))
     pct = 100.0 * iguais / len(comuns) if comuns else 0.0
     return Resultado(len(comuns), iguais, pct, divergencias)

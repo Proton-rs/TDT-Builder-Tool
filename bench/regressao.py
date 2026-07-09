@@ -41,10 +41,16 @@ def carregar_casos(caminho: str) -> list[Caso]:
 
 
 def checar_casos(nosso_tdt: str, casos: list[Caso]) -> list[tuple[Caso, str, bool]]:
-    por_addr = carregar_siglas_por_endereco(nosso_tdt)
+    por_chave = carregar_siglas_por_endereco(nosso_tdt)
+    # casos_travados.csv são todos discretos; a chave do gate agora é
+    # (sheet, endereço) — busca no DiscreteSignals.
+    por_addr_disc = {
+        addr: v for (sheet, addr), v in por_chave.items()
+        if sheet == "DNP3_DiscreteSignals"
+    }
     out: list[tuple[Caso, str, bool]] = []
     for c in casos:
-        obtida = por_addr.get(c.endereco, (None, ""))[1]
+        obtida = por_addr_disc.get(c.endereco, (None, ""))[1]
         out.append((c, obtida, obtida.upper() == c.sigla_esperada.upper()))
     return out
 
