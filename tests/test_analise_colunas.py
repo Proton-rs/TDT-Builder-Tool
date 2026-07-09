@@ -317,6 +317,24 @@ def test_indice_prefere_header_de_endereco_sobre_terminal_fisico_do_ied():
     assert mapa.colunas["indice"] == 3  # DNP3.0, não "Entrada Binaria" (col 0)
 
 
+def test_coluna_ruido_nao_e_classificada_como_endereco():
+    # spM: coluna de MEDIDA (tensão 138/69/23, corrente 600) tem valores
+    # inteiros mas é ruído -- poucos valores distintos, muito repetidos, sem
+    # ser um espaço de endereço. A coluna real de endereço DNP3 é densa,
+    # crescente e de alta cardinalidade. O ruído não pode vencer o índice.
+    header = ("Descricao", "Tensao", "Corrente", "Addr")
+    tensao = [138, 69, 23, 138, 69, 23, 138, 69, 23, 138, 69, 23]
+    corrente = [600, 600, 600, 600, 600, 600, 600, 600, 600, 600, 600, 600]
+    addr = list(range(10, 22))  # endereço DNP3 denso, crescente, todo distinto
+    descs = ["FALHA COMUNICACAO", "DISJUNTOR ABERTO", "CORRENTE FASE"] * 4
+    rows = [header] + [
+        (descs[i % 3], str(tensao[i]), str(corrente[i]), str(addr[i]))
+        for i in range(len(addr))
+    ]
+    mapa = analisar(rows, encoder=_fake_encoder, ref_emb=_REF)
+    assert mapa.colunas["indice"] == 3  # Addr, não Tensao (1) nem Corrente (2)
+
+
 def test_indice_por_padrao_sequencial_sheet_wide_permanece_correto():
     # Caso "SNMP" (FWB): quando a coluna de endereço REAL também é sequencial
     # sheet-wide (sem reiniciar, sem gap -- ex. 2100,2101,2102...) e o rótulo
