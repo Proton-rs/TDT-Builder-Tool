@@ -235,6 +235,18 @@ def test_cmd_orfao_nao_afeta_grupo_cmd_com_input_em_outro_modulo():
     assert revisao == ()
 
 
+def test_secg_terra_status_sem_comando_nao_vira_gap():
+    # item 4: SECG (seccionadora de terra) é um STATUS — no TDT real está em
+    # DNP3_DiscreteSignals (MM _terra, doublebit "28;29"), sem par de comando,
+    # porque o intertravamento de segurança impede operação remota. Status
+    # sozinho já cai no ramo `if not outputs` -> saída; nunca é marcado como
+    # comando_sem_discreto (esse ramo só morde Output órfão). Trava o não-gap.
+    status = _rec("s:1", "SECG", "Input", [28, 29])
+    saida, revisao = parear([status], Config())
+    assert revisao == ()
+    assert saida[0].sigla_sinal == "SECG"
+
+
 def test_fundir_propaga_comando_duplo():
     from dataclasses import replace
     status = _rec("s:1", "81U1", "Input", [1539])
