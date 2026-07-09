@@ -29,6 +29,11 @@ class SinalPadrao:
     tipo_medicao: str | None = None  # "Corrente", "Tensão", ... (lista padrão, PT)
     unidade_exibicao: str | None = None  # "A", "kV", "Grau", "-", ...
     type_severidade: str | None = None  # "PROT", "FALHAS FCOM/VCA/VCC", ... (só discretos)
+    normal_value: int | None = None
+    remote_point_type: str | None = None
+    output_data_type: str | None = None
+    device_mapping_ref: str | None = None
+    aplicabilidade: str | None = None
 
 
 def _val(v) -> str | None:
@@ -90,10 +95,41 @@ def _ler_sheet(ws, categoria: str, mapa: dict[str, str]) -> list[SinalPadrao]:
     return sinais
 
 
+def _ler_sheet_discrete_analog(ws) -> list[SinalPadrao]:
+    linhas = ws.iter_rows(values_only=True)
+    header = next(linhas)
+    idx = {n: _coluna(header, n) for n in (
+        "SINAL", "DESCRIÇÃO NOVA", "SIGNAL TYPE", "FASES", "DIRECTION",
+        "NORMAL VALUE", "REMOTE POINT TYPE", "OUTPUT DATA TYPE",
+        "DEVICE MAPPING REF", "APLICABILIDADE")}
+    out: list[SinalPadrao] = []
+    for row in linhas:
+        def get(nome):
+            i = idx[nome]
+            return _val(row[i]) if i is not None and i < len(row) else None
+
+        sigla = get("SINAL")
+        if sigla is None:
+            continue
+        nv = get("NORMAL VALUE")
+        out.append(SinalPadrao(
+            sigla=sigla, descricao=get("DESCRIÇÃO NOVA") or "",
+            signal_type=get("SIGNAL TYPE") or "", direction=get("DIRECTION"),
+            mm=None, categoria="DiscreteAnalog",
+            normal_value=int(nv) if nv is not None else None,
+            remote_point_type=get("REMOTE POINT TYPE"),
+            output_data_type=get("OUTPUT DATA TYPE"),
+            device_mapping_ref=get("DEVICE MAPPING REF"),
+            aplicabilidade=get("APLICABILIDADE"),
+        ))
+    return out
+
+
 @dataclass(frozen=True)
 class ListaPadraoADMS:
     discretos: tuple[SinalPadrao, ...]
     analogicos: tuple[SinalPadrao, ...]
+    discrete_analog: tuple[SinalPadrao, ...] = ()
 
     @classmethod
     def carregar(cls, path: str | Path) -> "ListaPadraoADMS":
@@ -131,22 +167,28 @@ class ListaPadraoADMS:
                     "type_severidade": None,
                 },
             )
+            da: list[SinalPadrao] = []
+            if "DiscreteAnalog" in wb.sheetnames:
+                da = _ler_sheet_discrete_analog(wb["DiscreteAnalog"])
         finally:
             wb.close()
-        return cls(tuple(disc), tuple(ana))
+        return cls(tuple(disc), tuple(ana), tuple(da))
+
+    def _todos(self) -> tuple[SinalPadrao, ...]:
+        return (*self.discretos, *self.analogicos, *self.discrete_analog)
 
     def por_sigla(self, sigla: str) -> SinalPadrao | None:
         alvo = sigla.strip().upper()
-        for s in (*self.discretos, *self.analogicos):
+        for s in self._todos():
             if s.sigla.upper() == alvo:
                 return s
         return None
 
     @property
     def siglas(self) -> frozenset[str]:
-        """Todas as siglas (discretos + analógicos), normalizadas maiúsculas —
-        usado pela detecção de coluna de sigla em listas não-homogêneas."""
-        return frozenset(s.sigla.upper() for s in (*self.discretos, *self.analogicos))
+        """Todas as siglas (discretos + analógicos + discrete_analog), normalizadas
+        maiúsculas — usado pela detecção de coluna de sigla em listas não-homogêneas."""
+        return frozenset(s.sigla.upper() for s in self._todos())
 
 
 @lru_cache(maxsize=4)
@@ -162,6 +204,6 @@ def descricoes_por_sigla(path: str) -> dict[str, str]:
         return {}
     return {
         s.sigla.upper(): s.descricao
-        for s in (*lp.discretos, *lp.analogicos)
+        for s in lp._todos()
         if s.descricao
     }

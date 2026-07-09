@@ -106,3 +106,22 @@ def test_descricoes_por_sigla_le_v1(docs):
 
 def test_descricoes_por_sigla_arquivo_ausente_devolve_vazio(tmp_path):
     assert descricoes_por_sigla(str(tmp_path / "nao_existe.xlsx")) == {}
+
+
+def test_carrega_aba_discrete_analog():
+    lp = ListaPadraoADMS.carregar("docs/Pontos Padrao ADMS_v7.xlsx")
+    tap = lp.por_sigla("TAP")
+    assert tap is not None
+    assert tap.categoria == "DiscreteAnalog"
+    assert tap.signal_type == "TapPosition"
+    assert tap.normal_value == 9
+    assert tap.remote_point_type == "Analog"
+    assert tap.device_mapping_ref == "COMTAP"
+    assert tap.aplicabilidade == "TRANSFORMADOR"
+    assert "TAP" in lp.siglas
+
+
+def test_lista_v2_sem_aba_nova_carrega_vazio():
+    lp = ListaPadraoADMS.carregar("docs/Pontos Padrao ADMS_v2.xlsx")
+    assert lp.discrete_analog == ()
+    assert lp.por_sigla("TAP") is None
