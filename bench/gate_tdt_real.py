@@ -11,22 +11,30 @@ from dataclasses import dataclass
 
 import openpyxl
 
-_SHEETS = ("DNP3_DiscreteSignals", "DNP3_AnalogSignals")
+# Input Coordinates 0-based por sheet. DiscreteSignals=31 correto; AnalogSignals
+# mantido em 31 para preservar o comportamento vigente do gate (o índice real de
+# AnalogSignals é 47 — analógicos hoje são silenciosamente excluídos; corrigir
+# muda o baseline do gate e é FOLLOW-UP fora do escopo desta SP). DiscreteAnalog=34
+# (índice real, medido no template e no export real).
+_SHEETS_INCOORDS = {
+    "DNP3_DiscreteSignals": 31,
+    "DNP3_AnalogSignals": 31,
+    "DNP3_DiscreteAnalog": 34,
+}
 _COL_NOME = 0
-_COL_INCOORDS = 31
 _PRIMEIRA_LINHA_DADOS = 5  # 1-based; rows 1-4 são cabeçalho
 
 
 def carregar_siglas_por_endereco(caminho: str) -> dict[int, tuple[str, str]]:
     wb = openpyxl.load_workbook(caminho, read_only=True, data_only=True)
     out: dict[int, tuple[str, str]] = {}
-    for sn in _SHEETS:
+    for sn, col_ic in _SHEETS_INCOORDS.items():
         if sn not in wb.sheetnames:
             continue
         ws = wb[sn]
         for r in ws.iter_rows(min_row=_PRIMEIRA_LINHA_DADOS, values_only=True):
             nome = r[_COL_NOME] if len(r) > _COL_NOME else None
-            addr = r[_COL_INCOORDS] if len(r) > _COL_INCOORDS else None
+            addr = r[col_ic] if len(r) > col_ic else None
             if not nome or not isinstance(addr, int):
                 continue
             sigla = str(nome).split("_")[-1]

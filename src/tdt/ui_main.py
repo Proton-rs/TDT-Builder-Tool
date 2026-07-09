@@ -9,7 +9,6 @@ from pathlib import Path
 from PySide6.QtWidgets import QApplication
 
 from tdt.config import Config
-from tdt.dados.encoder import criar_encoder
 from tdt.dados.lista_padrao import ListaPadraoADMS
 from tdt.defaults import DEFAULT_LISTA as _DEFAULT_LISTA
 from tdt.defaults import DEFAULT_OUTPUT as _DEFAULT_OUTPUT
@@ -30,7 +29,8 @@ def main():
     paths.setdefault("output", _DEFAULT_OUTPUT)
     estado = AppState(config=cfg, paths=paths)
 
-    # Carrega a lista padrão e o encoder em background
+    # Carrega a lista padrão (síncrono; barato — o encoder pesado só carrega
+    # quando roda análise)
     lp_path = paths.get("lista_padrao", "")
     if lp_path and Path(lp_path).exists():
         try:

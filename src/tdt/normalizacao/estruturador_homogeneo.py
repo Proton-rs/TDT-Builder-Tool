@@ -55,6 +55,36 @@ def _col(header: tuple, nome: str) -> int | None:
     return None
 
 
+_ROTULO_BLOCO = "EQUIPAMENTO"
+_COLUNA_NUMERO_BLOCO = 1  # "NÚMERO OPERATIVO / MNEMNICO"
+
+
+def extrair_numeros_operativos(rows: list[tuple], header_idx: int) -> dict[str, str]:
+    """Bloco acima do cabeçalho: EQUIPAMENTO | NÚMERO OPERATIVO / MNEMNICO.
+
+    Devolve rótulo normalizado -> número ("MODULO" -> "23", "DJ" -> "52-23").
+    Bloco ausente/ilegível -> {} (chamador não inventa número).
+    """
+    nums: dict[str, str] = {}
+    dentro = False
+    for row in rows[:header_idx]:
+        rotulo = _normaliza_celula(row[0] if row else None)
+        segundo = _normaliza_celula(
+            row[_COLUNA_NUMERO_BLOCO] if len(row) > _COLUNA_NUMERO_BLOCO else None)
+        if rotulo == _ROTULO_BLOCO and "OPERATIVO" in segundo:
+            dentro = True
+            continue
+        if not dentro:
+            continue
+        if not rotulo:
+            dentro = False
+            continue
+        valor = row[_COLUNA_NUMERO_BLOCO] if len(row) > _COLUNA_NUMERO_BLOCO else None
+        if valor is not None and str(valor).strip():
+            nums[rotulo] = str(valor).strip()
+    return nums
+
+
 def estruturar_homogeneo(
     rows: list[tuple], header_idx: int, sheet_name: str,
     lp: ListaPadraoADMS, config: Config,
@@ -71,6 +101,9 @@ def estruturar_homogeneo(
         "index": _col(header, "INDEX DNP3"),
     }
 
+    numeros = extrair_numeros_operativos(rows, header_idx)
+    numero_modulo = numeros.get("MODULO")
+
     decididos: list[SignalRecord] = []
     pendentes: list[SignalRecord] = []
 
@@ -85,6 +118,11 @@ def estruturar_homogeneo(
         cod_tipo = _normaliza_celula(row[idx["tipo"]]) if idx["tipo"] is not None else ""
         categoria, direcao = CODIGOS_TIPO.get(cod_tipo, ("Discrete", "Input"))
         modulo_nome = str(row[idx["modulo"]]) if idx["modulo"] is not None and row[idx["modulo"]] else None
+        origem_modulo = "coluna:MODULO"
+        if (modulo_nome and numero_modulo
+                and not any(ch.isdigit() for ch in modulo_nome)):
+            modulo_nome = f"{modulo_nome.strip()}{numero_modulo}"
+            origem_modulo = "coluna:MODULO+header:NUMERO_OPERATIVO"
         equip_cod = _normaliza_celula(row[idx["equipamento"]]) if idx["equipamento"] is not None else ""
         sigla = str(row[idx["sigla"]] or "").strip() if idx["sigla"] is not None else ""
         indices = _parse_indices(row[idx["index"]]) if idx["index"] is not None and idx["index"] < len(row) else ()
@@ -96,7 +134,7 @@ def estruturar_homogeneo(
 
         rec = SignalRecord(
             id=f"{sheet_name}:{i}",
-            modulo=Modulo(modulo_nome, "coluna:MODULO"),
+            modulo=Modulo(modulo_nome, origem_modulo),
             tipo_sinal=TipoSinal(categoria, datatype=datatype, direcao=direcao,
                                  categoria_confiavel=True),
             enderecamento=Enderecamento("DNP3", indices),

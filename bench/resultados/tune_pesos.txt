@@ -1,0 +1,25 @@
+# tune_pesos 2026-07-09 15:31
+pesos atuais: (0.7, 0.25, 0.05) | roteacao pct>=0.45 gap>=0.08 | ROTULOS=1539
+
+  #  prec@dec   acc@1   decid  pesos
+  1    81.26%  72.19%  82.52%  (0.4, 0.25, 0.35)
+  2    81.12%  69.79%  82.59%  (0.4, 0.35, 0.25)
+  3    80.94%  72.12%  82.85%  (0.35, 0.3, 0.35)
+  4    80.94%  71.60%  81.48%  (0.4, 0.2, 0.4)
+  5    80.88%  69.66%  82.59%  (0.35, 0.35, 0.3)
+  6    80.86%  70.05%  83.17%  (0.4, 0.3, 0.3)
+  7    80.82%  69.85%  82.65%  (0.4, 0.4, 0.2)
+  8    80.82%  69.72%  82.65%  (0.45, 0.4, 0.15)
+  9    80.82%  68.81%  82.65%  (0.3, 0.4, 0.3)
+ 10    80.74%  71.60%  82.00%  (0.35, 0.25, 0.4)
+
+atual (0.7, 0.25, 0.05): prec@dec=77.38% acc@1=69.92% decid=87.91%
+
+=== ESTAGIO 2: gate real (reprocessa pipeline por combo) ===
+gate pesos=(0.4, 0.25, 0.35): comum=926 iguais=626 pct=67.60
+gate pesos=(0.4, 0.35, 0.25): comum=924 iguais=626 pct=67.75
+gate pesos=(0.35, 0.3, 0.35): comum=918 iguais=613 pct=66.78
+gate pesos=(0.7, 0.25, 0.05) (ATUAL): comum=972 iguais=649 pct=66.77
+
+MELHOR no gate: (0.7, 0.25, 0.05) -> iguais=649 pct=66.77
+MANTER atual: nenhum combo supera (0.7, 0.25, 0.05) no gate (atual iguais=649).

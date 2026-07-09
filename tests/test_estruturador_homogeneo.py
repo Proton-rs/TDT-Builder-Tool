@@ -91,3 +91,51 @@ def test_indice_duplo_nativo_vira_doublebit():
     lp = _ListaPadraoFake({"DJF1": _sinal_padrao("DJF1")})
     decididos, _ = estruturar_homogeneo(rows, 0, "DJ1", lp, Config())
     assert decididos[0].tipo_sinal.datatype == "DoubleBit"
+
+
+def _rows_com_bloco(modulo_col="AL", numero="23"):
+    return [
+        ("MÓDULO - ALIMENTADOR",),
+        ("EQUIPAMENTO", "NÚMERO OPERATIVO / MNEMNICO"),
+        ("MÓDULO  ", numero),
+        ("DJ", "52-23"),
+        ("SECC", "29-62"),
+        _HEADER,
+        ("SIM", "IMA", modulo_col, "DJ", "C", "DISJUNTOR NF", "DJF1",
+         "IMA_AL23_52-23_DJF1", "-", "-", "-", "-", "-", "1"),
+    ]
+
+
+def test_extrai_numeros_operativos_do_bloco():
+    from tdt.normalizacao.estruturador_homogeneo import extrair_numeros_operativos
+    nums = extrair_numeros_operativos(_rows_com_bloco(), header_idx=5)
+    assert nums["MODULO"] == "23"
+    assert nums["DJ"] == "52-23"
+
+
+def test_modulo_compoe_tipo_da_coluna_com_numero_do_bloco():
+    rows = _rows_com_bloco(modulo_col="AL", numero="23")
+    lp = _ListaPadraoFake({"DJF1": _sinal_padrao("DJF1")})
+    decididos, pendentes = estruturar_homogeneo(rows, 5, "AL23", lp, Config())
+    rec = (decididos + pendentes)[0]
+    assert rec.modulo.nome == "AL23"
+    assert "header:NUMERO_OPERATIVO" in rec.modulo.origem_contexto
+
+
+def test_modulo_coluna_ja_numerada_mantem_comportamento():
+    rows = _rows_com_bloco(modulo_col="LT 1", numero="99")
+    lp = _ListaPadraoFake({"DJF1": _sinal_padrao("DJF1")})
+    decididos, pendentes = estruturar_homogeneo(rows, 5, "LT1", lp, Config())
+    rec = (decididos + pendentes)[0]
+    assert rec.modulo.nome == "LT 1"
+    assert rec.modulo.origem_contexto == "coluna:MODULO"
+
+
+def test_bloco_ausente_mantem_comportamento():
+    rows = [_HEADER, ("SIM", "IMA", "AL", "DJ", "C", "DISJUNTOR NF", "DJF1",
+                      "IMA_AL_DJF1", "-", "-", "-", "-", "-", "1")]
+    lp = _ListaPadraoFake({"DJF1": _sinal_padrao("DJF1")})
+    decididos, pendentes = estruturar_homogeneo(rows, 0, "AL", lp, Config())
+    rec = (decididos + pendentes)[0]
+    assert rec.modulo.nome == "AL"
+    assert rec.modulo.origem_contexto == "coluna:MODULO"

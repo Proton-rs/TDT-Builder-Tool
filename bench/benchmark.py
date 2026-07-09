@@ -84,10 +84,10 @@ METODOS = {
     "tfidf": lambda r: tfidf.pontuar(r, 5),
     "vetorial(MiniLM)": lambda r: vetorial(r, 5),
     "fuzzy": lambda r: fuzzy.pontuar(r, 5),
-    "tfidf+vet+fuzzy": lambda r: combinar([tfidf.pontuar(r, 5), vetorial(r, 5), fuzzy.pontuar(r, 5)], [0.34, 0.33, 0.33]),
-    "combo(calib-minmax)": lambda r: combinar_calib([tfidf.pontuar(r, 5), vetorial(r, 5), fuzzy.pontuar(r, 5)], [0.34, 0.33, 0.33], "minmax"),
-    "combo(calib-temp)": lambda r: combinar_calib([tfidf.pontuar(r, 5), vetorial(r, 5), fuzzy.pontuar(r, 5)], [0.34, 0.33, 0.33], "temperature"),
-    "combo+regras": lambda r: motor_regras.aplicar(r, combinar([tfidf.pontuar(r, 5), vetorial(r, 5), fuzzy.pontuar(r, 5)], [0.34, 0.33, 0.33]), cfg),
+    "tfidf+vet+fuzzy": lambda r: combinar([tfidf.pontuar(r, 5), vetorial(r, 5), fuzzy.pontuar(r, 5)], [cfg.peso_tfidf, cfg.peso_vetorial, cfg.peso_fuzzy]),
+    "combo(calib-minmax)": lambda r: combinar_calib([tfidf.pontuar(r, 5), vetorial(r, 5), fuzzy.pontuar(r, 5)], [cfg.peso_tfidf, cfg.peso_vetorial, cfg.peso_fuzzy], "minmax"),
+    "combo(calib-temp)": lambda r: combinar_calib([tfidf.pontuar(r, 5), vetorial(r, 5), fuzzy.pontuar(r, 5)], [cfg.peso_tfidf, cfg.peso_vetorial, cfg.peso_fuzzy], "temperature"),
+    "combo+regras": lambda r: motor_regras.aplicar(r, combinar([tfidf.pontuar(r, 5), vetorial(r, 5), fuzzy.pontuar(r, 5)], [cfg.peso_tfidf, cfg.peso_vetorial, cfg.peso_fuzzy]), cfg),
 }
 from tdt import motor_regras
 

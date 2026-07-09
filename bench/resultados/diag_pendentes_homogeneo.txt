@@ -1,0 +1,36 @@
+C:\Users\vinic\AppData\Roaming\Python\Python314\site-packages\openpyxl\worksheet\_reader.py:329: UserWarning: Data Validation extension is not supported and will be removed
+  warn(msg)
+input: docs/input_homogeneo_IMA.xlsx
+lista padrao: docs/Pontos Padrao ADMS_v6.xlsx
+siglas distintas pendentes: 12 | ocorrencias: 40
+
+sigla        n  classe                       exemplo
+FGOO        23  (a) faltando na lista v6     FALHA GOOSE
+86RM         3  (a) faltando na lista v6     REARME 86
+TAP          2  (a) resolvido Fase 3         TAP
+COMTAP       2  (a) resolvido Fase 3         COMANDO TAP
+TCT          2  (a) faltando na lista v6     FUNCAO  TCT
+81A          2  (a) faltando na lista v6     81 - FUNCAO RECOMPOSICAO ERAC
+TCTI         1  (a) faltando na lista v6     TCT INICIADA
+TCTS         1  (a) faltando na lista v6     TCT COM SUCESSO
+TCTF         1  (a) faltando na lista v6     TCT COM FALHA
+81P          1  (a) faltando na lista v6     81 - RECOMPOSICAO ERAC PREPARADO
+81F          1  (a) faltando na lista v6     81 - FALHA RECOMPOSICAO ERAC
+81C          1  (a) faltando na lista v6     81 - RECOMPOSICAO ERAC FECHAMENTO
+
+---
+RESUMO DA CLASSIFICAÇÃO
+Total de siglas distintas pendentes: 12 (40 ocorrências no input IMA)
+
+Classe (a) Resolvido Fase 3 (2 siglas, 4 ocorrências):
+  TAP, COMTAP — serão incorporados no DiscreteAnalog sheet + command wiring da Fase 3 deste SP.
+
+Classe (a) Faltando na Lista Padrão v6 (10 siglas, 36 ocorrências):
+  FGOO (23), 86RM (3), TCT (2), 81A (2), TCTI (1), TCTS (1), TCTF (1), 81P (1), 81F (1), 81C (1)
+  Estes são sinais genuinamente ausentes da lista padrão v6, não variantes de grafia.
+  Para adicioná-los, é necessário coletar dados de domínio (descrição, tipo de sinal, MM, severidade)
+  junto ao proprietário. Este é um follow-up para o usuário — NÃO se fabricam entradas.
+
+Checagem de variantes de grafia (b):
+  Nenhuma variante de grafia próxima (token_sort_ratio ≥ 85) foi detectada. A script percorreu
+  todas as 12 siglas pendentes contra a lista padrão v6 (529 siglas) — lookup bug não encontrado.
