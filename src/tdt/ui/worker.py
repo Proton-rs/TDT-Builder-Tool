@@ -14,7 +14,6 @@ from PySide6.QtCore import QThread, Signal
 
 from tdt.auditoria import Auditoria
 from tdt.config import Config
-from tdt.dados.encoder import criar_encoder
 from tdt import pipeline
 
 
@@ -25,7 +24,7 @@ class PipelineWorker(QThread):
     progresso = Signal(int, int)  # (atual, total)
 
     def __init__(self, paths, config: Config, modo, subestacao,
-                 encoder_factory=criar_encoder, executar_fn=pipeline.executar,
+                 encoder_factory=None, executar_fn=pipeline.executar,
                  app_state=None, sheets=None, aliases=None):
         super().__init__()
         self._paths = paths
@@ -62,7 +61,11 @@ class PipelineWorker(QThread):
             if self._app_state is not None and self._app_state.encoder is not None:
                 encoder = self._app_state.encoder
             else:
-                encoder = self._encoder_factory(self._config.modelo_embedding)
+                factory = self._encoder_factory
+                if factory is None:
+                    from tdt.dados.encoder import criar_encoder
+                    factory = criar_encoder
+                encoder = factory(self._config.modelo_embedding)
                 if self._app_state is not None:
                     self._app_state.encoder = encoder
             resultado, _wb = self._executar_fn(
