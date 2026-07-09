@@ -1,0 +1,11 @@
+Task 9 spC4 (contexto de topo da sheet) — 2026-07-08 — ARQUIVADA
+
+Implementado e medido: capturar titulo/observacoes acima do header e anexar (limitado a
+6 tokens) a descricao normalizada de cada sinal.
+
+Gate REGREDIU forte: pct 67.4 -> 50.1 (comum 964 -> 928). O contexto de topo (constante
+por sheet, repetido em todos os sinais) dilui o embedding e ainda perturbou o casamento
+por endereco. Confirma a previsao do plano ("spec de menor evidencia; provavel regressao").
+
+DECISAO: revertido por completo (src/tdt/normalizacao/estruturador.py e o teste). spC4
+arquivada como "testada, nao move o gate". Producao inalterada -> gate == 67.4%.
