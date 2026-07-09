@@ -1,0 +1,4 @@
+Task 3 f_sf6 (item 3) — 2026-07-08
+baseline anterior pct=66.9
+pct=67.4 (iguais 645->650, +5)
+sem regressao; f_sf6 adicionado a _FILTROS

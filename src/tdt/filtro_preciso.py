@@ -192,6 +192,30 @@ def f_posicao(cand: Candidato, rec: SignalRecord) -> bool:
     return eh_texto_de_posicao(rec.descricoes.normalizada)
 
 
+# --- F_sf6: SF6 alarme (baixa pressão) × bloqueio ---------------------------
+#
+# conhecimento_sinais item 3: com "SF6" no texto, "baixa pressão" isolada é
+# alarme (família SF6); "bloqueio"/"bloqueado" é a família de bloqueio
+# (SF6B/SFAB/SFFC). Remove o candidato da família errada. Lê ``ctx.tokens``
+# (não existe ``ctx.texto``); "baixa pressao" é o par de tokens BAIXA+PRESSAO.
+_SF6_BLOQUEIO = frozenset({"SF6B", "SFAB", "SFFC"})
+
+
+def f_sf6(cand: Candidato, ctx: Contexto) -> bool:
+    """Remove candidato da família SF6 errada (alarme vs bloqueio)."""
+    toks = ctx.tokens
+    if "SF6" not in toks:
+        return True
+    tem_bloqueio = "BLOQUEIO" in toks or "BLOQUEADO" in toks
+    tem_alarme = ("BAIXA" in toks and "PRESSAO" in toks) and not tem_bloqueio
+    sig = cand.sigla.upper()
+    if sig in _SF6_BLOQUEIO and tem_alarme:
+        return False  # texto é alarme isolado, candidato é bloqueio → remove
+    if sig == "SF6" and tem_bloqueio:
+        return False  # texto é bloqueio, candidato é alarme → remove
+    return True
+
+
 # Registro de filtros — adicione funções aqui para crescer.
 _FILTROS = (
     f_r1,
@@ -201,6 +225,7 @@ _FILTROS = (
     f_r5,
     f_equip,
     f_r6,
+    f_sf6,
 )
 
 

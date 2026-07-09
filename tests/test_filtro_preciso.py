@@ -194,6 +194,22 @@ def test_f_r6_candidato_generico_sem_marca_mantem():
     assert f_r6(_cand("V"), ctx) is True
 
 
+# --- F_sf6: alarme (baixa pressão) × bloqueio (item 3) -------------------------
+
+
+def test_sf6_baixa_pressao_remove_candidato_de_bloqueio():
+    rec = _rec("SF6 baixa pressao", "SF6 BAIXA PRESSAO")
+    out = filtrar(rec, [_cand("SF6"), _cand("SF6B")], Config())
+    assert [c.sigla for c in out] == ["SF6"]  # SF6B (bloqueio) removido
+
+
+def test_sf6_bloqueio_remove_candidato_de_alarme():
+    rec = _rec("SF6 bloqueio abertura", "SF6 BLOQUEIO ABERTURA")
+    out = filtrar(rec, [_cand("SF6"), _cand("SF6B")], Config())
+    siglas = [c.sigla for c in out]
+    assert "SF6B" in siglas and "SF6" not in siglas
+
+
 # --- filtrar(): integração, cascata em ordem -----------------------------------
 
 
