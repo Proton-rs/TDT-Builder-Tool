@@ -28,6 +28,8 @@ SHEET_DISCRETOS = "DNP3_DiscreteSignals"
 COLUNAS_ESPERADAS = 43
 SHEET_ANALOGICOS = "DNP3_AnalogSignals"
 COLUNAS_ESPERADAS_ANALOG = 61
+SHEET_DISCRETE_ANALOG = "DNP3_DiscreteAnalog"
+COLUNAS_ESPERADAS_DISCRETE_ANALOG = 48
 PRIMEIRA_LINHA_DADOS = 5
 
 _DIRECAO = {"Input": "Read", "Output": "Write", "InputOutput": "ReadWrite"}
@@ -271,6 +273,49 @@ def _valores_analog(rec: SignalRecord, subestacao: str | None, padrao: ListaPadr
     }
 
 
+def _eh_discrete_analog(rec: SignalRecord, padrao: ListaPadraoADMS) -> bool:
+    sp = padrao.por_sigla(rec.sigla_sinal) if rec.sigla_sinal else None
+    return bool(sp and sp.categoria == "DiscreteAnalog")
+
+
+def _valores_discrete_analog(rec: SignalRecord, subestacao: str | None,
+                              padrao: ListaPadraoADMS,
+                              alias_v1: "dict[str, str] | None" = None) -> dict:
+    """TAP real (GTD DNP3_DiscreteAnalog): Measurement Type=Discrete,
+    Signal Type=TapPosition, Remote Point Type=Analog, Normal Value=9,
+    Device Mapping -> comando COMTAP no mesmo módulo."""
+    sp = padrao.por_sigla(rec.sigla_sinal) if rec.sigla_sinal else None
+    nome = _nome_hierarquico(
+        subestacao, rec.modulo.nome, rec.eletrico.nome_equipamento,
+        rec.eletrico.barra, rec.sigla_sinal or "?",
+    )
+    remote_unit = _remote_unit(subestacao)
+    indices = rec.enderecamento.indices
+    coords = indices[0] if len(indices) == 1 else ";".join(str(i) for i in indices)
+    device = nome
+    ref = sp.device_mapping_ref if sp else None
+    if ref and rec.sigla_sinal and nome.endswith(rec.sigla_sinal):
+        device = nome[: len(nome) - len(rec.sigla_sinal)] + ref
+    return {
+        "Signal Name": nome,
+        "Signal Alias": _signal_alias(rec, alias_v1),
+        "Measurement Type": "Discrete",
+        "Signal Type": (sp.signal_type if sp and sp.signal_type else "Custom"),
+        "Phases": _fase_saida(rec.eletrico.fase),
+        "Side": "None",
+        "Direction": "Read",
+        "Normal Value": sp.normal_value if sp else None,
+        "Device Mapping": device,
+        "Signal AOR Group": _aor_group(subestacao, _eh_alimentador(rec.modulo.nome)),
+        "Input Coordinates": coords,
+        "Remote Point Type": (sp.remote_point_type if sp and sp.remote_point_type else "Analog"),
+        "Remote Point Name": nome,
+        "Remote Unit": remote_unit,
+        "Remote Point Custom ID": f"{nome}_{remote_unit}" if remote_unit else None,
+        "Remote Point Alias": _alias_hoje(),
+    }
+
+
 def gerar(
     lista: ListaHomogenea,
     template_path: str | Path,
@@ -278,18 +323,31 @@ def gerar(
     alias_v1: "dict[str, str] | None" = None,
 ) -> openpyxl.Workbook:
     wb = openpyxl.load_workbook(template_path)  # mantém fórmulas/estilos
+    regs_da = [r for r in lista.registros if _eh_discrete_analog(r, lista_padrao)]
+    ids_da = {id(r) for r in regs_da}
+    regs_disc = [r for r in lista.registros
+                 if r.tipo_sinal.categoria == "Discrete" and id(r) not in ids_da]
+    regs_ana = [r for r in lista.registros
+                if r.tipo_sinal.categoria == "Analog" and id(r) not in ids_da]
     _escrever_sheet(
         wb[SHEET_DISCRETOS], SHEET_DISCRETOS, COLUNAS_ESPERADAS,
-        [r for r in lista.registros if r.tipo_sinal.categoria == "Discrete"],
+        regs_disc,
         lambda rec, sub, padrao: _valores(rec, sub, padrao, alias_v1),
         lista.subestacao, lista_padrao,
     )
     _escrever_sheet(
         wb[SHEET_ANALOGICOS], SHEET_ANALOGICOS, COLUNAS_ESPERADAS_ANALOG,
-        [r for r in lista.registros if r.tipo_sinal.categoria == "Analog"],
+        regs_ana,
         lambda rec, sub, padrao: _valores_analog(rec, sub, padrao, alias_v1),
         lista.subestacao, lista_padrao,
     )
+    if regs_da:
+        _escrever_sheet(
+            wb[SHEET_DISCRETE_ANALOG], SHEET_DISCRETE_ANALOG,
+            COLUNAS_ESPERADAS_DISCRETE_ANALOG, regs_da,
+            lambda rec, sub, padrao: _valores_discrete_analog(rec, sub, padrao, alias_v1),
+            lista.subestacao, lista_padrao,
+        )
     return wb
 
 

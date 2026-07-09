@@ -543,3 +543,42 @@ def test_campos_novos_no_output(template_dnp3_path, lista_padrao_path, tmp_path)
     assert ws.cell(5, col["Remote Point Custom ID"]).value == "IMA_3_3_DJ_UTR_IMA_1"
     import re as _re
     assert _re.fullmatch(r"\d{8}", ws.cell(5, col["Remote Point Alias"]).value)
+
+
+def test_tap_sai_na_sheet_discrete_analog(template_dnp3_path):
+    """TAP (categoria DiscreteAnalog na lista padrão v7) roteia para a sheet
+    DNP3_DiscreteAnalog e não para Discrete/Analog, mesmo com categoria de
+    sinal legada 'Discrete' (o roteamento é por sigla, não por tipo_sinal)."""
+    from tdt.dados.lista_padrao import ListaPadraoADMS
+
+    lp = ListaPadraoADMS.carregar("docs/Pontos Padrao ADMS_v7.xlsx")
+    rec = SignalRecord(
+        id="TR1:1",
+        modulo=Modulo("TR 1", "sheet_name"),
+        tipo_sinal=TipoSinal("Discrete", "SingleBit", "Input"),
+        enderecamento=Enderecamento("DNP3", (9,)),
+        descricoes=Descricoes("TAP BRUTO", "TAP"),
+        sigla_sinal="TAP",
+        status="decidido",
+    )
+    lista = ListaHomogenea(subestacao="GTD", protocolo="DNP3", registros=(rec,))
+    wb = gerar(lista, template_dnp3_path, lp)
+    ws = wb["DNP3_DiscreteAnalog"]
+    nomes = [ws.cell(r, 1).value for r in range(5, 8)]
+    assert any(n and str(n).endswith("_TAP") for n in nomes)
+    # e NÃO saiu nas sheets Discrete/Analog
+    for sn in ("DNP3_DiscreteSignals", "DNP3_AnalogSignals"):
+        col1 = [wb[sn].cell(r, 1).value for r in range(5, 8)]
+        assert not any(v and str(v).endswith("_TAP") for v in col1)
+    # colunas-chave preenchidas conforme o dado real (lista padrão v7)
+    hdr = {ws.cell(4, c).value: c for c in range(1, ws.max_column + 1)}
+    linha_tap = next(
+        r for r in range(5, 8)
+        if ws.cell(r, 1).value and str(ws.cell(r, 1).value).endswith("_TAP")
+    )
+    assert ws.cell(linha_tap, hdr["Measurement Type"]).value == "Discrete"
+    assert ws.cell(linha_tap, hdr["Signal Type"]).value == "TapPosition"
+    assert ws.cell(linha_tap, hdr["Remote Point Type"]).value == "Analog"
+    assert ws.cell(linha_tap, hdr["Normal Value"]).value == 9
+    assert ws.cell(linha_tap, hdr["Input Coordinates"]).value == 9
+    assert ws.cell(linha_tap, hdr["Device Mapping"]).value == "GTD_TR1_TR1_COMTAP"
