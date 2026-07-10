@@ -14,13 +14,15 @@ input fornecer a grandeza física.
 from __future__ import annotations
 
 import re
+from collections import defaultdict
+from dataclasses import replace
 from datetime import date
 from pathlib import Path
 
 import openpyxl
 from openpyxl.utils import get_column_letter
 
-from tdt.contracts import ListaHomogenea, SignalRecord
+from tdt.contracts import ItemRevisao, ListaHomogenea, SignalRecord
 from tdt.dados.lista_padrao import ListaPadraoADMS
 from tdt.normalizacao.normalizador import FASES
 
@@ -314,6 +316,32 @@ def _valores_discrete_analog(rec: SignalRecord, subestacao: str | None,
         "Remote Point Custom ID": f"{nome}_{remote_unit}" if remote_unit else None,
         "Remote Point Alias": _alias_hoje(),
     }
+
+
+def particionar_custom_id_duplicado(
+    lista: ListaHomogenea,
+) -> tuple[ListaHomogenea, tuple[ItemRevisao, ...]]:
+    """Gate de unicidade (spec 2026-07-10): o ADMS descarta remote points com
+    Custom ID repetido no mesmo import. Grupos que colidem saem TODOS do TDT
+    e vão para revisão — nunca saem calados no xlsx."""
+    remote_unit = _remote_unit(lista.subestacao)
+    por_cid: dict[str, list[SignalRecord]] = defaultdict(list)
+    for rec in lista.registros:
+        nome = _nome_hierarquico(
+            lista.subestacao, rec.modulo.nome, rec.eletrico.nome_equipamento,
+            rec.eletrico.barra, rec.sigla_sinal or "?",
+        )
+        cid = f"{nome}_{remote_unit}" if remote_unit else nome
+        por_cid[cid].append(rec)
+    duplicados = {id(r) for grupo in por_cid.values() if len(grupo) > 1 for r in grupo}
+    if not duplicados:
+        return lista, ()
+    revisao = tuple(
+        ItemRevisao(replace(r, status="revisao"), motivo="custom_id_duplicado")
+        for r in lista.registros if id(r) in duplicados
+    )
+    restantes = tuple(r for r in lista.registros if id(r) not in duplicados)
+    return replace(lista, registros=restantes), revisao
 
 
 def gerar(
