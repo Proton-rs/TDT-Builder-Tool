@@ -1,10 +1,12 @@
 # Spec — Correção dos erros de importação ADMS da lista homogênea IMA
 
-**Data:** 2026-07-10
+**Data:** 2026-07-10 (rev. 2: pesquisa MM por sigla + TAP/DiscreteAnalog)
 **Status:** aprovada (design validado com usuário nesta data)
 **Evidência:** `docs/erros.csv` (log de import do ADMS), `docs/input_homogeneo_IMA.xlsx`,
-`output/TDT_IMA_20260709.xlsx`, `docs/Export_base_Full__27_fev_2026.xlsx` (modelo real),
-`docs/TDT/exportTDT_UTR_GTD_1_20260626.xlsx` (TDT aceito), `docs/Pontos Padrao ADMS_v7.xlsx`.
+`output/TDT_IMA_20260709.xlsx`, `output/Auditoria_IMA_20260709.xlsx`,
+`docs/Export_base_Full__27_fev_2026.xlsx` (modelo real),
+`docs/TDT/exportTDT_UTR_GTD_1_20260626.xlsx` (TDT aceito), `docs/Pontos Padrao ADMS_v7.xlsx`,
+`output/pesquisa_mm_quebrados.txt` (contagens completas da pesquisa MM).
 
 ## 1. Diagnóstico
 
@@ -15,6 +17,9 @@
 | 1. Remote point duplicado | 133 (121 ids) | Nome gerado colapsa equipamentos distintos do mesmo módulo |
 | 2. Message Mapping inexistente | 105 (91 elems) | Refs da lista padrão v7 não existem no modelo real |
 | 3. Cascata (elemento DNP3 órfão) | 105 | Consequência direta da classe 2 — sem ação própria |
+
+Fora do `erros.csv`, mais dois defeitos confirmados no mesmo run (seção 5):
+TAP não identificado (foi pra revisão) e COMTAP decidido errado como `CMD`.
 
 ### Classe 1 — duplicados
 
@@ -51,17 +56,15 @@ regra de equipamento; os 337 restantes são todos **resolução de módulo**
 ### Classe 2 — Message Mappings
 
 MM sai literal da coluna MM da lista padrão (`engine_tdt.py:188`, `sp.mm`).
+Contexto (usuário, 2026-07-10): a lista padrão foi criada por engenheiros da
+RGE para padronizar os MMs — pegaram o mais usado por sinal, mas erraram alguns.
+
 Auditoria completa das 692 siglas com MM da v7 contra o catálogo real
-(`MessageMappings` do Export Base Full, 484 refs): **6 refs quebradas, ~35 siglas**.
-A IMA só bateu em 2; as demais quebram o próximo import que usar as siglas
-(GAU tem lista na fila).
-
-Ground truth (TDT GTD aceito no ADMS):
-
-| Sigla | Ref quebrada (v7) | Correção (v8) |
-|---|---|---|
-| 43LR | `null@null___REMOTO@LOCAL__Local_S_TS_SS` | `null@null___REMOTO@LOCAL___Custom_S_TS_SS` (19x GTD, 833x base) |
-| 81U1–81U5 | `null@null___DESABILITADO@HABILITADO___Custom_S_TS_SV` | `null@ATIVAR___DESATIVADO@ATIVADO___Custom_S_TC_SS` (70x GTD) |
+(`MessageMappings` do Export Base Full, 484 refs): **6 refs quebradas, 35 siglas**
+(`43LR`, `81U1-5`, `AJ*` ×23, `DSAB`, `VFAR`, `ZERO`, `ICC`, `CDCO`, `CCIC`).
+A IMA só bateu em 43LR/81U*; as demais quebram o próximo import que usar as
+siglas (GAU tem lista na fila). A pesquisa da seção 4 refaz o "mais usado por
+sinal" direto do Export Base Full para todas elas.
 
 ## 2. Solução
 
@@ -95,11 +98,13 @@ linhas conflitantes vão para Auditoria/Revisão; nunca saem caladas no xlsx.
 
 ### 2.3 Lista padrão v7 → v8 (Classe 2)
 
-- `docs/Pontos Padrao ADMS_v8.xlsx`: corrige as 2 refs da tabela acima
-  (43LR + 81U1–81U5, sheet DiscreteSignals, coluna MM). Nada mais muda.
+- `docs/Pontos Padrao ADMS_v8.xlsx`: corrige as 2 refs que quebraram a IMA
+  (43LR + 81U1–81U5, sheet DiscreteSignals, coluna MM) conforme seção 4.
+  As demais correções da seção 4 são aplicadas na mesma edição da v8 quando o
+  usuário validar as recomendações (ICC/CCIC ficam pendentes — sem evidência).
 - Teste de domínio novo: toda ref da coluna MM da lista padrão deve existir no
-  catálogo `MessageMappings` do Export Base Full, com whitelist explícita das
-  4 pendências da seção 4 (o teste falha se surgir ref quebrada nova).
+  catálogo `MessageMappings` do Export Base Full, com whitelist explícita do
+  que ainda não foi corrigido (o teste falha se surgir ref quebrada nova).
 
 ### 2.4 Verificação NOME×regra (auditoria)
 
@@ -114,28 +119,81 @@ convenção em listas futuras.
   resolvedor.
 - Teste de domínio MM ⊆ catálogo real (seção 2.3).
 - Gate de unicidade: teste com dup sintético → vai pra revisão, não pro xlsx.
+- TAP (seção 5): regen IMA → sheet `DNP3_DiscreteAnalog` com `IMA_TR6_TR6_TAP`
+  e `IMA_TR7_TR7_TAP` (perfil TapPosition/Discrete/Read/Analog/NV 9, sem MM);
+  COMTAP em revisão; nenhum `CMD` espúrio gerado.
 - Regressão: regen `TDT_IMA` + re-run `gate_tdt_real`/bench.
 - Critério de aceite do conjunto: no TDT regenerado, zero `Remote Point Custom ID`
   duplicado e zero MM fora do catálogo real → as 343 falhas do `erros.csv`
   não se reproduzem.
 
-## 4. Pendências (validar com domínio antes do import GAU)
+## 4. Pesquisa MM — mais usado por sigla no Export Base Full
 
-Refs quebradas restantes da v7 — candidatos do modelo real, decisão de domínio
-pendente:
+Método: contagem de MM por sigla (sufixo `_SIGLA` do Signal Name) em
+`DNP3_DiscreteSignals` (237k sinais); todos os candidatos recomendados foram
+verificados presentes no catálogo `MessageMappings`. Contagens completas em
+`output/pesquisa_mm_quebrados.txt`. Ressalva ao método "mais usado": o MM tem
+que ser compatível com o tipo do ponto — single vs double (`S_`/`D_`, prefixo
+`DI_`) e sinalização vs comando (`TS`/`TC`). O mais usado global pode ser da
+variante errada (ex.: 43LR global é `DI_..._DS`, double).
 
-| Siglas | Ref quebrada | Evidência / candidato |
-|---|---|---|
-| AJ1..AJ31 (30) | `null@null___DESABILITADO@HABILITADO___Custom_S_TS_SV` | Uso real misto: `..._DESATIVADO@ATIVADO___Custom_S_TS_SVx` / `_S_TS_SV` / `_S_TC_SV` (1–2 usos cada) |
-| ZERO | `ZERAR@null___null@null___Custom_S_TC_SS` | Candidato forte: `DI_null@ZERAR___NORMAL@ZERADO___Custom_admsINV_S_TC` (406 usos) |
-| ICC | `RESET@null___null@null___Custom_S_TC_SS` | Zero uso na base; variantes `DI_RESETAR@null___...` existem |
-| CDCO | `MESTRE@INDIVIDUAL@COMANDO___..._Parallel___admsINV_D_TC` | 3 variantes reais D_TC/D_TS `Custom___admsINV`/`Custom___INV` |
-| CCIC | `CMD_RGE@null___RGE@CPFLT___Custom_S_TC_SS_CPFLT` | `CPFLT` não existe no catálogo; sem uso na base |
+| Sigla(s) | Ref quebrada (v7) | Recomendação v8 | Evidência |
+|---|---|---|---|
+| 43LR | `null@null___REMOTO@LOCAL__Local_S_TS_SS` | `null@null___REMOTO@LOCAL___Custom_S_TS_SS` | mais usado single-bit (833x; GTD aceito 19x). Top global `DI_null@null___REMOTO@LOCAL___Local___INV_S_TS_DS` (5165x) é double |
+| 81U1–81U5 | `null@null___DESABILITADO@HABILITADO___Custom_S_TS_SV` | ponto com comando: `null@ATIVAR___DESATIVADO@ATIVADO___Custom_S_TC_SS` (GTD aceito 70x); só sinalização: `null@null___DESABILITADO@HABILITADO___Custom_S_TS` (mais usado, ~58%) | IMA tem comando (Discrete Output) → variante TC |
+| AJ1..AJ34 (23) | idem 81U | `null@null___DESATIVADO@ATIVADO___Custom_S_TS_SV` (com comando: `null@ATIV_DES___DESATIVADO@ATIVADO___Custom_S_TC_SV`) | família uniforme na base: par é DESATIVADO@ATIVADO, nunca DESABILITADO@HABILITADO; variantes SV/SVx 1–2 usos cada |
+| DSAB | idem 81U | `null@null___HABILITADO@DESABILITADO___Custom_S_TS_SA` | único uso real (1x) |
+| VFAR | idem 81U | `DESLIGAR@LIGAR___DESLIGADO@LIGADO___Custom_S_TC_SV` | único uso real (2x) |
+| ZERO | `ZERAR@null___null@null___Custom_S_TC_SS` | `DI_null@ZERAR___NORMAL@ZERADO___Custom_admsINV_S_TC` | 406x, 100% dos usos |
+| CDCO | `MESTRE@INDIVIDUAL@COMANDO___..._Parallel___admsINV_D_TC` | `MESTRE@INDIVIDUAL@COMANDADO___MESTRE@INDIVIDUAL@COMANDADO___Custom___INV___D_TS_SS` | mais usado (7x, 41%); ponto double |
+| ICC | `RESET@null___null@null___Custom_S_TC_SS` | **pendente** — zero uso na base; variantes `DI_RESETAR@null___...` existem no catálogo | decisão de engenharia RGE |
+| CCIC | `CMD_RGE@null___RGE@CPFLT___Custom_S_TC_SS_CPFLT` | **pendente** — zero uso; `CPFLT` não existe no catálogo | decisão de engenharia RGE |
 
-## 5. Fora de escopo
+## 5. TAP / DiscreteAnalog
 
-- Caminho não homogêneo (GAU/GPR usam outra spec).
+### Diagnóstico
+
+Run de 09/07 (TDT 17:16): TAP e COMTAP do input (TR 1/TR 2: `TAP` tipo `A/D`
+idx 47/69; `COMTAP` tipo `C` idx `30;30`) **não saíram no TDT**. Auditoria:
+`TAP` → revisão `score_baixo` (0.462, candidato 90DP); `COMTAP` → **decidido
+errado como `CMD`** (0.643) — falso positivo que gera comando espúrio.
+
+Estado do código (HEAD): suporte DiscreteAnalog existe e funciona — loader lê a
+aba (`baee2f9`, 09/07 13:51), engine roteia por `sp.categoria` e escreve a sheet
+`DNP3_DiscreteAnalog` (`b8d36c7`, 09/07 15:08), `por_sigla("TAP")` resolve na
+v7. O run das 17:16 falhou na identificação — processo/UI com código ou lista
+padrão anteriores. Gaps reais restantes:
+
+1. **Tipo `A/D` não mapeado**: `CODIGOS_TIPO` só tem A/C/D; `A/D` cai no default
+   `("Discrete","Input")` — categoria errada no registro, na auditoria e na
+   barreira de domínio do dual-pass (caminho não homogêneo).
+2. **COMTAP sem tratamento**: sigla não existe na lista padrão nem como sinal na
+   base real (0 sinais `_COMTAP`; 0 de 1629 linhas DiscreteAnalog nos 3
+   protocolos têm Output Coordinates/Direction≠Read). COMTAP real só existe como
+   alvo de Device Mapping da linha TAP. Sem tratamento, o scoring decide `CMD`.
+
+Perfil TAP real (1516 linhas DNP3, 100% uniforme): `Signal Type=TapPosition`,
+`Measurement Type=Discrete`, `Direction=Read`, `Remote Point Type=Analog`,
+`Normal Value=9`, **MM vazio** (DiscreteAnalog não usa Message Mapping — não há
+MM de TAP a corrigir na lista padrão; a v7 já traz o perfil completo e o builder
+`_valores_discrete_analog` já o reproduz).
+
+### Correções
+
+- `CODIGOS_TIPO["A/D"] = ("DiscreteAnalog", "Input")` em `vocabulario_tipo.py`
+  (contrato `contracts.py` e `_DOMINIOS_POR_CATEGORIA` já suportam a categoria).
+- **COMTAP → revisão, sem gerar sinal** (decisão usuário 2026-07-10): sigla
+  conhecida que não vira ponto; sai do scoring (elimina o falso positivo `CMD`)
+  e cai na auditoria com motivo "comando TAP não modelado no ADMS".
+- Critério de aceite na seção 3.
+
+## 6. Fora de escopo
+
+- Caminho não homogêneo (GAU/GPR usam outra spec) — exceto o efeito colateral
+  benigno de `CODIGOS_TIPO["A/D"]`.
 - Classe 3 (cascata) — desaparece com a classe 2.
 - Scoring/matching de siglas.
 - Módulos de sheets futuras com blocos de cabeçalho diferentes dos 4 padrões
   mapeados (TR/BARRA/RET/TSA + padrão geral) — fallback + revisão cobre.
+- Edição em si da v8 para AJ*/DSAB/VFAR/ZERO/CDCO — recomendações prontas na
+  seção 4, aplicar após validação do usuário; ICC/CCIC dependem de engenharia RGE.
