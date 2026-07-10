@@ -21,6 +21,9 @@ CATALOGO = set((RAIZ / "tests" / "fixtures" / "mm_catalogo_real.txt")
 falhas: list[str] = []
 wb = openpyxl.load_workbook(TDT, read_only=True, data_only=True)
 nomes_da: set[str] = set()
+# Custom ID e unico por IMPORT (todo o workbook), nao por sheet — o ADMS
+# descarta remote points colidindo em qualquer lugar do mesmo import.
+cids: Counter[str] = Counter()
 for sheet in ("DNP3_DiscreteSignals", "DNP3_AnalogSignals", "DNP3_DiscreteAnalog"):
     if sheet not in wb.sheetnames:
         falhas.append(f"{sheet}: sheet ausente")
@@ -31,7 +34,6 @@ for sheet in ("DNP3_DiscreteSignals", "DNP3_AnalogSignals", "DNP3_DiscreteAnalog
     hdr = [str(c) if c else "" for c in next(linhas)]
     i_cid = next((i for i, c in enumerate(hdr) if "remote point custom" in c.lower()), None)
     i_mm = next((i for i, c in enumerate(hdr) if c == "Message Mapping"), None)
-    cids: Counter[str] = Counter()
     for r in linhas:
         nome = r[0]
         if not nome:
@@ -44,10 +46,11 @@ for sheet in ("DNP3_DiscreteSignals", "DNP3_AnalogSignals", "DNP3_DiscreteAnalog
             cids[str(r[i_cid])] += 1
         if i_mm is not None and r[i_mm] and str(r[i_mm]).strip() not in CATALOGO:
             falhas.append(f"{sheet}: {nome}: MM fora do catálogo: {r[i_mm]}")
-    dups = {k: v for k, v in cids.items() if v > 1}
-    if dups:
-        falhas.append(f"{sheet}: Custom IDs duplicados: {dups}")
 wb.close()
+
+dups = {k: v for k, v in cids.items() if v > 1}
+if dups:
+    falhas.append(f"Custom IDs duplicados no import: {dups}")
 
 for esperado in ("IMA_TR6_TR6_TAP", "IMA_TR7_TR7_TAP"):
     if esperado not in nomes_da:
