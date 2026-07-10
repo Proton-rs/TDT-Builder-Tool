@@ -17,6 +17,7 @@ from pathlib import Path
 from tdt.auditoria import Auditoria
 from tdt.config import Config
 from tdt.dados.encoder import criar_encoder
+from tdt.defaults import DEFAULT_LISTA
 from tdt.pipeline import executar
 
 
@@ -41,7 +42,7 @@ def main(argv: list[str] | None = None) -> int:
     g.add_argument("input")
     g.add_argument("--output", required=True)
     g.add_argument("--template", default="docs/dnp3_template.xlsx")
-    g.add_argument("--lista-padrao", default="docs/Pontos Padrao ADMS_v2.xlsx")
+    g.add_argument("--lista-padrao", default=DEFAULT_LISTA)
     g.add_argument("--modo", default="auto", choices=["auto", "homogeneo", "nao-homogeneo"])
     g.add_argument("--subestacao", default=None)
     args = p.parse_args(argv)

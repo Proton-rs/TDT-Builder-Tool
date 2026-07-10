@@ -528,6 +528,7 @@ def gerar_tdt(registros, template_path, lp, subestacao=None, aliases=None, confi
     pareados, _rev = dc_pairer.parear(lst, config)
     corrigidos, _rev2 = corrigir(list(pareados), _whitelist_posicao(lp, config))
     lista = criador_lista_homogenea.montar(list(corrigidos), subestacao=subestacao)
+    lista, _rev_dup = engine_tdt.particionar_custom_id_duplicado(lista)
     return engine_tdt.gerar(
         lista, template_path, lp, alias_v1=descricoes_por_sigla(DEFAULT_LISTA_ALIAS)
     )
@@ -590,8 +591,12 @@ def executar(
         rows = ler_rows(wb_in[sn])
         header_homog = detectar_header(rows) if rota.homogeneo else None
         if header_homog is not None:
-            decididos_homog, sinais = estruturar_homogeneo(rows, header_homog, sn, lp, config)
+            decididos_homog, sinais, rev_homog, avisos_homog = estruturar_homogeneo(
+                rows, header_homog, sn, lp, config)
             decididos.extend(decididos_homog)
+            revisao.extend(rev_homog)
+            for msg in avisos_homog:
+                aud.evento("identidade_homogenea", msg, "AVISO")
         else:
             mapa = analisar(rows, encoder, ref_emb, siglas_set=lp.siglas)
             sinais = list(estruturar(rows, mapa, sheet_name=sn, config=config, vocab=vocab,
@@ -710,6 +715,10 @@ def executar(
         corrigidos = [_limitar_confianca(r) for r in corrigidos]
         revisao = [_limitar_confianca_item(it) for it in revisao]
         lista = criador_lista_homogenea.montar(list(corrigidos), subestacao=subestacao)
+        lista, rev_dup = engine_tdt.particionar_custom_id_duplicado(lista)
+        if rev_dup:
+            aud.evento("engine", f"{len(rev_dup)} registros com Custom ID duplicado -> revisão", "AVISO")
+            revisao.extend(rev_dup)
         alias_v1 = descricoes_por_sigla(DEFAULT_LISTA_ALIAS)
         if not alias_v1:
             aud.evento(

@@ -5,8 +5,8 @@ from tdt.dados.lista_padrao import ListaPadraoADMS
 from tdt.dados.lista_padrao import descricoes_por_sigla
 
 
-def test_default_lista_aponta_para_v7_com_djf1_enriquecido():
-    assert Path(DEFAULT_LISTA).name == "Pontos Padrao ADMS_v7.xlsx"
+def test_default_lista_aponta_para_v8_com_djf1_enriquecido():
+    assert Path(DEFAULT_LISTA).name == "Pontos Padrao ADMS_v8.xlsx"
     lp = ListaPadraoADMS.carregar(DEFAULT_LISTA)
     sp = lp.por_sigla("DJF1")
     assert sp is not None

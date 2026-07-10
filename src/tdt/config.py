@@ -261,3 +261,6 @@ class Config:
             }),
         }
     )
+    # Siglas da lista de entrada que NÃO viram ponto no ADMS (base real:
+    # comando de TAP não é sinal; 0/1629 DiscreteAnalog com output).
+    siglas_sem_ponto: frozenset[str] = frozenset({"COMTAP"})

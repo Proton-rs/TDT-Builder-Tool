@@ -582,3 +582,45 @@ def test_tap_sai_na_sheet_discrete_analog(template_dnp3_path):
     assert ws.cell(linha_tap, hdr["Normal Value"]).value == 9
     assert ws.cell(linha_tap, hdr["Input Coordinates"]).value == 9
     assert ws.cell(linha_tap, hdr["Device Mapping"]).value == "GTD_TR1_TR1_COMTAP"
+
+
+# ── Tarefa 3: gate de unicidade de Remote Point Custom ID ───────────────────
+
+def _rec_gate(id_, sigla, endereco, nome_equipamento=None):
+    from tdt.contracts import (Descricoes, Eletrico, Enderecamento, Modulo,
+                               SignalRecord, TipoSinal)
+    return SignalRecord(
+        id=id_,
+        modulo=Modulo("LT3", "coluna:MODULO"),
+        tipo_sinal=TipoSinal("Discrete"),
+        enderecamento=Enderecamento("DNP3", (endereco,)),
+        descricoes=Descricoes("43 - CHAVE LOCAL REMOTO", "chave local remoto"),
+        eletrico=Eletrico(nome_equipamento=nome_equipamento),
+        sigla_sinal=sigla, status="decidido",
+    )
+
+
+def test_gate_custom_id_duplicado_manda_grupo_inteiro_pra_revisao():
+    from tdt.contracts import ListaHomogenea
+    from tdt.engine_tdt import particionar_custom_id_duplicado
+    lista = ListaHomogenea(subestacao="IMA", protocolo="DNP3", registros=(
+        _rec_gate("LT 3:1", "43LR", 1),        # IMA_LT3_LT3_43LR
+        _rec_gate("LT 3:2", "43LR", 22),       # IMA_LT3_LT3_43LR (colide)
+        _rec_gate("LT 3:3", "CCFL", 2),        # único -> fica
+        _rec_gate("LT 3:4", "43LR", 6, "89-14"),  # IMA_LT3_89-14_43LR -> fica
+    ))
+    lista_ok, rev = particionar_custom_id_duplicado(lista)
+    assert [r.id for r in lista_ok.registros] == ["LT 3:3", "LT 3:4"]
+    assert {it.registro.id for it in rev} == {"LT 3:1", "LT 3:2"}
+    assert all(it.motivo == "custom_id_duplicado" for it in rev)
+
+
+def test_gate_sem_duplicatas_nao_mexe():
+    from tdt.contracts import ListaHomogenea
+    from tdt.engine_tdt import particionar_custom_id_duplicado
+    lista = ListaHomogenea(subestacao="IMA", protocolo="DNP3", registros=(
+        _rec_gate("LT 3:1", "43LR", 1, "89-16"),
+        _rec_gate("LT 3:2", "CCFL", 2),
+    ))
+    lista_ok, rev = particionar_custom_id_duplicado(lista)
+    assert lista_ok == lista and rev == ()
