@@ -7,9 +7,10 @@ from __future__ import annotations
 from dataclasses import replace
 
 from ..config import Config
-from ..contracts import Descricoes, Eletrico, Enderecamento, Modulo, SignalRecord, TipoSinal
+from ..contracts import Descricoes, Eletrico, Enderecamento, ItemRevisao, Modulo, SignalRecord, TipoSinal
 from ..dados.lista_padrao import ListaPadraoADMS
 from .estruturador import _parse_indices
+from .identidade_homogenea import extrair_bloco, resolver
 from .normalizador import canonizar, extrair_contexto_estrutural
 from .vocabulario_tipo import CODIGOS_TIPO
 
@@ -55,57 +56,34 @@ def _col(header: tuple, nome: str) -> int | None:
     return None
 
 
-_ROTULO_BLOCO = "EQUIPAMENTO"
-_COLUNA_NUMERO_BLOCO = 1  # "NÚMERO OPERATIVO / MNEMNICO"
-
-
-def extrair_numeros_operativos(rows: list[tuple], header_idx: int) -> dict[str, str]:
-    """Bloco acima do cabeçalho: EQUIPAMENTO | NÚMERO OPERATIVO / MNEMNICO.
-
-    Devolve rótulo normalizado -> número ("MODULO" -> "23", "DJ" -> "52-23").
-    Bloco ausente/ilegível -> {} (chamador não inventa número).
-    """
-    nums: dict[str, str] = {}
-    dentro = False
-    for row in rows[:header_idx]:
-        rotulo = _normaliza_celula(row[0] if row else None)
-        segundo = _normaliza_celula(
-            row[_COLUNA_NUMERO_BLOCO] if len(row) > _COLUNA_NUMERO_BLOCO else None)
-        if rotulo == _ROTULO_BLOCO and "OPERATIVO" in segundo:
-            dentro = True
-            continue
-        if not dentro:
-            continue
-        if not rotulo:
-            dentro = False
-            continue
-        valor = row[_COLUNA_NUMERO_BLOCO] if len(row) > _COLUNA_NUMERO_BLOCO else None
-        if valor is not None and str(valor).strip():
-            nums[rotulo] = str(valor).strip()
-    return nums
-
-
 def estruturar_homogeneo(
     rows: list[tuple], header_idx: int, sheet_name: str,
     lp: ListaPadraoADMS, config: Config,
-) -> tuple[list[SignalRecord], list[SignalRecord]]:
-    """Devolve (decididos, pendentes_de_scoring)."""
+) -> tuple[list[SignalRecord], list[SignalRecord], list[ItemRevisao], list[str]]:
+    """Devolve (decididos, pendentes_de_scoring, revisao, avisos).
+
+    revisao: siglas conhecidas sem ponto (config.siglas_sem_ponto, ex. COMTAP).
+    avisos: divergência NOME do cliente x nome calculado (lint, não bloqueia).
+    """
     header = rows[header_idx]
     idx = {
         "utilizado": _col(header, "UTILIZADO?"),
+        "subestacao": _col(header, "SUBESTACAO"),
         "modulo": _col(header, "MODULO"),
         "equipamento": _col(header, "EQUIPAMENTO"),
         "tipo": _col(header, "TIPO"),
         "descricao": _col(header, "DESCRICAO DO PONTO"),
         "sigla": _col(header, "SIGLA SINAL"),
+        "nome": _col(header, "NOME"),
         "index": _col(header, "INDEX DNP3"),
     }
 
-    numeros = extrair_numeros_operativos(rows, header_idx)
-    numero_modulo = numeros.get("MODULO")
+    bloco = extrair_bloco(rows, header_idx)
 
     decididos: list[SignalRecord] = []
     pendentes: list[SignalRecord] = []
+    revisao: list[ItemRevisao] = []
+    avisos: list[str] = []
 
     for i, row in enumerate(rows[header_idx + 1:], start=header_idx + 2):
         if idx["utilizado"] is None or idx["utilizado"] >= len(row):
@@ -117,13 +95,9 @@ def estruturar_homogeneo(
         remanescente, ctx = extrair_contexto_estrutural(bruta)
         cod_tipo = _normaliza_celula(row[idx["tipo"]]) if idx["tipo"] is not None else ""
         categoria, direcao = CODIGOS_TIPO.get(cod_tipo, ("Discrete", "Input"))
-        modulo_nome = str(row[idx["modulo"]]) if idx["modulo"] is not None and row[idx["modulo"]] else None
-        origem_modulo = "coluna:MODULO"
-        if (modulo_nome and numero_modulo
-                and not any(ch.isdigit() for ch in modulo_nome)):
-            modulo_nome = f"{modulo_nome.strip()}{numero_modulo}"
-            origem_modulo = "coluna:MODULO+header:NUMERO_OPERATIVO"
+        modulo_col = _normaliza_celula(row[idx["modulo"]]) if idx["modulo"] is not None else ""
         equip_cod = _normaliza_celula(row[idx["equipamento"]]) if idx["equipamento"] is not None else ""
+        ident = resolver(bloco, sheet_name, modulo_col, equip_cod)
         sigla = str(row[idx["sigla"]] or "").strip() if idx["sigla"] is not None else ""
         indices = _parse_indices(row[idx["index"]]) if idx["index"] is not None and idx["index"] < len(row) else ()
         datatype = (
@@ -134,7 +108,7 @@ def estruturar_homogeneo(
 
         rec = SignalRecord(
             id=f"{sheet_name}:{i}",
-            modulo=Modulo(modulo_nome, origem_modulo),
+            modulo=Modulo(ident.modulo, ident.origem),
             tipo_sinal=TipoSinal(categoria, datatype=datatype, direcao=direcao,
                                  categoria_confiavel=True),
             enderecamento=Enderecamento("DNP3", indices),
@@ -142,10 +116,29 @@ def estruturar_homogeneo(
             eletrico=Eletrico(
                 fase=ctx.fase,
                 equipamento_alvo=_EQUIPAMENTO_POR_MODULO.get(equip_cod, ctx.equipamento_alvo),
-                nome_equipamento=ctx.nome_equipamento,
+                nome_equipamento=ident.equipamento,
                 barra=ctx.barra,
             ),
         )
+
+        # Lint NOME do cliente x regra (spec §2.4): aviso, não bloqueia.
+        nome_cli = str(row[idx["nome"]] or "").strip() if idx["nome"] is not None else ""
+        se = str(row[idx["subestacao"]] or "").strip() if idx["subestacao"] is not None else ""
+        if nome_cli and sigla and se:
+            mod_fmt = ident.modulo.replace(" ", "")
+            calc = f"{se}_{mod_fmt}_{ident.equipamento or mod_fmt}_{sigla}"
+            if calc != nome_cli:
+                avisos.append(
+                    f"{sheet_name}:{i}: NOME do cliente '{nome_cli}' difere do calculado '{calc}'"
+                )
+
+        if sigla and sigla.upper() in config.siglas_sem_ponto:
+            revisao.append(ItemRevisao(
+                replace(rec, sigla_sinal=sigla.upper(), status="revisao",
+                        justificativa="comando TAP não modelado no ADMS (base real: 0 sinais COMTAP)"),
+                motivo="comando_tap_nao_modelado",
+            ))
+            continue
 
         sp = lp.por_sigla(sigla) if sigla else None
         if sp is None:
@@ -153,4 +146,4 @@ def estruturar_homogeneo(
         else:
             decididos.append(replace(rec, sigla_sinal=sigla, status="decidido"))
 
-    return decididos, pendentes
+    return decididos, pendentes, revisao, avisos

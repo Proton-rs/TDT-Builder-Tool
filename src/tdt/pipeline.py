@@ -590,8 +590,12 @@ def executar(
         rows = ler_rows(wb_in[sn])
         header_homog = detectar_header(rows) if rota.homogeneo else None
         if header_homog is not None:
-            decididos_homog, sinais = estruturar_homogeneo(rows, header_homog, sn, lp, config)
+            decididos_homog, sinais, rev_homog, avisos_homog = estruturar_homogeneo(
+                rows, header_homog, sn, lp, config)
             decididos.extend(decididos_homog)
+            revisao.extend(rev_homog)
+            for msg in avisos_homog:
+                aud.evento("identidade_homogenea", msg, "AVISO")
         else:
             mapa = analisar(rows, encoder, ref_emb, siglas_set=lp.siglas)
             sinais = list(estruturar(rows, mapa, sheet_name=sn, config=config, vocab=vocab,

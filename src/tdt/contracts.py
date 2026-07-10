@@ -146,7 +146,7 @@ class ListaHomogenea:
 @dataclass(frozen=True)
 class ItemRevisao:
     registro: SignalRecord
-    motivo: str  # "score_baixo"|"endereco_duplicado"|"sem_endereco"|"sem_fix"|"categoria_ambigua"|"categoria_incompativel"|"modulo_indefinido"|"sigla_multipla"|"posicao_ambigua"|"pareamento_ambiguo"|"nome_sigla_inconsistente"|"descartado_indefinido"|"descartado_redundante"|"comando_sem_discreto"|"estado_sem_candidato"|"fora_whitelist_equipamento"|"decisao_por_projeto"|"qualificador_ambiguo"
+    motivo: str  # "score_baixo"|"endereco_duplicado"|"sem_endereco"|"sem_fix"|"categoria_ambigua"|"categoria_incompativel"|"modulo_indefinido"|"sigla_multipla"|"posicao_ambigua"|"pareamento_ambiguo"|"nome_sigla_inconsistente"|"descartado_indefinido"|"descartado_redundante"|"comando_sem_discreto"|"estado_sem_candidato"|"fora_whitelist_equipamento"|"decisao_por_projeto"|"qualificador_ambiguo"|"comando_tap_nao_modelado"|"custom_id_duplicado"
     candidatos_sugeridos: tuple[Candidato, ...] = ()
 
 

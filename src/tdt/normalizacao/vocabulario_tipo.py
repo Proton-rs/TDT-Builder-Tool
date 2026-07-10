@@ -26,6 +26,7 @@ CODIGOS_TIPO: dict[str, tuple[str, str]] = {
     "A": ("Analog", "Input"),
     "C": ("Discrete", "Output"),
     "D": ("Discrete", "Input"),
+    "A/D": ("DiscreteAnalog", "Input"),  # TAP (spec 2026-07-10)
 }
 
 
