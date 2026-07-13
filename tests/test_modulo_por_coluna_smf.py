@@ -1,8 +1,9 @@
 """Integração: gênero sheet-por-tipo (SMF) — módulo por coluna, cross-sheet.
 
-Determinístico, sem modelo ST: exercita _col_modulo + canonizar_modulo +
-estruturar + aplicar_identidade nas linhas reais do arquivo. Guarda contra
-regressão da detecção e da reconciliação cross-sheet.
+Determinístico, sem modelo ST: valida, contra os dados reais do arquivo, o
+que _col_modulo/_header_por_densidade/_ncols detectam e o que
+canonizar_modulo resolve -- não invoca estruturar/aplicar_identidade. Guarda
+contra regressão da detecção e da reconciliação cross-sheet.
 """
 from pathlib import Path
 

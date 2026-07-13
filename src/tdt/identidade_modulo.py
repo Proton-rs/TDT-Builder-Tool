@@ -2,8 +2,10 @@
 
 Resolve o nome real do módulo a partir do nome da sheet (prefixo canônico +
 número) e classifica num de TIPOS_MODULO. Funções puras; tabelas vêm de
-config. Sheets slot (módulo por linha) ficam para o follow-up — `por_linha`
-já existe na assinatura, sempre None aqui.
+config. Sheets slot (módulo por linha, tag `coluna:MODULO_POR_LINHA`) são
+tratadas por `_identidade_por_linha`, que canoniza e classifica por grupo de
+módulo. O campo `ResolucaoModulo.por_linha` em si continua sem uso — essa
+atribuição por linha acontece em `estruturar()`, não por esse campo.
 """
 
 from __future__ import annotations
@@ -111,6 +113,11 @@ def _identidade_por_linha(
         if s.modulo.origem_contexto == "coluna:MODULO_POR_LINHA" and s.modulo.nome:
             res = canonizar_modulo(s.modulo.nome, config, explicito=True)
             s = replace(s, modulo=replace(s.modulo, nome=res.nome))
+            if not res.nome:
+                # Canonizou para vazio (ex.: célula era só sufixo de classe de
+                # tensão) -- equivale a módulo ausente, mesma trilha de revisão
+                # do caminho de célula vazia em estruturador.py.
+                s = replace(s, status="revisao", justificativa="modulo_indefinido")
         canon.append(s)
     grupos: dict[str, list[SignalRecord]] = {}
     for s in canon:

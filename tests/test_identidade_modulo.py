@@ -285,3 +285,13 @@ def test_aplicar_identidade_por_linha_reconcilia_variantes():
     sinais = [_rec_mod("SINAL A", "AL 11 - 13.8kV"), _rec_mod("SINAL B", "AL11 - 13.8kV")]
     novos, _ = aplicar_identidade(sinais, "MEDIDAS", [], Config())
     assert novos[0].modulo.nome == novos[1].modulo.nome == "AL11"
+
+
+def test_aplicar_identidade_por_linha_canonizacao_vazia_vai_pra_revisao():
+    # Célula de módulo é só sufixo de classe de tensão ("- 13.8kV"): não
+    # vazia na origem, mas canoniza (explicito=True) para "" -- equivale a
+    # módulo ausente e não pode seguir pro scoring em silêncio.
+    sinais = [_rec_mod("DISJUNTOR", "- 13.8kV")]
+    novos, _ = aplicar_identidade(sinais, "ESTADOS", [], Config())
+    assert novos[0].status == "revisao"
+    assert novos[0].justificativa == "modulo_indefinido"

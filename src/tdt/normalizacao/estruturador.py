@@ -3,7 +3,8 @@
 Rastreia marcadores de seção na coluna 1 (com sinônimos: Comandos/Controle,
 Digitais/Sinalizações, Analógicas/Medidas) para definir categoria e direção.
 A coluna 'Tipo' refina linha a linha quando presente. Módulo é constante por
-sheet (vem da coluna Módulo).
+sheet (do sheet_name ou de NOME derivado de sigla) no gênero tradicional, ou
+lido linha a linha quando há coluna dedicada (`coluna:MODULO_POR_LINHA`).
 """
 
 from __future__ import annotations
