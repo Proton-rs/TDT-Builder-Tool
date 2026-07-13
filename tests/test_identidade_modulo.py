@@ -245,3 +245,13 @@ def test_canonizar_nao_explicito_preserva_fallback_resolver_modulo():
     r = canonizar_modulo("SLOT GERAL", cfg)  # explicito=False (default)
     assert r.nome == "SLOT GERAL"   # cru, SEM limpeza
     assert r.confianca == "baixa"
+
+
+def test_canonizar_explicito_sufixo_tensao_com_prefixo_nao_mapeado():
+    # XYZ não está em mapa_prefixo_modulo, então não é capturado por Estratégia 2.
+    # Com explicito=True, a regex de _limpar_modulo (sufixo de tensão) deve remover
+    # " - 13.8kV" e retornar o valor limpo com confiança alta.
+    cfg = Config()
+    r = canonizar_modulo("XYZ - 13.8kV", cfg, explicito=True)
+    assert r.nome == "XYZ"
+    assert r.confianca == "alta"
