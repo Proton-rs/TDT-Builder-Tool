@@ -70,6 +70,24 @@ def test_categoria_incerta_sem_pista():
     assert recs[0].tipo_sinal.categoria_confiavel is False
 
 
+def test_grandeza_continua_sem_coluna_tipo_infere_analog():
+    # CVA11: sem coluna TIPO, sem marcador de seção, descrição indica
+    # grandeza elétrica contínua (tensão) -> Analog/Input, nunca Discrete.
+    rows = [
+        ("Descrição", "Endereço"),
+        ("Tensão Barra AB", "10"),
+        ("Tensão Barra BC", "11"),
+        ("Tensão Barra CA", "12"),
+    ]
+    mapa = MapaColunas(header_row=1, colunas={"descricao": 0, "indice": 1})
+    recs = estruturar(rows, mapa, sheet_name="CVA11", config=Config())
+    assert len(recs) == 3
+    for r in recs:
+        assert r.tipo_sinal.categoria == "Analog"
+        assert r.tipo_sinal.direcao == "Input"
+        assert r.tipo_sinal.categoria_confiavel is True
+
+
 def test_categoria_confiavel_com_marcador():
     rows = [
         ("Descrição", "Endereço"),
