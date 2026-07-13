@@ -1,6 +1,7 @@
 import numpy as np
 
 from tdt.analise.analise_colunas import analisar, normalizar_emb
+from tdt.config import Config
 
 # vocab compartilhado entre valores das colunas e a referência ADMS
 _VOCAB = ["FALHA", "COMUNICACAO", "DISJUNTOR", "ABERTO", "CORRENTE", "FASE",
@@ -351,3 +352,54 @@ def test_indice_por_padrao_sequencial_sheet_wide_permanece_correto():
     ]
     mapa = analisar(rows, encoder=_fake_encoder, ref_emb=_REF)
     assert mapa.colunas["indice"] == 3  # UTR COS Index, não "Linha"
+
+
+# --- _col_modulo() (Task 2: modulo por coluna) ---------------------------
+
+
+def test_col_modulo_detecta_coluna_de_bloco_com_prefixo():
+    # col 0 = módulo (blocos, prefixos AL/TR); col 1 = IED (SEL, sem prefixo);
+    # col 2 = descrição; col 3 = índice
+    rows = [
+        ("Modulo", "Origem", "Descricao", "Addr"),
+        ("AL 11 - 13.8kV", "SEL-411L", "FALHA COMUNICACAO", "1"),
+        ("AL 11 - 13.8kV", "SEL-411L", "DISJUNTOR ABERTO", "2"),
+        ("TR1", "SEL-3530", "CORRENTE FASE", "3"),
+        ("TR1", "SEL-3530", "CORRENTE FASE B", "4"),
+    ]
+    mapa = analisar(rows, encoder=_fake_encoder, ref_emb=_REF, config=Config())
+    assert mapa.colunas["modulo"] == 0
+
+
+def test_col_modulo_nao_confunde_com_ied():
+    rows = [
+        ("Modulo", "Origem", "Descricao", "Addr"),
+        ("AL11", "SEL-411L", "FALHA COMUNICACAO", "1"),
+        ("AL12", "SEL-411L", "DISJUNTOR ABERTO", "2"),
+        ("TR1", "SEL-3530", "CORRENTE FASE", "3"),
+    ]
+    mapa = analisar(rows, encoder=_fake_encoder, ref_emb=_REF, config=Config())
+    assert mapa.colunas["modulo"] == 0  # não a coluna IED (1)
+
+
+def test_col_modulo_ausente_quando_sem_config():
+    # sem config, _col_modulo não roda -> comportamento atual preservado
+    rows = [
+        ("Modulo", "Origem", "Descricao", "Addr"),
+        ("AL11", "SEL-411L", "FALHA COMUNICACAO", "1"),
+        ("AL12", "SEL-411L", "DISJUNTOR ABERTO", "2"),
+    ]
+    mapa = analisar(rows, encoder=_fake_encoder, ref_emb=_REF)  # sem config
+    assert "modulo" not in mapa.colunas
+
+
+def test_col_modulo_none_sem_coluna_de_modulo():
+    # nenhuma coluna canoniza em bloco -> None (não inventa módulo)
+    rows = [
+        ("Sigla", "Descricao", "Addr"),
+        ("79", "RELIGAMENTO", "1"),
+        ("SF6", "PRESSAO BAIXA", "2"),
+        ("DR", "DEFEITO RELE", "3"),
+    ]
+    mapa = analisar(rows, encoder=_fake_encoder, ref_emb=_REF, config=Config())
+    assert "modulo" not in mapa.colunas

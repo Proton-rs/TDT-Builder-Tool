@@ -21,6 +21,7 @@ import unicodedata
 import faiss
 import numpy as np
 
+from tdt.config import Config
 from tdt.contracts import MapaColunas
 from tdt.normalizacao.vocabulario_tipo import CODIGOS_TIPO, VOCAB as _TIPO_VOCAB
 
@@ -239,6 +240,13 @@ def _col_tipo(rows, inicio, ncols) -> int | None:
 _SIGLA_THRESHOLD = 0.3
 
 
+_MODULO_ROTULO = ("MODULO", "BAY", "VAO")
+_MODULO_BONUS = 0.10
+_MODULO_CANON_MIN = 0.3   # fração mín. de valores distintos com prefixo de módulo
+_MODULO_BLOCO_MIN = 0.5   # estrutura de bloco: 1 - transicoes/(n-1)
+_SO_ALFA = re.compile(r"[A-Za-z]+")
+
+
 def _col_sigla(rows, inicio, ncols, siglas_set: frozenset[str]) -> int | None:
     """Coluna cujos valores são majoritariamente siglas conhecidas da lista
     padrão ADMS (``siglas_set``). Exclui colunas predominantemente numéricas
@@ -265,21 +273,86 @@ def _col_sigla(rows, inicio, ncols, siglas_set: frozenset[str]) -> int | None:
     return melhor
 
 
+def _col_modulo(rows, inicio, ncols, config: Config, reservadas: set[int]) -> int | None:
+    """Coluna de módulo por linha: valores em BLOCOS contíguos + alta taxa de
+    canonização por prefixo de módulo. Header 'Módulo' soma bônus de desempate.
+
+    - Estrutura de bloco separa {módulo, IED} de {descrição, índice}.
+    - Taxa de canonização (1º token alfabético ∈ mapa_prefixo_modulo) separa
+      módulo de IED (SEL-411L não bate prefixo).
+    - Exclui colunas já reivindicadas (descricao/indice/tipo/sigla), numéricas
+      e de baixa diversidade (< 2 distintos).
+    """
+    prefixos = set(config.mapa_prefixo_modulo)
+    header_row = inicio - 1
+    header = rows[header_row] if 0 <= header_row < len(rows) else ()
+    melhor, melhor_score = None, 0.0
+    for c in range(ncols):
+        if c in reservadas:
+            continue
+        vals = _valores_coluna(rows, c, inicio)
+        if len(vals) < 2:
+            continue
+        norm = [_norm(v) for v in vals]
+        if len(set(norm)) < 2:
+            continue
+        if sum(1 for v in norm if v.replace("-", "").isdigit()) / len(norm) > 0.5:
+            continue
+        # Calcular transições baseado em prefixos (blocos de mesmo prefixo)
+        prefixos_vals = []
+        for v in norm:
+            m = _SO_ALFA.findall(v)
+            if m:
+                prefixos_vals.append(m[0])
+            else:
+                prefixos_vals.append(v)
+        transicoes = sum(1 for a, b in zip(prefixos_vals, prefixos_vals[1:]) if a != b)
+        bloco = 1.0 - transicoes / max(len(prefixos_vals) - 1, 1)
+        if bloco < _MODULO_BLOCO_MIN:
+            continue
+        distintos = set(norm)
+        com_prefixo = sum(
+            1 for v in distintos
+            if (m := _SO_ALFA.findall(v)) and m[0] in prefixos
+        )
+        canon = com_prefixo / len(distintos)
+        if canon < _MODULO_CANON_MIN:
+            continue
+        score = canon * bloco
+        rotulo = _norm(header[c]) if c < len(header) else ""
+        if any(t in rotulo for t in _MODULO_ROTULO):
+            score *= 1 + _MODULO_BONUS
+        if score > melhor_score:
+            melhor, melhor_score = c, score
+    return melhor
+
+
 def analisar(
     rows: list[tuple], encoder, ref_emb: np.ndarray,
     siglas_set: frozenset[str] | None = None,
+    config: Config | None = None,
 ) -> MapaColunas:
     ncols = _ncols(rows)
     h = _header_por_densidade(rows)
     inicio = h + 1
 
+    c_desc = _col_descricao(rows, inicio, ncols, encoder, ref_emb)
+    c_idx = _col_indice(rows, inicio, ncols)
+    c_tipo = _col_tipo(rows, inicio, ncols)
+    c_sig = _col_sigla(rows, inicio, ncols, siglas_set) if siglas_set is not None else None
+    c_mod = None
+    if config is not None:
+        reservadas = {c for c in (c_desc, c_idx, c_tipo, c_sig) if c is not None}
+        c_mod = _col_modulo(rows, inicio, ncols, config, reservadas)
+
     colunas = {
         k: v
         for k, v in (
-            ("descricao", _col_descricao(rows, inicio, ncols, encoder, ref_emb)),
-            ("indice", _col_indice(rows, inicio, ncols)),
-            ("tipo", _col_tipo(rows, inicio, ncols)),
-            ("sigla", _col_sigla(rows, inicio, ncols, siglas_set) if siglas_set is not None else None),
+            ("descricao", c_desc),
+            ("indice", c_idx),
+            ("tipo", c_tipo),
+            ("sigla", c_sig),
+            ("modulo", c_mod),
         )
         if v is not None
     }
