@@ -72,3 +72,34 @@ def test_aviso_pendentes_emite_rever(qtbot):
     tela.rever_pendentes.connect(lambda: recebido.append(True))
     tela.rever_pendentes.emit()
     assert recebido
+
+
+def test_custom_id_duplicado_vai_para_relatorio_de_revisao(qtbot, monkeypatch, tmp_path):
+    tela = _tela(qtbot, [_rec("a", status="decidido")])
+    tela._estado.lista_padrao = object()
+    tela._estado.paths.update({"template": "t.xlsx", "output": str(tmp_path)})
+
+    class _FakeWb:
+        def save(self, path):
+            pass
+
+    def fake_gerar_tdt(registros, template, lp, subestacao=None, aliases=None, auditoria=None):
+        auditoria.evento(
+            "engine", "1 registros com Custom ID duplicado -> revisão", "AVISO",
+            dados={"ids": ("a",)})
+        return _FakeWb()
+
+    monkeypatch.setattr("tdt.pipeline.gerar_tdt", fake_gerar_tdt)
+
+    capturado = {}
+
+    def fake_relatorio(registros, revisao, destino, diagnostico=None, subestacao=None):
+        capturado["revisao"] = revisao
+        return tmp_path / "Auditoria_x.xlsx"
+
+    monkeypatch.setattr("tdt.ui.tela_geracao.gerar_relatorio_revisao", fake_relatorio)
+
+    tela._gerar()
+
+    motivos = {it.registro.id: it.motivo for it in capturado["revisao"]}
+    assert motivos.get("a") == "custom_id_duplicado"
