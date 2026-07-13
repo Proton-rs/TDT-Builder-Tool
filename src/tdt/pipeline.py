@@ -532,7 +532,9 @@ def gerar_tdt(registros, template_path, lp, subestacao=None, aliases=None, confi
     lista = criador_lista_homogenea.montar(list(corrigidos), subestacao=subestacao)
     lista, rev_dup = engine_tdt.particionar_custom_id_duplicado(lista)
     if rev_dup:
-        aud.evento("engine", f"{len(rev_dup)} registros com Custom ID duplicado -> revisão", "AVISO")
+        ids = tuple(it.registro.id for it in rev_dup)
+        aud.evento("engine", f"{len(rev_dup)} registros com Custom ID duplicado -> revisão", "AVISO",
+                   dados={"ids": ids})
     return engine_tdt.gerar(
         lista, template_path, lp, alias_v1=descricoes_por_sigla(DEFAULT_LISTA_ALIAS)
     )

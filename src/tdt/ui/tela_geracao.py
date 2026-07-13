@@ -14,6 +14,8 @@ from PySide6.QtWidgets import (
     QPushButton, QVBoxLayout, QWidget,
 )
 
+from tdt.auditoria import Auditoria
+from tdt.contracts import ItemRevisao
 from tdt.nomes_saida import nome_saida
 from tdt.relatorio_revisao import gerar_relatorio_revisao
 from tdt.ui.estado import AppState
@@ -188,16 +190,27 @@ class TelaGeracao(QWidget):
             return
         try:
             from tdt import pipeline
+            aud = Auditoria()
             wb = pipeline.gerar_tdt(
                 self._estado.registros, template, lp,
                 subestacao=self._estado.subestacao,
                 aliases=self._estado.aliases,
+                auditoria=aud,
             )
             wb.save(str(out_path))
-            revisao = (self._estado.resultado.revisao
-                       if self._estado.resultado else ())
+            revisao = list(self._estado.resultado.revisao
+                           if self._estado.resultado else ())
             diag = (self._estado.resultado.diagnostico
                     if self._estado.resultado else {})
+            # ponytail: só gerar_tdt() emite AVISO com dados["ids"] hoje (gate de
+            # Custom ID duplicado); se outro evento futuro reusar essa chave com
+            # motivo diferente, isto precisa distinguir por `ev.modulo`/msg.
+            por_id = {r.id: r for r in self._estado.registros}
+            for ev in aud.eventos:
+                dup_ids = (ev.dados or {}).get("ids", ()) if ev.nivel == "AVISO" else ()
+                revisao.extend(
+                    ItemRevisao(por_id[i], motivo="custom_id_duplicado")
+                    for i in dup_ids if i in por_id)
             aud_path = gerar_relatorio_revisao(
                 self._estado.registros, revisao, output, diagnostico=diag,
                 subestacao=self._estado.subestacao)
