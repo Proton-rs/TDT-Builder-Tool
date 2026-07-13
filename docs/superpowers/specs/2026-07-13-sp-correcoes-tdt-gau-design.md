@@ -8,7 +8,7 @@
 
 ## 1. Contexto e método
 
-O usuário revisou as últimas TDTs geradas e anotou 13 observações (`docs/anot.txt`). Este design mapeia cada observação à causa verificada no código atual e agrupa as correções em 6 eixos. Itens cuja causa depende do dado real (o arquivo GAU) ganham **diagnóstico reproduzível primeiro** — regra do projeto: não codar correção de pareamento/endereço sem reproduzir o caso (histórico: Fase 8 do SP-Unificado, "bloqueada por dado").
+O usuário revisou as últimas TDTs geradas e anotou 13 observações (`docs/anot.txt`), mais uma reportada em conversa (item 14, tensão CA×AC — 13jul). Este design mapeia cada observação à causa verificada no código atual e agrupa as correções em 6 eixos. Itens cuja causa depende do dado real (o arquivo GAU) ganham **diagnóstico reproduzível primeiro** — regra do projeto: não codar correção de pareamento/endereço sem reproduzir o caso (histórico: Fase 8 do SP-Unificado, "bloqueada por dado").
 
 Sobreposição com `docs/observações_pendentes.txt` e com a spec A (26jun, "revisão UI lote/endereçamento/módulo" — 3/9 itens implementados até hoje): os itens re-reportados no anot.txt entram aqui; o restante da spec A permanece lá.
 
@@ -30,6 +30,7 @@ Sobreposição com `docs/observações_pendentes.txt` e com a spec A (26jun, "re
 | 11 | BC1/BC2: módulo incorretamente nomeado na origem → sinais iguais que pareciam do mesmo módulo; gerar aviso | Dado do cliente errado (fora de alcance corrigir); o sistema detecta colisão só no fim (`particionar_custom_id_duplicado`) com motivo genérico. Falta aviso explícito "sinais iguais no mesmo módulo vindos de sheets distintas" | E4 |
 | 12 | GERAL: identificador da sheet de origem | `sheet_origem()` já existe (`modelo_tabela.py:60`, usada nas abas/proxy) — só não é coluna nem vai destacada no relatório | E5 |
 | 13 | GERAL: "futuro" → "sem endereço"; melhorar descrição dos motivos | `_MOTIVO_LABEL` mapeia 9 motivos; o pipeline emite 14 (`pareamento_ambiguo`, `custom_id_duplicado`, `posicao_ambigua`, `comando_sem_discreto`, `comando_tap_nao_modelado`, `decisao_por_projeto`, `descartado_*`… ficam de fora). Não mapeado renderiza **"—"** (`modelo_tabela.py:145`). Label atual "Futuro (sem endereço)" | E6 |
+| 14 | Tensão fase CA sai como "AC" na TDT (invertido); identificar as fases e ordenar | Par de fase invertido não é reconhecido: `normalizador.FASES` (`:72`) só tem `CA`; "AC" não extrai (fase=None → Phases vira "ABC") e não há `"AC"` hardcoded em `src/tdt` — a origem do "AC" exibido (coluna Phases × Signal Alias × descrição da lista padrão) precisa do diagnóstico | E1→E2 |
 
 ## 3. Eixos de correção
 
@@ -39,6 +40,7 @@ Script `bench/diag_gau.py` (padrão dos `bench/diag_*.py` existentes): roda o pi
 
 - **Comandos** (BC1 "endereço 80", BC2 DJF1, BC5_6 DJF1): para cada linha de comando do input, onde terminou — TDT ReadWrite / Write órfão / revisão (qual motivo) / **ausente** (perda silenciosa). Instrumenta a cadeia `dc_pairer → corrigir → montar → particionar_custom_id_duplicado → gerar`.
 - **CVA11 VAB**: qual coluna `_col_tipo` escolheu, qual categoria/direção cada sinal analógico recebeu, e onde o layout difere (tipo em linha de seção × coluna).
+- **Tensões entre fases (item 14)**: para cada tensão VAB/VBC/VCA do input, a fase extraída pelo N0, o valor gravado na coluna Phases e o texto do Signal Alias — localizar exatamente onde o "AC" invertido aparece (extração × lista padrão × template).
 - **BC1/BC2 módulos**: quais Custom IDs colidiram e de quais sheets vieram os registros de cada grupo.
 
 Saída: `docs/superpowers/specs/2026-07-13-diag-gau-achados.md`. As correções de E3 são instanciadas a partir dele — **uma causa = uma task = um gate**.
@@ -47,6 +49,7 @@ Saída: `docs/superpowers/specs/2026-07-13-diag-gau-achados.md`. As correções 
 
 1. **`f_r4` estágio com fallback** (item 2): quando o texto tem estágio E1-E4 mas **nenhum** candidato da família termina no dígito, manter o candidato sem-estágio (hoje ele é removido). Só remover quem termina em dígito *diferente*. É o upgrade path já anotado no próprio código.
 2. **Piso absoluto de decisão** (item 4): novo knob `config.piso_decisao` — se o score do top-1 (mesclado, pós-calibrador E4, antes do motor de regras) ficar abaixo do piso, rotear para revisão com motivo `score_baixo` mesmo com pct/gap ok. Valor inicial calibrado contra o gate (partida: 0.20). Protege contra o padrão "descrições muito discrepantes decididas".
+3. **Canonização de par de fases invertido** (item 14): `_fase_no_texto` passa a reconhecer os pares invertidos e canonizar para a ordem cíclica padrão — `AC→CA`, `BA→AB`, `CB→BC` — antes do lookup em `FASES`. Beneficia extração (N0), o filtro duro de fase (`f_r3`) e a coluna Phases. Se o diagnóstico mostrar que o "AC" da TDT vem da **descrição da lista padrão** (dado, não código), a correção vira proposta de edição da lista (decisão à parte — lista é fonte de verdade do usuário).
 
 ### E3 — Pareamento/comando (pós-diagnóstico)
 
@@ -97,7 +100,8 @@ No ponto do `particionar_custom_id_duplicado`: quando um grupo colidido tem regi
 - Invariante de conservação de comando testada: nenhum comando de entrada some sem aparecer no TDT ou na revisão.
 - Motivo de revisão nunca renderiza "—" quando existe motivo.
 - Operador consegue, na tela de revisão: aprovar N linhas de uma vez, propagar edição à seleção, editar endereço, formar/trocar par de posição DJA1↔DJF1, ver sheet de origem e contadores pendentes/total.
-- Casos do anot.txt reproduzidos no diag (BC1 endereço 80, BC2/BC5_6 comando, CVA11 VAB) com causa documentada e correção aplicada ou explicitamente adiada com motivo.
+- Casos do anot.txt reproduzidos no diag (BC1 endereço 80, BC2/BC5_6 comando, CVA11 VAB, tensão CA×AC) com causa documentada e correção aplicada ou explicitamente adiada com motivo.
+- Tensão entre fases sai com o par na ordem canônica (AB/BC/CA) — nunca "AC"/"BA"/"CB" — em Phases e na extração de fase.
 
 ## 7. Questões em aberto (não bloqueiam o plano; confirmar na revisão da spec)
 

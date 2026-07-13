@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Fechar as 13 observações do `docs/anot.txt` (TDTs GAU/CVA): diagnóstico reproduzível dos comandos perdidos e do tipo VAB, 2 correções de classificação com gate, aviso de módulo suspeito, e o pacote de UI de revisão (motivos visíveis, lote, endereço editável, par de posição, colunas e contadores).
+**Goal:** Fechar as 14 observações das TDTs GAU/CVA (13 do `docs/anot.txt` + tensão CA×AC): diagnóstico reproduzível dos comandos perdidos e do tipo VAB, 3 correções de classificação com gate, aviso de módulo suspeito, e o pacote de UI de revisão (motivos visíveis, lote, endereço editável, par de posição, colunas e contadores).
 
 **Architecture:** Faseado, na receita do SP-Unificado 08jul: diagnóstico primeiro (E3 e o fix do VAB são bloqueados por dado), correções determinísticas de UI/motivos sem gate, correções de scoring/pareamento **uma por task com gate individual** (`bench/gate_tdt_real.py`, `pct >= baseline`, nunca agrupar). Lógica nova de UI vai em `estado`/`modelo_tabela` (testável headless); `tela_revisao` só wira.
 
@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- **Gate obrigatório e individual** em toda task que altera matching/roteamento/pareamento (Tasks 4, 5, 8, 9): `PYTHONPATH=src python bench/gate_tdt_real.py`; `pct` não pode cair vs. a task anterior. Regrediu → reverter a task, registrar em `bench/resultados/spGAU_<task>.txt`, seguir.
+- **Gate obrigatório e individual** em toda task que altera matching/roteamento/pareamento (Tasks 4, 4b, 5, 8, 9): `PYTHONPATH=src python bench/gate_tdt_real.py`; `pct` não pode cair vs. a task anterior. Regrediu → reverter a task, registrar em `bench/resultados/spGAU_<task>.txt`, seguir.
 - **Lista padrão de matching:** `Pontos Padrao ADMS_v8.xlsx` (default atual; nunca v5/v6).
 - **Tasks bloqueadas por dado (8 e 9):** instanciar SÓ depois do diagnóstico (Task 1); uma causa = uma task = um gate; parar e reportar ao usuário antes de implementar.
 - Estilo: nomes descritivos, funções puras, teste por função pública (CLAUDE.md). TDD sempre. Commits pequenos `fix(...)|feat(ui)|test(...)`.
@@ -84,6 +84,10 @@ Instrumentação: comparar os ids presentes em `decididos` (pré `dc_pairer.pare
 - [ ] **Step 3: Instrumentar o CVA11 (VAB)**
 
 Imprimir: índice/nome da coluna que `analise_colunas._col_tipo` escolheu, e para cada sinal analógico (VAB, VBC, ...) a categoria/direção atribuída pelo `estruturador` e de onde veio (célula TIPO × marcador de seção). Confirmar a hipótese "tipo na linha numa sheet, na coluna em outra".
+
+- [ ] **Step 3b: Instrumentar as tensões entre fases (item 14 — CA×AC)**
+
+Para cada tensão entre fases do input (VAB/VBC/VCA, "tensão fase CA" etc.): imprimir o texto bruto, a fase que `extrair_contexto_estrutural` devolveu, o valor final da coluna Phases e o texto do Signal Alias no TDT gerado. Objetivo: localizar exatamente onde o "AC" invertido aparece — extração N0 (texto do input traz "AC"), descrição da lista padrão (Signal Alias), ou outro campo. Se vier da lista padrão, a correção é de dado (proposta à parte), não a Task 4b.
 
 - [ ] **Step 4: Instrumentar BC1/BC2 (módulo)**
 
@@ -256,6 +260,48 @@ Se `Contexto` não expõe a família, computar o conjunto de finais uma vez em `
 - [ ] **Step 5: Gate individual.** `PYTHONPATH=src python bench/gate_tdt_real.py` → `pct >= baseline` (Task 0). Regrediu → revert + `bench/resultados/spGAU_task4.txt`.
 
 - [ ] **Step 6: Commit** `git commit -am "fix(regras): f_r4 mantem sigla base quando familia nao tem variante do estagio (50N E2)"`
+
+### Task 4b: Canonização de par de fases invertido (AC→CA, BA→AB, CB→BC)
+
+**Files:**
+- Modify: `src/tdt/normalizacao/normalizador.py:90-120` (`_fase_no_texto` + tupla multi-letra do D2.2)
+- Test: `tests/test_normalizador.py`
+
+**Interfaces:**
+- Consumes: `extrair_contexto_estrutural(texto) -> (texto_remanescente, ContextoEstrutural)` (assinatura atual, `normalizador.py:132`).
+- Produces: `ContextoEstrutural.fase` sempre em ordem canônica (`AB`/`BC`/`CA`); domínio `FASES` inalterado. Beneficia `f_r3` (filtro duro de fase) e a coluna Phases (`engine_tdt._fase_saida`).
+
+- [ ] **Step 1: Teste que falha**
+
+```python
+def test_par_de_fase_invertido_canoniza():
+    _, ctx = extrair_contexto_estrutural("TENSAO FASE AC")
+    assert ctx.fase == "CA"
+    _, ctx = extrair_contexto_estrutural("TENSAO FASE BA")
+    assert ctx.fase == "AB"
+    _, ctx = extrair_contexto_estrutural("TENSAO FASE CB")
+    assert ctx.fase == "BC"
+
+def test_par_de_fase_canonico_inalterado():
+    _, ctx = extrair_contexto_estrutural("TENSAO FASE CA")
+    assert ctx.fase == "CA"
+```
+
+- [ ] **Step 2: Rodar — falha.** `PYTHONPATH=src python -m pytest tests/test_normalizador.py -k fase_invertido -v` → FAIL (fase=None hoje: "AC" não está em `FASES`).
+
+- [ ] **Step 3: Implementar**
+
+```python
+_PAR_FASE_INVERTIDO = {"AC": "CA", "BA": "AB", "CB": "BC"}
+```
+
+Em `_fase_no_texto`: antes de cada lookup em `FASES` (e na tupla multi-letra do D2.2, `normalizador.py:117`), canonizar o token: `t = _PAR_FASE_INVERTIDO.get(t, t)`. Devolver a fase canonizada — o token original permanece no texto (contrato atual da função).
+
+- [ ] **Step 4: Rodar — passa.** Suíte inteira de `test_normalizador.py` PASS.
+
+- [ ] **Step 5: Gate individual.** `PYTHONPATH=src python bench/gate_tdt_real.py` → `pct >= baseline`. Regrediu → revert + `bench/resultados/spGAU_task4b.txt`.
+
+- [ ] **Step 6: Commit** `git commit -am "fix(normalizacao): canoniza par de fases invertido (AC->CA, BA->AB, CB->BC)"`
 
 ### Task 5: Piso absoluto de decisão (51F → FC87)
 
@@ -622,7 +668,7 @@ def test_roundtrip_edicao_nao_altera_valor():
 ## Self-Review (cobertura spec → plano)
 
 - E1 diagnóstico (itens 1b/3/5/8/10/11) → Task 1 ✓
-- E2 f_r4 estágio (item 2) → Task 4 ✓ | piso absoluto (item 4) → Task 5 ✓
+- E2 f_r4 estágio (item 2) → Task 4 ✓ | piso absoluto (item 4) → Task 5 ✓ | par de fases invertido (item 14) → Task 4b ✓ (+ rastreio no diag, Task 1 Step 3b)
 - E3 invariante → Task 7 ✓ | correções GAU → Task 8 (bloqueada por dado, hipóteses H1-H4) ✓
 - E1→fix VAB (item 8) → Task 9 (bloqueada por dado) ✓
 - E4 aviso módulo (item 11) → Task 6 ✓
