@@ -262,3 +262,33 @@ def test_comando_s_marca_comando_nao_duplo():
     assert regs[0].tipo_sinal.direcao == "Output"
     assert regs[0].tipo_sinal.comando_duplo is False
     assert regs[1].tipo_sinal.comando_duplo is True
+
+
+# --- módulo por linha (coluna MODULO_POR_LINHA, Task 3) -----
+
+
+def test_estruturar_modulo_por_linha_muda_entre_blocos():
+    rows = [
+        ("Modulo", "Descricao", "Tipo", "Addr"),
+        ("LTSM3C1", "DISJUNTOR ABERTO", "Ponto Simples", "1"),
+        ("LTSM3C1", "DISJUNTOR FECHADO", "Ponto Simples", "2"),
+        ("TR1", "TEMPERATURA OLEO", "Ponto Simples", "3"),
+    ]
+    mapa = MapaColunas(header_row=1, colunas={"modulo": 0, "descricao": 1, "tipo": 2, "indice": 3})
+    recs = estruturar(rows, mapa, sheet_name="ESTADOS", config=Config())
+    assert [r.modulo.nome for r in recs] == ["LTSM3C1", "LTSM3C1", "TR1"]
+    assert all(r.modulo.origem_contexto == "coluna:MODULO_POR_LINHA" for r in recs)
+
+
+def test_estruturar_modulo_vazio_vai_para_revisao():
+    rows = [
+        ("Modulo", "Descricao", "Tipo", "Addr"),
+        ("TR1", "TEMPERATURA OLEO", "Ponto Simples", "1"),
+        ("", "SINAL SEM MODULO", "Ponto Simples", "2"),
+    ]
+    mapa = MapaColunas(header_row=1, colunas={"modulo": 0, "descricao": 1, "tipo": 2, "indice": 3})
+    recs = estruturar(rows, mapa, sheet_name="ESTADOS", config=Config())
+    assert recs[0].status == "pendente"
+    assert recs[1].status == "revisao"
+    assert recs[1].justificativa == "modulo_indefinido"
+    assert recs[1].modulo.nome is None

@@ -3,7 +3,8 @@
 Rastreia marcadores de seção na coluna 1 (com sinônimos: Comandos/Controle,
 Digitais/Sinalizações, Analógicas/Medidas) para definir categoria e direção.
 A coluna 'Tipo' refina linha a linha quando presente. Módulo é constante por
-sheet (vem da coluna Módulo).
+sheet (do sheet_name ou de NOME derivado de sigla) no gênero tradicional, ou
+lido linha a linha quando há coluna dedicada (`coluna:MODULO_POR_LINHA`).
 """
 
 from __future__ import annotations
@@ -58,6 +59,7 @@ def estruturar(
     c_idx = cols.get("indice")
     c_tipo = cols.get("tipo")
     c_sigla = cols.get("sigla")
+    c_modulo = cols.get("modulo")
     nome_mod = modulo if modulo is not None else sheet_name
     col0 = 0  # marcadores de seção ficam na 1ª coluna
 
@@ -107,13 +109,29 @@ def estruturar(
             barra=ctx_estrutural.barra,
         )
 
-        # --- pré-classificação por coluna de sigla (sigla não-homogênea) ---
+        # --- resolução de módulo/sigla por coluna ---
         sigla_sinal = None
         status = "pendente"
         motivo_revisao = None
         origem_modulo = "sheet_name"
         nome_mod_final = nome_mod
-        if tem_sigla and siglas_set is not None:
+
+        if c_modulo is not None:
+            # Gênero sheet-por-tipo: módulo numa coluna dedicada, por linha.
+            # Precedência sobre extração do NOME (coluna explícita ganha).
+            val_mod = (
+                str(row[c_modulo]).strip()
+                if c_modulo < len(row) and row[c_modulo] is not None
+                else ""
+            )
+            origem_modulo = "coluna:MODULO_POR_LINHA"
+            if val_mod:
+                nome_mod_final = val_mod
+            else:
+                nome_mod_final = None
+                status = "revisao"
+                motivo_revisao = "modulo_indefinido"
+        elif tem_sigla and siglas_set is not None:
             sv = str(row[c_sigla] or "").strip().upper()
             if sv and sv in siglas_set:
                 sigla_sinal = sv
@@ -135,7 +153,7 @@ def estruturar(
                         if equip_extraido:
                             eletrico = replace(eletrico, nome_equipamento=equip_extraido)
             # sv não-vazia mas fora da LP -> status fica "pendente": recai no scoring
-        # ---------------------------------------------------------------------
+        # -------------------------------------------------------------------
 
         registros.append(
             SignalRecord(

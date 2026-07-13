@@ -213,3 +213,85 @@ def test_particionar_alta_segue_adiante():
     segue, revisao = particionar_por_confianca(sinais, "alta")
     assert segue == sinais
     assert revisao == []
+
+
+from tdt.identidade_modulo import canonizar_modulo
+
+
+def test_canonizar_explicito_prefixo_e_numero_com_sufixo_de_tensao():
+    cfg = Config()
+    assert canonizar_modulo("AL 11 - 13.8kV", cfg, explicito=True).nome == "AL11"
+    assert canonizar_modulo("AL15 - 13.8kV (FUTURO)", cfg, explicito=True).nome == "AL15"
+    assert canonizar_modulo("TR1", cfg, explicito=True).nome == "TR1"
+
+
+def test_canonizar_explicito_sem_prefixo_usa_cru_limpo_alta():
+    cfg = Config()
+    r = canonizar_modulo("TIE-AT", cfg, explicito=True)
+    assert r.nome == "TIE-AT"
+    assert r.confianca == "alta"
+    r2 = canonizar_modulo("LTSM3C1", cfg, explicito=True)
+    assert r2.nome == "LTSM3C1"
+    assert r2.confianca == "alta"
+
+
+def test_canonizar_explicito_limpa_sufixo_futuro_sem_prefixo():
+    cfg = Config()
+    assert canonizar_modulo("TIE-AT (FUTURO)", cfg, explicito=True).nome == "TIE-AT"
+
+
+def test_canonizar_nao_explicito_preserva_fallback_resolver_modulo():
+    cfg = Config()
+    r = canonizar_modulo("SLOT GERAL", cfg)  # explicito=False (default)
+    assert r.nome == "SLOT GERAL"   # cru, SEM limpeza
+    assert r.confianca == "baixa"
+
+
+def test_canonizar_explicito_sufixo_tensao_com_prefixo_nao_mapeado():
+    # XYZ não está em mapa_prefixo_modulo, então não é capturado por Estratégia 2.
+    # Com explicito=True, a regex de _limpar_modulo (sufixo de tensão) deve remover
+    # " - 13.8kV" e retornar o valor limpo com confiança alta.
+    cfg = Config()
+    r = canonizar_modulo("XYZ - 13.8kV", cfg, explicito=True)
+    assert r.nome == "XYZ"
+    assert r.confianca == "alta"
+
+
+def _rec_mod(norm: str, nome_mod: str) -> SignalRecord:
+    return SignalRecord(
+        id="t:1",
+        modulo=Modulo(nome_mod, "coluna:MODULO_POR_LINHA"),
+        tipo_sinal=TipoSinal("Discrete", "SingleBit", "Input"),
+        enderecamento=Enderecamento("DNP3", ()),
+        descricoes=Descricoes(norm, norm),
+    )
+
+
+def test_aplicar_identidade_por_linha_canoniza_e_classifica_por_grupo():
+    sinais = [
+        _rec_mod("DISJUNTOR", "AL 11 - 13.8kV"),
+        _rec_mod("CORRENTE", "TR1"),
+    ]
+    novos, conf = aplicar_identidade(sinais, "ESTADOS", [], Config())
+    assert novos[0].modulo.nome == "AL11"
+    assert novos[0].modulo.tipo == "Alimentador"
+    assert novos[1].modulo.nome == "TR1"
+    assert novos[1].modulo.tipo == "Transformador"
+    assert conf == "alta"
+
+
+def test_aplicar_identidade_por_linha_reconcilia_variantes():
+    # 'AL 11' e 'AL11' (variantes cross-sheet) canonizam para o mesmo nome
+    sinais = [_rec_mod("SINAL A", "AL 11 - 13.8kV"), _rec_mod("SINAL B", "AL11 - 13.8kV")]
+    novos, _ = aplicar_identidade(sinais, "MEDIDAS", [], Config())
+    assert novos[0].modulo.nome == novos[1].modulo.nome == "AL11"
+
+
+def test_aplicar_identidade_por_linha_canonizacao_vazia_vai_pra_revisao():
+    # Célula de módulo é só sufixo de classe de tensão ("- 13.8kV"): não
+    # vazia na origem, mas canoniza (explicito=True) para "" -- equivale a
+    # módulo ausente e não pode seguir pro scoring em silêncio.
+    sinais = [_rec_mod("DISJUNTOR", "- 13.8kV")]
+    novos, _ = aplicar_identidade(sinais, "ESTADOS", [], Config())
+    assert novos[0].status == "revisao"
+    assert novos[0].justificativa == "modulo_indefinido"
