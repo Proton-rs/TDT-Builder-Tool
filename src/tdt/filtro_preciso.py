@@ -93,18 +93,25 @@ def f_r3(cand: Candidato, ctx: Contexto) -> bool:
 # --- F_R4: estágio ----------------------------------------------------------
 
 
-def f_r4(cand: Candidato, ctx: Contexto) -> bool:
-    """Remove se texto tem estágio e sigla não termina no dígito do estágio.
-    
-    Agressivo: remove até candidatos sem estágio (ex: 51N quando texto
-    tem E1). Upgrade: só remover se sigla explicitamente terminar em
-    dígito DIFERENTE do estágio, mantendo sem-estágio.
+def f_r4(
+    cand: Candidato, ctx: Contexto, finais_familia: frozenset[str] = frozenset()
+) -> bool:
+    """Remove se texto tem estágio e sigla diverge do dígito do estágio.
+
+    Só remove candidato sem estágio (sigla não termina em dígito) se ALGUM
+    candidato da família (``finais_familia``, finais numéricos das siglas do
+    grupo julgado por ``filtrar``) tiver a variante certa; senão mantém —
+    evita remover 51N quando texto tem "E1" mas nenhuma variante "…1" existe
+    na família (ex: "50N E2" sem 50N2 no catálogo).
     """
     estagios = ctx.tokens & _ESTAGIOS
     if not estagios:
         return True
     digito = next(iter(estagios))[1]
-    return cand.sigla.endswith(digito)
+    final = cand.sigla[-1]
+    if final.isdigit():
+        return final == digito
+    return digito not in finais_familia
 
 
 # --- F_R5: comando × status -------------------------------------------------
@@ -251,11 +258,12 @@ def f_50bf(cand: Candidato, ctx: Contexto) -> bool:
 
 
 # Registro de filtros — adicione funções aqui para crescer.
+# f_r4 fica fora: precisa de finais_familia (computado uma vez em filtrar()),
+# assinatura diferente da cascata genérica (cand, ctx) -> bool.
 _FILTROS = (
     f_r1,
     f_r2,
     f_r3,
-    f_r4,
     f_r5,
     f_equip,
     f_r6,
@@ -277,6 +285,9 @@ def filtrar(
     """
     _ = config  # reservado para futuros gates por config
     ctx = Contexto.de(rec)
+    finais_familia = frozenset(
+        c.sigla[-1] for c in candidatos if c.sigla and c.sigla[-1].isdigit()
+    )
     resultado: list[Candidato] = []
     for cand in candidatos:
         manter = True
@@ -284,6 +295,8 @@ def filtrar(
             if not filtro(cand, ctx):
                 manter = False
                 break
+        if manter and not f_r4(cand, ctx, finais_familia):
+            manter = False
         if manter and not f_posicao(cand, rec):
             manter = False
         if manter:
