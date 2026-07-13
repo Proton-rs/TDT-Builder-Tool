@@ -84,6 +84,20 @@ def test_registro_em_revisao_sem_diagnostico_nao_quebra_e_usa_placeholder(tmp_pa
     assert _col(ws, "Regras Aplicadas") in (None, "")
 
 
+def test_relatorio_duplicado_lista_sheets_de_origem_de_cada_registro(tmp_path):
+    """itens de revisão por Custom ID duplicado -- cada linha deve exibir sua
+    própria sheet de origem, para diferenciar os registros do grupo."""
+    recs = [_rec("BC1:10"), _rec("BC2:12")]
+    revisao = tuple(ItemRevisao(r, motivo="custom_id_duplicado") for r in recs)
+
+    caminho = gerar_relatorio_revisao(recs, revisao, tmp_path)
+
+    wb = openpyxl.load_workbook(caminho)
+    ws = wb["Auditoria"]
+    assert _col(ws, "Sheet Origem", linha=2) == "BC1"
+    assert _col(ws, "Sheet Origem", linha=3) == "BC2"
+
+
 def test_gerar_relatorio_sem_diagnostico_mantem_retrocompat(tmp_path):
     """Chamador antigo (sem o parâmetro novo) continua funcionando -- UI legada."""
     rec = _rec("SUB3:1", sigla="DJF1", candidatos=(Candidato("DJF1", 0.9, "mesclado"),))
