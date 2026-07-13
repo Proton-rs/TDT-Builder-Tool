@@ -37,6 +37,20 @@ def _tem_prefixo(tokens: list[str], prefixos: tuple[str, ...]) -> bool:
     return any(tok.startswith(p) for tok in tokens for p in prefixos)
 
 
+# Comando de 1 linha só ("Abrir/Fechar", "Ligar/Desligar" — verbo infinitivo,
+# as DUAS polaridades no mesmo texto) — não bate _LIGADO_PREFIXOS/
+# _DESLIGADO_PREFIXOS (particípio), então precisa de prefixos próprios pra
+# ser reconhecido como comando-par (Task 8.1 SP-CVA, achado item 1b).
+_ABERTURA_PREFIXOS = ("ABRIR", "ABERT", "DESLIGA")
+_FECHAMENTO_PREFIXOS = ("FECHA", "LIGA")
+
+
+def _eh_comando_toggle(tokens: list[str]) -> bool:
+    """True se o texto carrega evidência das DUAS polaridades juntas (comando
+    de uma linha só que alterna o equipamento, ex. 'Abrir/Fechar')."""
+    return _tem_prefixo(tokens, _ABERTURA_PREFIXOS) and _tem_prefixo(tokens, _FECHAMENTO_PREFIXOS)
+
+
 # Siglas que representam POSIÇÃO de equipamento (aberto/fechado, ligado/
 # desligado) — só podem decidir um sinal se o texto tiver evidência real de
 # posição (ver eh_texto_de_posicao). Task 6 / SP-G: gate contra decisão "por
@@ -135,6 +149,18 @@ def forcar_polaridade_equipamento(
                 # par detectado mas variante não reconhecida — revisão explícita
                 for r in par:
                     ambiguos.add(r.id)
+
+        if sigla is not None:
+            # comando de uma linha só ("Abrir/Fechar") do MESMO equipamento —
+            # converge pra sigla já forçada do par de status, senão o scorer
+            # semântico desempata pra sigla errada (ex. DJA1 em vez de DJF1).
+            for outro in grupo:
+                if outro is ligado[0] or outro is desligado[0]:
+                    continue
+                if outro.tipo_sinal.direcao == "Output" and _eh_comando_toggle(
+                    outro.descricoes.normalizada.split()
+                ):
+                    forcados[outro.id] = sigla
 
     revisao = [
         ItemRevisao(rec, motivo="posicao_ambigua")
