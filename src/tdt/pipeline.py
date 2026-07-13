@@ -602,7 +602,7 @@ def executar(
             for msg in avisos_homog:
                 aud.evento("identidade_homogenea", msg, "AVISO")
         else:
-            mapa = analisar(rows, encoder, ref_emb, siglas_set=lp.siglas)
+            mapa = analisar(rows, encoder, ref_emb, siglas_set=lp.siglas, config=config)
             sinais = list(estruturar(rows, mapa, sheet_name=sn, config=config, vocab=vocab,
                                      siglas_set=lp.siglas))
         sinais, conf_mod = aplicar_identidade(sinais, sn, rows, config)

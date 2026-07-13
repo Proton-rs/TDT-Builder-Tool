@@ -255,3 +255,33 @@ def test_canonizar_explicito_sufixo_tensao_com_prefixo_nao_mapeado():
     r = canonizar_modulo("XYZ - 13.8kV", cfg, explicito=True)
     assert r.nome == "XYZ"
     assert r.confianca == "alta"
+
+
+def _rec_mod(norm: str, nome_mod: str) -> SignalRecord:
+    return SignalRecord(
+        id="t:1",
+        modulo=Modulo(nome_mod, "coluna:MODULO_POR_LINHA"),
+        tipo_sinal=TipoSinal("Discrete", "SingleBit", "Input"),
+        enderecamento=Enderecamento("DNP3", ()),
+        descricoes=Descricoes(norm, norm),
+    )
+
+
+def test_aplicar_identidade_por_linha_canoniza_e_classifica_por_grupo():
+    sinais = [
+        _rec_mod("DISJUNTOR", "AL 11 - 13.8kV"),
+        _rec_mod("CORRENTE", "TR1"),
+    ]
+    novos, conf = aplicar_identidade(sinais, "ESTADOS", [], Config())
+    assert novos[0].modulo.nome == "AL11"
+    assert novos[0].modulo.tipo == "Alimentador"
+    assert novos[1].modulo.nome == "TR1"
+    assert novos[1].modulo.tipo == "Transformador"
+    assert conf == "alta"
+
+
+def test_aplicar_identidade_por_linha_reconcilia_variantes():
+    # 'AL 11' e 'AL11' (variantes cross-sheet) canonizam para o mesmo nome
+    sinais = [_rec_mod("SINAL A", "AL 11 - 13.8kV"), _rec_mod("SINAL B", "AL11 - 13.8kV")]
+    novos, _ = aplicar_identidade(sinais, "MEDIDAS", [], Config())
+    assert novos[0].modulo.nome == novos[1].modulo.nome == "AL11"

@@ -101,9 +101,32 @@ def classificar_tipo(modulo_nome: str, registros: list[SignalRecord], config: Co
     return "Outros"
 
 
+def _identidade_por_linha(
+    sinais: list[SignalRecord], config: Config
+) -> list[SignalRecord]:
+    """Gênero módulo-por-coluna: canoniza cada nome de módulo (explícito) e
+    classifica o tipo POR GRUPO de módulo canônico (não 1 tipo/sheet)."""
+    canon: list[SignalRecord] = []
+    for s in sinais:
+        if s.modulo.origem_contexto == "coluna:MODULO_POR_LINHA" and s.modulo.nome:
+            res = canonizar_modulo(s.modulo.nome, config, explicito=True)
+            s = replace(s, modulo=replace(s.modulo, nome=res.nome))
+        canon.append(s)
+    grupos: dict[str, list[SignalRecord]] = {}
+    for s in canon:
+        grupos.setdefault(s.modulo.nome or "", []).append(s)
+    tipo_de = {nome: classificar_tipo(nome, regs, config) for nome, regs in grupos.items()}
+    return [
+        replace(s, modulo=replace(s.modulo, tipo=tipo_de[s.modulo.nome or ""]))
+        for s in canon
+    ]
+
+
 def aplicar_identidade(
     sinais: list[SignalRecord], sheet_name: str, rows: list[tuple], config: Config
 ) -> tuple[list[SignalRecord], str]:
+    if any(s.modulo.origem_contexto == "coluna:MODULO_POR_LINHA" for s in sinais):
+        return _identidade_por_linha(sinais, config), "alta"
     res = resolver_modulo(sheet_name, rows, config)
     # nome: resolve só onde veio do nome da sheet; preserva módulo de coluna.
     com_nome = [
