@@ -213,3 +213,35 @@ def test_particionar_alta_segue_adiante():
     segue, revisao = particionar_por_confianca(sinais, "alta")
     assert segue == sinais
     assert revisao == []
+
+
+from tdt.identidade_modulo import canonizar_modulo
+
+
+def test_canonizar_explicito_prefixo_e_numero_com_sufixo_de_tensao():
+    cfg = Config()
+    assert canonizar_modulo("AL 11 - 13.8kV", cfg, explicito=True).nome == "AL11"
+    assert canonizar_modulo("AL15 - 13.8kV (FUTURO)", cfg, explicito=True).nome == "AL15"
+    assert canonizar_modulo("TR1", cfg, explicito=True).nome == "TR1"
+
+
+def test_canonizar_explicito_sem_prefixo_usa_cru_limpo_alta():
+    cfg = Config()
+    r = canonizar_modulo("TIE-AT", cfg, explicito=True)
+    assert r.nome == "TIE-AT"
+    assert r.confianca == "alta"
+    r2 = canonizar_modulo("LTSM3C1", cfg, explicito=True)
+    assert r2.nome == "LTSM3C1"
+    assert r2.confianca == "alta"
+
+
+def test_canonizar_explicito_limpa_sufixo_futuro_sem_prefixo():
+    cfg = Config()
+    assert canonizar_modulo("TIE-AT (FUTURO)", cfg, explicito=True).nome == "TIE-AT"
+
+
+def test_canonizar_nao_explicito_preserva_fallback_resolver_modulo():
+    cfg = Config()
+    r = canonizar_modulo("SLOT GERAL", cfg)  # explicito=False (default)
+    assert r.nome == "SLOT GERAL"   # cru, SEM limpeza
+    assert r.confianca == "baixa"

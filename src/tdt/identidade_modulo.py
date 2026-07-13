@@ -28,33 +28,37 @@ class ResolucaoModulo:
     por_linha: dict[int, str] | None = None  # slot (follow-up); None aqui
 
 
-def resolver_modulo(sheet_name: str, rows: list[tuple], config: Config) -> ResolucaoModulo:
-    toks = _tokens(sheet_name)
-    # Estratégia 1: alias direto por sheet_name inteiro normalizado (mais
-    # específica — checa primeiro). Cobre sheet_names que não decompõem em
-    # prefixo+número de forma confiável: bay/vão sem número de módulo
-    # ("01F1_GTA_P" -> "LTGTA"), número embutido que NÃO é o nº do módulo
-    # ("IB_23kV": 23 é a tensão, não o módulo -> "IB"), siglas próprias
-    # ("87B_AT" -> "87BAT"). Exato/literal por sheet_name — sem ambiguidade,
-    # confirmado contra os dados reais (coluna de módulo + ground-truth TDT
-    # exportado). Tabela em config.mapa_sheet_modulo.
+_SUFIXO_RUIDO = re.compile(
+    r"\s*-\s*\d+(?:[.,]\d+)?\s*KV\b|\s*\((?:FUTURO|RESERVA)\)",
+    re.IGNORECASE,
+)
+
+
+def _limpar_modulo(valor: str) -> str:
+    """Remove sufixos de ruído (classe de tensão, (FUTURO)/(RESERVA)) e
+    colapsa espaços. Usado só no ramo explícito (coluna de módulo)."""
+    return " ".join(_SUFIXO_RUIDO.sub("", valor).split())
+
+
+def canonizar_modulo(valor: str, config: Config, *, explicito: bool = False) -> ResolucaoModulo:
+    """Canoniza um NOME de módulo (de sheet_name OU de célula da coluna Módulo).
+
+    Estratégia 1: alias direto por nome inteiro normalizado (mapa_sheet_modulo).
+    Estratégia 2: prefixo mapeado seguido do número do módulo.
+    Sem canonização:
+      - explicito=False (sheet_name): valor CRU, confiança BAIXA  [inalterado]
+      - explicito=True  (coluna):     valor cru LIMPO, confiança ALTA
+    """
+    toks = _tokens(valor)
     chave = "".join(toks)
     if chave in config.mapa_sheet_modulo:
         return ResolucaoModulo(nome=config.mapa_sheet_modulo[chave], confianca="alta")
-    # Estratégia 2: posicional — prefixo mapeado seguido do número do módulo.
-    # Sufixos de barra/proteção (_P1, _P2) adicionam números que NÃO são o nº
-    # do módulo — por isso usamos o número imediatamente após o prefixo, não
-    # "exatamente um número global".
     ocorr = [
         (i, config.mapa_prefixo_modulo[t])
         for i, t in enumerate(toks)
         if t.isalpha() and t in config.mapa_prefixo_modulo
     ]
     canonicos = {c for _, c in ocorr}
-    # alta confiança só sem ambiguidade: uma única família canônica (sinônimos
-    # contam como uma) e um único nº DEPOIS de um prefixo mapeado. Assim "AL
-    # FWB15"->AL15 (sinônimo), "BC1_P1"->BC1 (sufixo de barra ignorado, só o nº
-    # após BC conta) e "SPS_TR1_TR2"->baixa (TR seguido de 1 e de 2, ambíguo).
     if len(canonicos) == 1:
         nums = {
             toks[i + 1] for i, _ in ocorr
@@ -64,7 +68,14 @@ def resolver_modulo(sheet_name: str, rows: list[tuple], config: Config) -> Resol
             (prefixo,) = canonicos
             (num,) = nums
             return ResolucaoModulo(nome=f"{prefixo}{num}", confianca="alta")
-    return ResolucaoModulo(nome=sheet_name, confianca="baixa")
+    if explicito:
+        return ResolucaoModulo(nome=_limpar_modulo(valor), confianca="alta")
+    return ResolucaoModulo(nome=valor, confianca="baixa")
+
+
+def resolver_modulo(sheet_name: str, rows: list[tuple], config: Config) -> ResolucaoModulo:
+    """Resolve o nome real do módulo a partir do nome da sheet."""
+    return canonizar_modulo(sheet_name, config)
 
 
 def classificar_tipo(modulo_nome: str, registros: list[SignalRecord], config: Config) -> str:
