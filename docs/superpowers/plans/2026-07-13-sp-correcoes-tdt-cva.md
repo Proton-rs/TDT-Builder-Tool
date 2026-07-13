@@ -1,18 +1,18 @@
-# SP-GAU — Correções pós-revisão das TDTs GAU/CVA — Implementation Plan
+# SP-CVA — Correções pós-revisão das TDTs da SE CVA — Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Fechar as 14 observações das TDTs GAU/CVA (13 do `docs/anot.txt` + tensão CA×AC): diagnóstico reproduzível dos comandos perdidos e do tipo VAB, 3 correções de classificação com gate, aviso de módulo suspeito, e o pacote de UI de revisão (motivos visíveis, lote, endereço editável, par de posição, colunas e contadores).
+**Goal:** Fechar as 14 observações das TDTs da SE CVA (13 do `docs/anot.txt` + tensão CA×AC): diagnóstico reproduzível dos comandos perdidos e do tipo VAB, 3 correções de classificação com gate, aviso de módulo suspeito, e o pacote de UI de revisão (motivos visíveis, lote, endereço editável, par de posição, colunas e contadores).
 
 **Architecture:** Faseado, na receita do SP-Unificado 08jul: diagnóstico primeiro (E3 e o fix do VAB são bloqueados por dado), correções determinísticas de UI/motivos sem gate, correções de scoring/pareamento **uma por task com gate individual** (`bench/gate_tdt_real.py`, `pct >= baseline`, nunca agrupar). Lógica nova de UI vai em `estado`/`modelo_tabela` (testável headless); `tela_revisao` só wira.
 
 **Tech Stack:** Python 3.12, openpyxl, pytest, PySide6 (Fases 6-7). Sem dependências novas.
 
-**Spec:** `docs/superpowers/specs/2026-07-13-sp-correcoes-tdt-gau-design.md`
+**Spec:** `docs/superpowers/specs/2026-07-13-sp-correcoes-tdt-cva-design.md`
 
 ## Global Constraints
 
-- **Gate obrigatório e individual** em toda task que altera matching/roteamento/pareamento (Tasks 4, 4b, 5, 8, 9): `PYTHONPATH=src python bench/gate_tdt_real.py`; `pct` não pode cair vs. a task anterior. Regrediu → reverter a task, registrar em `bench/resultados/spGAU_<task>.txt`, seguir.
+- **Gate obrigatório e individual** em toda task que altera matching/roteamento/pareamento (Tasks 4, 4b, 5, 8, 9): `PYTHONPATH=src python bench/gate_tdt_real.py`; `pct` não pode cair vs. a task anterior. Regrediu → reverter a task, registrar em `bench/resultados/spCVA_<task>.txt`, seguir.
 - **Lista padrão de matching:** `Pontos Padrao ADMS_v8.xlsx` (default atual; nunca v5/v6).
 - **Tasks bloqueadas por dado (8 e 9):** instanciar SÓ depois do diagnóstico (Task 1); uma causa = uma task = um gate; parar e reportar ao usuário antes de implementar.
 - Estilo: nomes descritivos, funções puras, teste por função pública (CLAUDE.md). TDD sempre. Commits pequenos `fix(...)|feat(ui)|test(...)`.
@@ -26,7 +26,7 @@
 ### Task 0: Congelar o baseline do gate
 
 **Files:**
-- Create: `bench/resultados/spGAU_baseline.txt`
+- Create: `bench/resultados/spCVA_baseline.txt`
 
 - [ ] **Step 1: Rodar o gate**
 
@@ -36,7 +36,7 @@ Expected: imprime `pct`.
 - [ ] **Step 2: Registrar**
 
 ```
-baseline spGAU — 2026-07-13
+baseline spCVA — 2026-07-13
 pct=<valor impresso>
 commit=<git rev-parse --short HEAD>
 ```
@@ -44,23 +44,25 @@ commit=<git rev-parse --short HEAD>
 - [ ] **Step 3: Commit**
 
 ```bash
-git add bench/resultados/spGAU_baseline.txt
-git commit -m "test(gate): congela baseline spGAU"
+git add bench/resultados/spCVA_baseline.txt
+git commit -m "test(gate): congela baseline spCVA"
 ```
 
 ---
 
-## Fase 1 — Diagnóstico GAU (E1) — sem mudança de produção
+## Fase 1 — Diagnóstico CVA (E1) — sem mudança de produção
 
-### Task 1: `bench/diag_gau.py` — rastrear comandos, VAB e colisões de módulo
+### Task 1: `bench/diag_cva.py` — rastrear comandos, VAB e colisões de módulo
 
 **Files:**
-- Create: `bench/diag_gau.py`
-- Create: `docs/superpowers/specs/2026-07-13-diag-gau-achados.md`
+- Create: `bench/diag_cva.py`
+- Create: `docs/superpowers/specs/2026-07-13-diag-cva-achados.md`
 
 **Interfaces:**
-- Consumes: `pipeline.executar` (ou os estágios individuais, como `bench/diag_direcao_comando.py` já faz), `docs/RGE GAU 2026 - Lista de Pontos v09.xlsx`.
+- Consumes: `pipeline.executar` (ou os estágios individuais, como `bench/diag_direcao_comando.py` já faz); input real `C:\Users\vinic\Documents\docs importantes\RGE\CVA\CVA - Pontos Por Equipamentos DNP_V03 - COS - resumida.xlsx`; comparação contra o já gerado `output/TDT_CVA_20260713_v3.xlsx` + `output/Auditoria_CVA_20260713_v3.xlsx`.
 - Produces: doc de achados que instancia as Tasks 8 e 9.
+
+**Nota de caminho:** o input mora fora do repo (pasta pessoal do usuário) — `bench/diag_cva.py` recebe o caminho por argumento/constante local, não hardcoded assumindo que existe em CI/outra máquina.
 
 - [ ] **Step 1: Ler o padrão dos diag existentes**
 
@@ -87,7 +89,7 @@ Imprimir: índice/nome da coluna que `analise_colunas._col_tipo` escolheu, e par
 
 - [ ] **Step 3b: Verificar as tensões entre fases (item 14 — causa já confirmada)**
 
-Causa fechada em 13jul: domínio `PhaseCode` da `DMSMatchingTemplateInfo` = {N, A, B, C, AB, BC, **AC**, ABC} e o pipeline escreve `CA`. Aqui só listar as tensões entre fases da GAU cuja coluna Phases sai fora do domínio (evidência pré-correção da Task 4b).
+Causa fechada em 13jul: domínio `PhaseCode` da `DMSMatchingTemplateInfo` = {N, A, B, C, AB, BC, **AC**, ABC} e o pipeline escreve `CA`. Aqui só listar as tensões entre fases da CVA cuja coluna Phases sai fora do domínio (evidência pré-correção da Task 4b).
 
 - [ ] **Step 4: Instrumentar BC1/BC2 (módulo)**
 
@@ -95,15 +97,15 @@ Listar os grupos que `particionar_custom_id_duplicado` removeu: Custom ID, ids d
 
 - [ ] **Step 5: Escrever os achados**
 
-`docs/superpowers/specs/2026-07-13-diag-gau-achados.md`: por caso do anot.txt (1b, 3, 5, 8, 10, 11), a causa confirmada com evidência (linha da planilha + ponto do código). Terminar com a instanciação proposta das Tasks 8 e 9 (uma causa = uma task).
+`docs/superpowers/specs/2026-07-13-diag-cva-achados.md`: por caso do anot.txt (1b, 3, 5, 8, 10, 11), a causa confirmada com evidência (linha da planilha + ponto do código). Terminar com a instanciação proposta das Tasks 8 e 9 (uma causa = uma task).
 
 - [ ] **Step 6: Parar e reportar ao usuário** — as correções de pareamento/análise (Tasks 8-9) só se implementam com o achado validado.
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add bench/diag_gau.py docs/superpowers/specs/2026-07-13-diag-gau-achados.md
-git commit -m "docs(diag): rastreio de comandos, tipo VAB e colisoes de modulo na lista GAU"
+git add bench/diag_cva.py docs/superpowers/specs/2026-07-13-diag-cva-achados.md
+git commit -m "docs(diag): rastreio de comandos, tipo VAB e colisoes de modulo na lista CVA"
 ```
 
 ---
@@ -257,7 +259,7 @@ Se `Contexto` não expõe a família, computar o conjunto de finais uma vez em `
 
 - [ ] **Step 4: Rodar — passa.** Suíte inteira de `test_filtro_preciso.py` PASS.
 
-- [ ] **Step 5: Gate individual.** `PYTHONPATH=src python bench/gate_tdt_real.py` → `pct >= baseline` (Task 0). Regrediu → revert + `bench/resultados/spGAU_task4.txt`.
+- [ ] **Step 5: Gate individual.** `PYTHONPATH=src python bench/gate_tdt_real.py` → `pct >= baseline` (Task 0). Regrediu → revert + `bench/resultados/spCVA_task4.txt`.
 
 - [ ] **Step 6: Commit** `git commit -am "fix(regras): f_r4 mantem sigla base quando familia nao tem variante do estagio (50N E2)"`
 
@@ -329,7 +331,7 @@ def _fase_saida(fase: str | None) -> str:
 
 - [ ] **Step 7: Rodar — passa.** Suítes de `test_normalizador.py` e `test_engine_tdt.py` PASS.
 
-- [ ] **Step 8: Gate individual.** `PYTHONPATH=src python bench/gate_tdt_real.py` → `pct >= baseline`. Regrediu → revert + `bench/resultados/spGAU_task4b.txt`.
+- [ ] **Step 8: Gate individual.** `PYTHONPATH=src python bench/gate_tdt_real.py` → `pct >= baseline`. Regrediu → revert + `bench/resultados/spCVA_task4b.txt`.
 
 - [ ] **Step 9: Commit** `git commit -am "fix(fases): extracao reconhece AC/BA/CB; coluna Phases usa dominio PhaseCode (CA->AC)"`
 
@@ -371,7 +373,7 @@ if cfg.piso_decisao and confianca_top1 < cfg.piso_decisao:
 
 - [ ] **Step 5: Rodar — passa.** PASS.
 
-- [ ] **Step 6: Gate individual + calibração.** Rodar o gate; se `pct` cair, reduzir o piso (0.15, 0.10) até `pct >= baseline` e registrar o valor final + trade-off em `bench/resultados/spGAU_task5.txt`. Se nem 0.10 segurar, reverter e registrar.
+- [ ] **Step 6: Gate individual + calibração.** Rodar o gate; se `pct` cair, reduzir o piso (0.15, 0.10) até `pct >= baseline` e registrar o valor final + trade-off em `bench/resultados/spCVA_task5.txt`. Se nem 0.10 segurar, reverter e registrar.
 
 - [ ] **Step 7: Commit** `git commit -am "feat(roteador): piso absoluto de confianca calibrada (config.piso_decisao)"`
 
@@ -450,20 +452,20 @@ def test_nenhum_comando_some_silenciosamente():
 
 - [ ] **Step 3: Commit** `git commit -am "test(pareamento): invariante de conservacao de comandos (TDT ou revisao, nunca some)"`
 
-### Task 8: Correções do pareamento GAU (instanciar pós-Task 1)
+### Task 8: Correções do pareamento CVA (instanciar pós-Task 1)
 
-**BLOQUEADA POR DADO.** Uma sub-task por causa confirmada no diagnóstico, cada uma com teste-que-falha reproduzindo o caso GAU + gate individual. Hipóteses mapeadas (sites verificados 13jul):
+**BLOQUEADA POR DADO.** Uma sub-task por causa confirmada no diagnóstico, cada uma com teste-que-falha reproduzindo o caso CVA + gate individual. Hipóteses mapeadas (sites verificados 13jul):
 
 | Hipótese | Site | Correção candidata |
 |---|---|---|
-| H1: limiar greedy 60.0 alto p/ textos GAU | `dc_pairer.py:139-165` | ajustar/knob `config` |
-| H2: `compatibilidade_texto` (gate D5) bloqueia par legítimo | `dc_pairer.py:107-110` | afrouxar predicado p/ o padrão GAU |
+| H1: limiar greedy 60.0 alto p/ textos CVA | `dc_pairer.py:139-165` | ajustar/knob `config` |
+| H2: `compatibilidade_texto` (gate D5) bloqueia par legítimo | `dc_pairer.py:107-110` | afrouxar predicado p/ o padrão CVA |
 | H3: endereço de output do comando não capturado na análise | `analise_colunas.py` / `estruturador.py` | captura da coluna/bloco de endereço de comando ("endereço 80") |
 | H4: par fundido removido por colisão de Custom ID (item 11) | `engine_tdt.py:321-344` | já mitigada por Task 6 (visibilidade); avaliar se o par deve sair inteiro mesmo |
 
-- [ ] **Step 1:** Ler `docs/superpowers/specs/2026-07-13-diag-gau-achados.md` e escrever uma sub-task TDD por causa confirmada (formato das Tasks 4-5).
+- [ ] **Step 1:** Ler `docs/superpowers/specs/2026-07-13-diag-cva-achados.md` e escrever uma sub-task TDD por causa confirmada (formato das Tasks 4-5).
 - [ ] **Step 2:** Aprovação do usuário sobre as sub-tasks propostas.
-- [ ] **Step 3:** Implementar cada sub-task com gate individual (`spGAU_task8_<n>.txt` se regredir).
+- [ ] **Step 3:** Implementar cada sub-task com gate individual (`spCVA_task8_<n>.txt` se regredir).
 
 ### Task 9: Tipo do sinal na linha × na coluna (CVA11 VAB) (instanciar pós-Task 1)
 
@@ -471,7 +473,7 @@ def test_nenhum_comando_some_silenciosamente():
 
 - [ ] **Step 1:** Do diagnóstico (Task 1 Step 3), escrever teste-que-falha com bloco de rows sintético reproduzindo o layout do CVA11 (tipo em linha de seção) onde VAB deve sair `Analog`/`Input` — nunca input digital.
 - [ ] **Step 2:** Corrigir no site apontado (detecção da coluna errada → endurecer `_col_tipo`; seção não detectada → estender o marcador de seção). Correção mínima, sem módulo novo.
-- [ ] **Step 3:** Suíte + gate individual (`pct >= baseline`; registrar `spGAU_task9.txt` se regredir).
+- [ ] **Step 3:** Suíte + gate individual (`pct >= baseline`; registrar `spCVA_task9.txt` se regredir).
 - [ ] **Step 4:** Commit `fix(analise): tipo de sinal por linha de secao no layout CVA11`.
 
 ---
@@ -689,9 +691,9 @@ def test_roundtrip_edicao_nao_altera_valor():
 - Modify: `src/tdt/ui/AGENTS.md` (colunas novas, lote, par de posição)
 - Modify: `docs/superpowers/specs/2026-06-26-spA-revisao-ui-lote-enderecamento-modulo-design.md` (nota de status: itens A1/A3 cobertos por este SP; A2-redo/A5 seguem pendentes)
 
-- [ ] **Step 1:** Rodar a suíte inteira + gate final; registrar `pct` em `bench/resultados/spGAU_final.txt`.
+- [ ] **Step 1:** Rodar a suíte inteira + gate final; registrar `pct` em `bench/resultados/spCVA_final.txt`.
 - [ ] **Step 2:** Atualizar os três documentos.
-- [ ] **Step 3:** Commit `docs: closeout SP-GAU (ledger, DOX, status spec A)`.
+- [ ] **Step 3:** Commit `docs: closeout SP-CVA (ledger, DOX, status spec A)`.
 
 ---
 
@@ -699,7 +701,7 @@ def test_roundtrip_edicao_nao_altera_valor():
 
 - E1 diagnóstico (itens 1b/3/5/8/10/11) → Task 1 ✓
 - E2 f_r4 estágio (item 2) → Task 4 ✓ | piso absoluto (item 4) → Task 5 ✓ | fases CA↔AC / domínio PhaseCode (item 14) → Task 4b ✓ (+ verificação no diag, Task 1 Step 3b)
-- E3 invariante → Task 7 ✓ | correções GAU → Task 8 (bloqueada por dado, hipóteses H1-H4) ✓
+- E3 invariante → Task 7 ✓ | correções CVA → Task 8 (bloqueada por dado, hipóteses H1-H4) ✓
 - E1→fix VAB (item 8) → Task 9 (bloqueada por dado) ✓
 - E4 aviso módulo (item 11) → Task 6 ✓
 - E5: aprovar lote (item 7) → Task 10 ✓ | propagar edição (item 7) → Task 11 ✓ | endereço editável (item 9) → Task 12 ✓ | Pareado + Sheet origem (itens 3/12) + nome hierárquico (item 9) → Task 13 ✓ | contadores (item 9) → Task 14 ✓ | par de posição / DJA1↔DJF1 (itens 1a/6) → Task 15 ✓ | double-click (item 7) → Task 16 ✓

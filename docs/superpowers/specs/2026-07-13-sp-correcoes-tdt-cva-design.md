@@ -1,14 +1,15 @@
-# SP-GAU — Correções pós-revisão das TDTs GAU/CVA — Design
+# SP-CVA — Correções pós-revisão das TDTs da SE CVA — Design
 
 **Data:** 2026-07-13
-**Fonte:** `docs/anot.txt` (13 observações do usuário sobre as últimas TDTs geradas — lista `docs/RGE GAU 2026 - Lista de Pontos v09.xlsx`, sheets BC1, BC2, BC5_6, CVA11).
+**Fonte:** `docs/anot.txt` (13 observações do usuário sobre as últimas TDTs geradas da **SE CVA**). Input real: `C:\Users\vinic\Documents\docs importantes\RGE\CVA\CVA - Pontos Por Equipamentos DNP_V03 - COS - resumida.xlsx` ("lista CVA resumida", sheets confirmadas: CAPA, IP, CVA11-14, CVA21-23, TRF, BC1, BC2, BC3_4, BC5_6, S4_LOG). Outputs gerados: `output/TDT_CVA_20260713_v3.xlsx` + `output/Auditoria_CVA_20260713_v3.xlsx` (versão mais recente; há também v1/v2 no mesmo diretório, geradas na mesma sessão de revisão).
+**Correção 13jul:** a versão anterior deste documento citava por engano `docs/RGE GAU 2026 - Lista de Pontos v09.xlsx` como fonte — arquivo não relacionado a estas observações. Confirmado por leitura direta do input real: as sheets BC1/BC2/BC5_6/CVA11 citadas no anot.txt existem na lista CVA, não na GAU.
 **Verificação de código:** 13jul (scouts pipeline + UI), cruzada com o Ledger de decisões (`docs/AGENTS.md`) e specs existentes (spA 26jun, spI 02jul, SP-Unificado 08jul).
 
 ---
 
 ## 1. Contexto e método
 
-O usuário revisou as últimas TDTs geradas e anotou 13 observações (`docs/anot.txt`), mais uma reportada em conversa (item 14, tensão CA×AC — 13jul). Este design mapeia cada observação à causa verificada no código atual e agrupa as correções em 6 eixos. Itens cuja causa depende do dado real (o arquivo GAU) ganham **diagnóstico reproduzível primeiro** — regra do projeto: não codar correção de pareamento/endereço sem reproduzir o caso (histórico: Fase 8 do SP-Unificado, "bloqueada por dado").
+O usuário revisou as últimas TDTs geradas para a SE CVA e anotou 13 observações (`docs/anot.txt`), mais uma reportada em conversa (item 14, tensão CA×AC — 13jul). Este design mapeia cada observação à causa verificada no código atual e agrupa as correções em 6 eixos. Itens cuja causa depende do dado real (a lista CVA resumida e o TDT/Auditoria gerados) ganham **diagnóstico reproduzível primeiro** — regra do projeto: não codar correção de pareamento/endereço sem reproduzir o caso (histórico: Fase 8 do SP-Unificado, "bloqueada por dado").
 
 Sobreposição com `docs/observações_pendentes.txt` e com a spec A (26jun, "revisão UI lote/endereçamento/módulo" — 3/9 itens implementados até hoje): os itens re-reportados no anot.txt entram aqui; o restante da spec A permanece lá.
 
@@ -34,16 +35,16 @@ Sobreposição com `docs/observações_pendentes.txt` e com a spec A (26jun, "re
 
 ## 3. Eixos de correção
 
-### E1 — Diagnóstico reproduzível no arquivo GAU (bloqueia E3 e o fix do item 8)
+### E1 — Diagnóstico reproduzível na lista CVA (bloqueia E3 e o fix do item 8)
 
-Script `bench/diag_gau.py` (padrão dos `bench/diag_*.py` existentes): roda o pipeline sobre `docs/RGE GAU 2026 - Lista de Pontos v09.xlsx` e rastreia, caso a caso:
+Script `bench/diag_cva.py` (padrão dos `bench/diag_*.py` existentes): roda o pipeline sobre `CVA - Pontos Por Equipamentos DNP_V03 - COS - resumida.xlsx` e compara com o já gerado `output/TDT_CVA_20260713_v3.xlsx`/`Auditoria_CVA_20260713_v3.xlsx`, rastreando caso a caso:
 
 - **Comandos** (BC1 "endereço 80", BC2 DJF1, BC5_6 DJF1): para cada linha de comando do input, onde terminou — TDT ReadWrite / Write órfão / revisão (qual motivo) / **ausente** (perda silenciosa). Instrumenta a cadeia `dc_pairer → corrigir → montar → particionar_custom_id_duplicado → gerar`.
 - **CVA11 VAB**: qual coluna `_col_tipo` escolheu, qual categoria/direção cada sinal analógico recebeu, e onde o layout difere (tipo em linha de seção × coluna).
-- **Tensões entre fases (item 14, verificação)**: causa já confirmada no template (domínio `PhaseCode` usa `AC`); o diag só confere no TDT da GAU quais tensões saíram com Phases fora do domínio antes/depois da correção.
+- **Tensões entre fases (item 14, verificação)**: causa já confirmada no template (domínio `PhaseCode` usa `AC`); o diag só confere no TDT da CVA quais tensões saíram com Phases fora do domínio antes/depois da correção.
 - **BC1/BC2 módulos**: quais Custom IDs colidiram e de quais sheets vieram os registros de cada grupo.
 
-Saída: `docs/superpowers/specs/2026-07-13-diag-gau-achados.md`. As correções de E3 são instanciadas a partir dele — **uma causa = uma task = um gate**.
+Saída: `docs/superpowers/specs/2026-07-13-diag-cva-achados.md`. As correções de E3 são instanciadas a partir dele — **uma causa = uma task = um gate**.
 
 ### E2 — Classificação (2 correções independentes, gate individual)
 
@@ -56,7 +57,7 @@ Saída: `docs/superpowers/specs/2026-07-13-diag-gau-achados.md`. As correções 
 
 ### E3 — Pareamento/comando (pós-diagnóstico)
 
-Correções instanciadas do E1. Hipóteses mapeadas (não codar antes do diag): limiar greedy de similaridade (60.0) alto demais para os textos da GAU; gate `compatibilidade_texto` (D5) bloqueando par legítimo; captura do endereço de output do comando falhando na análise de colunas; par fundido removido por colisão de Custom ID (consequência do item 11).
+Correções instanciadas do E1. Hipóteses mapeadas (não codar antes do diag): limiar greedy de similaridade (60.0) alto demais para os textos da CVA; gate `compatibilidade_texto` (D5) bloqueando par legítimo; captura do endereço de output do comando falhando na análise de colunas; par fundido removido por colisão de Custom ID (consequência do item 11).
 
 Independente do achado, entra **uma garantia permanente**: teste de invariante de conservação — *todo sinal de comando que entra no pipeline aparece no TDT ou na revisão; nunca some silenciosamente* (fixture sintética + contagem fim-a-fim).
 
