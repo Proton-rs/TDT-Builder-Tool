@@ -42,6 +42,10 @@ class Config:
     threshold_pct: float = 0.45
     threshold_gap: float = 0.08
     top_n_pct: float = 0.80
+    # Piso absoluto de confiança calibrada (SP-CVA E2): abaixo dele, nunca
+    # decide mesmo com gap grande (top-1 fraco não deve vencer por W.O.).
+    # 0.0 desliga (retrocompat).
+    piso_decisao: float = 0.20
     # Analógicos — mesmos defaults dos discretos até calibrar separadamente
     peso_tfidf_analog: float = 0.70
     peso_vetorial_analog: float = 0.25
