@@ -121,7 +121,17 @@ def estruturar_homogeneo(
             ),
         )
 
+        if sigla and sigla.upper() in config.siglas_sem_ponto:
+            revisao.append(ItemRevisao(
+                replace(rec, sigla_sinal=sigla.upper(), status="revisao",
+                        justificativa="comando TAP não modelado no ADMS (base real: 0 sinais COMTAP)"),
+                motivo="comando_tap_nao_modelado",
+            ))
+            continue
+
         # Lint NOME do cliente x regra (spec §2.4): aviso, não bloqueia.
+        # Roda depois do gate acima -- linha já roteada p/ revisão não vira
+        # sinal, então divergência de NOME aqui seria ruído de auditoria.
         nome_cli = str(row[idx["nome"]] or "").strip() if idx["nome"] is not None else ""
         se = str(row[idx["subestacao"]] or "").strip() if idx["subestacao"] is not None else ""
         if nome_cli and sigla and se:
@@ -131,14 +141,6 @@ def estruturar_homogeneo(
                 avisos.append(
                     f"{sheet_name}:{i}: NOME do cliente '{nome_cli}' difere do calculado '{calc}'"
                 )
-
-        if sigla and sigla.upper() in config.siglas_sem_ponto:
-            revisao.append(ItemRevisao(
-                replace(rec, sigla_sinal=sigla.upper(), status="revisao",
-                        justificativa="comando TAP não modelado no ADMS (base real: 0 sinais COMTAP)"),
-                motivo="comando_tap_nao_modelado",
-            ))
-            continue
 
         sp = lp.por_sigla(sigla) if sigla else None
         if sp is None:

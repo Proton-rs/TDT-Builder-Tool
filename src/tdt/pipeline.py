@@ -522,13 +522,17 @@ def _aplicar_aliases(registros: list, aliases: dict[str, str] | None) -> list:
     return novos
 
 
-def gerar_tdt(registros, template_path, lp, subestacao=None, aliases=None, config=None):
+def gerar_tdt(registros, template_path, lp, subestacao=None, aliases=None, config=None,
+              auditoria=None):
     """Gera o workbook TDT a partir de uma lista (já decidida/editada) de registros."""
+    aud = auditoria or Auditoria()
     lst = _aplicar_aliases(list(registros), aliases)
     pareados, _rev = dc_pairer.parear(lst, config)
     corrigidos, _rev2 = corrigir(list(pareados), _whitelist_posicao(lp, config))
     lista = criador_lista_homogenea.montar(list(corrigidos), subestacao=subestacao)
-    lista, _rev_dup = engine_tdt.particionar_custom_id_duplicado(lista)
+    lista, rev_dup = engine_tdt.particionar_custom_id_duplicado(lista)
+    if rev_dup:
+        aud.evento("engine", f"{len(rev_dup)} registros com Custom ID duplicado -> revisão", "AVISO")
     return engine_tdt.gerar(
         lista, template_path, lp, alias_v1=descricoes_por_sigla(DEFAULT_LISTA_ALIAS)
     )
