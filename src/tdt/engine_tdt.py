@@ -341,8 +341,17 @@ def particionar_custom_id_duplicado(
     duplicados = {id(r) for grupo in por_cid.values() if len(grupo) > 1 for r in grupo}
     if not duplicados:
         return lista, ()
+    motivo_por_id: dict[int, str] = {}
+    for grupo in por_cid.values():
+        if len(grupo) <= 1:
+            continue
+        # mesma derivação de modelo_tabela.sheet_origem
+        sheets = {r.id.rsplit(":", 1)[0] if ":" in r.id else "" for r in grupo}
+        motivo = "modulo_duplicado_entre_sheets" if len(sheets) > 1 else "custom_id_duplicado"
+        for r in grupo:
+            motivo_por_id[id(r)] = motivo
     revisao = tuple(
-        ItemRevisao(replace(r, status="revisao"), motivo="custom_id_duplicado")
+        ItemRevisao(replace(r, status="revisao"), motivo=motivo_por_id[id(r)])
         for r in lista.registros if id(r) in duplicados
     )
     restantes = tuple(r for r in lista.registros if id(r) not in duplicados)

@@ -634,3 +634,25 @@ def test_gate_sem_duplicatas_nao_mexe():
     ))
     lista_ok, rev = particionar_custom_id_duplicado(lista)
     assert lista_ok == lista and rev == ()
+
+
+def test_colisao_entre_sheets_ganha_motivo_especifico():
+    from tdt.contracts import ListaHomogenea
+    from tdt.engine_tdt import particionar_custom_id_duplicado
+    lista = ListaHomogenea(subestacao="IMA", protocolo="DNP3", registros=(
+        _rec_gate("BC1:10", "43LR", 1),
+        _rec_gate("BC2:12", "43LR", 2),
+    ))
+    lista_ok, rev = particionar_custom_id_duplicado(lista)
+    assert {it.motivo for it in rev} == {"modulo_duplicado_entre_sheets"}
+
+
+def test_colisao_mesma_sheet_mantem_motivo_atual():
+    from tdt.contracts import ListaHomogenea
+    from tdt.engine_tdt import particionar_custom_id_duplicado
+    lista = ListaHomogenea(subestacao="IMA", protocolo="DNP3", registros=(
+        _rec_gate("BC1:10", "43LR", 1),
+        _rec_gate("BC1:11", "43LR", 2),
+    ))
+    lista_ok, rev = particionar_custom_id_duplicado(lista)
+    assert {it.motivo for it in rev} == {"custom_id_duplicado"}
