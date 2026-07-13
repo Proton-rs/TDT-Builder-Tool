@@ -211,8 +211,13 @@ ABREVIACOES_EXTRA: dict[str, str] = {
 # já os extrai do texto bruto, classificados por código ANSI, antes que
 # normalizar() colapse o hífen em espaço — nesse ponto do pipeline (depois de
 # normalizar()) o hífen já não existe mais de qualquer forma.
+# Último caractere aceita "0" OU "O": typo de origem troca o dígito zero pela
+# letra O (ex: "28QO" em vez de "28Q0") -- sem isso o ID malformado sobrevive
+# no texto e derruba a palavra-âncora de equipamento em N3 (boilerplate).
+# Restrito a essa posição/par específico -- não afrouxa para qualquer letra
+# final (evita casar palavras reais terminadas em letra).
 # ponytail: regex calibrada; ID de equipamento é contexto, não sinal.
-_ID_LETRA_NUM = re.compile(r"\b\d+[A-Z]\d+\b")  # 01Q0, 12J4
+_ID_LETRA_NUM = re.compile(r"\b\d+[A-Z](?:\d+|O)\b")  # 01Q0, 12J4, 28QO (typo O~0)
 
 # N5 — unidades equivalentes -> forma canônica (whole-token).
 _UNIDADES: dict[str, str] = {

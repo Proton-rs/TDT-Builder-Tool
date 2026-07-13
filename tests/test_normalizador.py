@@ -120,6 +120,15 @@ def test_n2_preserva_funcao_protecao():
         assert fn in texto.split()
 
 
+def test_n2_remove_id_com_letra_o_no_lugar_de_zero():
+    # typo de origem: "28QO" (letra O) em vez de "28Q0" (digito 0) -- ainda
+    # e formato de ID e precisa ser removido, senao sobrevive ate N3 e
+    # derruba a palavra-ancora "DISJUNTOR" (ver test_conservacao_comandos)
+    texto, ctx = separar_ids_equipamento("28QO ABRIR FECHAR", CFG)
+    assert "28QO" not in texto
+    assert "28QO" in ctx
+
+
 def test_n2_gate_desligado():
     cfg = Config(remover_ids_equipamento=False)
     texto, ctx = separar_ids_equipamento("01Q0 ALARME", cfg)
@@ -212,6 +221,13 @@ def test_canonizar_typo_com_vocab():
     vocab = {"CORRENTE", "DESBALANCO"}
     out = canonizar("Corretnte de Desbalanço", CFG, vocab=vocab)
     assert "CORRENTE" in out.split()
+
+
+def test_canonizar_id_com_letra_o_preserva_ancora_disjuntor():
+    # "28QO" (typo O~0) nao pode sobreviver ate N3 e derrubar "DISJUNTOR"
+    out = canonizar("Disjuntor (28QO) Abrir Fechar", CFG)
+    assert "DISJUNTOR" in out.split()
+    assert "28QO" not in out.split()
 
 
 def test_canonizar_siglas_nunca_quebradas():
