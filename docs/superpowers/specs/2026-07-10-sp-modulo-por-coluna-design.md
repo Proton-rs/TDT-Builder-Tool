@@ -4,6 +4,8 @@
 **Status:** Proposto
 **Origem:** `docs/input_não_homogeneo_5_SMF.xlsx` — lista não-homogênea cujas sheets separam por **tipo de ponto** (ESTADOS/MEDIDAS/COMANDOS), não por módulo. O módulo fica numa **coluna dedicada** (col A, header "Módulo"), varia por linha, em blocos contíguos. Alimentado hoje, todo sinal da sheet recebe módulo = nome da sheet ("ESTADOS") — errado.
 **Escopo:** Detectar e atribuir módulo por linha no caminho não-homogêneo; canonizar/reconciliar nomes de módulo divergentes entre sheets. Implementa o follow-up já previsto em `identidade_modulo.py:4-6` (`ResolucaoModulo.por_linha`, sempre `None` hoje).
+
+**Princípio (auditado):** SÓ ADICIONA um método de aquisição de módulo. Nenhum caminho existente (homogêneo, sheet_name, coluna:SIGLA) muda de comportamento. Quem decide qual método usar é o próprio programa: a detecção `_col_modulo` dispara (novo gênero) ou retorna `None` (comportamento atual preservado); a `origem_contexto` de cada sinal registra qual método forneceu o módulo, e os métodos coexistem entre sheets. Ver seção **Preservação de comportamento**.
 **Relacionada:** [2026-06-30-sp-sigla-nao-homogeneo-design.md](2026-06-30-sp-sigla-nao-homogeneo-design.md) — aquela spec trata coluna de **sigla** (SAN2, condensada, sem coluna MODULO); esta trata coluna de **módulo** explícita. Genéros distintos, caminho não-homogêneo compartilhado.
 
 ---
@@ -72,22 +74,26 @@ Pipeline não-homogêneo (existente, estendido):
          ▼
   estruturar(rows, mapa, sheet_name, ...)
     └── se "modulo" no mapa: lê célula por linha → modulo.nome,
-        origem_contexto="coluna:MODULO"  (por linha, não por sheet)
+        origem_contexto="coluna:MODULO_POR_LINHA"  (TAG NOVA, por linha)
+        └── célula vazia → status="revisao", justificativa="modulo_indefinido"
          │
          ▼
   aplicar_identidade(sinais, sheet_name, rows, config)
-    └── p/ sinais origem="coluna:MODULO": canonizar_modulo() por célula
+    └── p/ sinais origem="coluna:MODULO_POR_LINHA": canonizar_modulo(explicito=True)
         ├── canoniza (prefixo+nº)        → nome canônico, alta
-        ├── não canoniza (sem prefixo)   → valor cru limpo, alta
-        └── célula vazia                 → baixa → revisão modulo_indefinido
-        classificar_tipo agrupado POR MÓDULO CANÔNICO (não 1/sheet)
+        └── não canoniza (sem prefixo)   → valor cru limpo, alta
+        classificar_tipo agrupado POR MÓDULO CANÔNICO (só p/ esta tag)
 ```
 
 Nenhuma rota nova. O identificador já classifica ESTADOS/MEDIDAS/COMANDOS como sheets de dados (têm coluna de inteiros + texto) e a rota como não-homogênea (header na linha 4, não no topo).
 
+> **Tag `coluna:MODULO_POR_LINHA` (nova, distinta de `coluna:MODULO`):** o caminho homogêneo (`identidade_homogenea.py`) já emite `origem="coluna:MODULO"` e `"coluna:MODULO+header:NUMERO_OPERATIVO"`, e esses sinais passam por `aplicar_identidade`. Reusar a tag faria o novo branch capturar sinais homogêneos. A tag nova isola o novo gênero — os branches de `aplicar_identidade`/`estruturar` que a tratam nunca tocam os sinais existentes.
+
 ### 1. Detecção — `_col_modulo` (`analise_colunas.py`)
 
 Detecta a coluna de módulo por linha, por **conteúdo**, com header como desempate (híbrido — consistente com `_col_indice`, que usa `_ROTULO_ENDERECO` como bônus).
+
+**Gating (preserva testes existentes de `analisar`):** `analisar` ganha parâmetro `config: Config | None = None`. `_col_modulo` só roda quando `config is not None`. Os ~20 testes atuais de `test_analise_colunas.py` chamam `analisar` **sem** config → `"modulo"` nunca é detectado → saída idêntica. O pipeline passa `config`, então o novo gênero é coberto em produção.
 
 ```python
 _MODULO_ROTULO = ("MODULO", "MÓDULO", "BAY", "VAO", "VÃO")
@@ -117,20 +123,24 @@ Notas de robustez:
 
 ### 2. Canonização por célula — `canonizar_modulo` (`identidade_modulo.py`)
 
-Refatorar a lógica de token/prefixo+número de `resolver_modulo` (que hoje recebe `sheet_name` e ignora `rows` no corpo) para função pura reusável por célula:
+Refatorar a lógica de token/prefixo+número de `resolver_modulo` (que hoje recebe `sheet_name` e ignora `rows` no corpo) para função pura reusável por célula. **O fallback (sem canonização) difere por origem** — por isso o parâmetro `explicito`:
 
 ```python
-def canonizar_modulo(valor: str, config: Config) -> ResolucaoModulo:
+def canonizar_modulo(valor: str, config: Config, *, explicito: bool = False) -> ResolucaoModulo:
     """Canoniza um NOME de módulo (de sheet_name OU de célula da coluna Módulo).
     Estratégia 1: alias direto (mapa_sheet_modulo). Estratégia 2: prefixo
-    mapeado + número seguinte. Sem canonização → valor cru LIMPO, alta confiança
-    (coluna de módulo é explícita — o módulo é dado, não inferido)."""
+    mapeado + número seguinte. Sem canonização:
+      - explicito=False (sheet_name): valor CRU, confiança BAIXA  [inalterado]
+      - explicito=True  (coluna):     valor cru LIMPO, confiança ALTA
+    """
 
 def resolver_modulo(sheet_name, rows, config) -> ResolucaoModulo:
-    return canonizar_modulo(sheet_name, config)  # comportamento preservado
+    return canonizar_modulo(sheet_name, config)  # explicito=False → comportamento byte-idêntico
 ```
 
-Regra de "cru limpo" (sem canonização por prefixo): remover sufixos de ruído — `- NNkV` / `- NN.NkV`, `(FUTURO)`, `(RESERVA)` — e colapsar espaços. Mantém o token de módulo legível.
+**Preservação:** com `explicito=False` (default), o fallback é `(valor cru, "baixa")` — exatamente o que `resolver_modulo` faz hoje (`identidade_modulo.py:67`). O teste `test_resolver_modulo_sem_numero_cai_em_baixa_confianca` (`"SLOT GERAL"` → nome cru, baixa) e todos os demais testes de `resolver_modulo` seguem verdes. Estratégias 1 e 2 (canonização) são idênticas para ambos os modos.
+
+Regra de "cru limpo" (só no ramo `explicito=True`, sem canonização por prefixo): remover sufixos de ruído — `- NNkV` / `- NN.NkV`, `(FUTURO)`, `(RESERVA)` — e colapsar espaços. Mantém o token de módulo legível. **Nunca aplicada ao caminho sheet_name.**
 
 Comportamento esperado:
 
@@ -147,22 +157,23 @@ Comportamento esperado:
 
 ### 3. Estruturação — `estruturar` (`normalizacao/estruturador.py`)
 
-Quando `mapa.colunas` tem `"modulo"`:
+Novo ramo **gated em `"modulo" in mapa.colunas`** — quando ausente (todos os testes atuais de `test_estruturador.py`, que montam `mapa` sem essa chave), o ramo é pulado e `estruturar` roda idêntico.
 
-- Lê a célula da coluna de módulo **por linha** → `Modulo(nome=valor_cru, origem_contexto="coluna:MODULO")`. A canonização acontece em `aplicar_identidade` (mantém `estruturar` sem dependência de `config.mapa_*`).
+- Lê a célula da coluna de módulo **por linha** → `Modulo(nome=valor_cru, origem_contexto="coluna:MODULO_POR_LINHA")`. A canonização acontece em `aplicar_identidade` (mantém `estruturar` sem dependência de `config.mapa_*`).
+- **Célula de módulo vazia** → `status="revisao"`, `justificativa="modulo_indefinido"`. Reusa o roteamento existente `pipeline.py:662` (`rec.status=="revisao"` → `ItemRevisao(motivo=rec.justificativa)`) e um motivo já existente (`modulo_indefinido`, usado em `particionar_por_confianca` e `pipeline.py:694`). Sem nova rota de revisão, sem novo motivo, sem mudar assinatura de `aplicar_identidade`/`particionar_por_confianca`.
 - **Precedência:** coluna MODULO explícita > extração do NOME padronizado. No SMF não há coluna de sigla, então o ramo de pré-classificação por sigla (`estruturador.py:110-138`) nem executa; a regra de precedência existe para robustez se um input futuro tiver ambos.
-- O status do sinal segue normal (`pendente` → scoring). A coluna de módulo **não** pré-classifica o sinal (diferente da coluna de sigla, que decide a sigla do sinal).
+- Fora a célula vazia, o status do sinal segue normal (`pendente` → scoring). A coluna de módulo **não** pré-classifica o sinal (diferente da coluna de sigla, que decide a sigla do sinal).
 
 ### 4. Identidade por linha — `aplicar_identidade` (`identidade_modulo.py`)
 
-Estender para sinais com `origem_contexto == "coluna:MODULO"`:
+Novo ramo **gated em `origem_contexto == "coluna:MODULO_POR_LINHA"`** (tag nova — não colide com `coluna:MODULO`/`coluna:MODULO+header:NUMERO_OPERATIVO` do caminho homogêneo, nem com `coluna:SIGLA`/`sheet_name`):
 
-- Canoniza cada `modulo.nome` via `canonizar_modulo`.
-- Célula vazia (nome vazio) → `ItemRevisao(motivo="modulo_indefinido")` **por linha**, não a sheet inteira. A confiança deixa de ser um único valor por sheet: os sinais com módulo válido seguem decididos; só os de célula vazia vão à revisão.
-- `classificar_tipo` passa a rodar **por grupo de módulo canônico** (agrupa os sinais da sheet por `modulo.nome` após canonização, classifica cada grupo). Hoje classifica 1 tipo para a sheet inteira usando o primeiro módulo — errado quando a sheet tem 30 módulos.
-- Sinais `origem_contexto == "sheet_name"` mantêm o fluxo atual intacto.
+- Canoniza cada `modulo.nome` via `canonizar_modulo(nome, config, explicito=True)`.
+- `classificar_tipo` roda **por grupo de módulo canônico** (agrupa os sinais desta tag por `modulo.nome` após canonização, classifica cada grupo). **Escopo estrito:** só para sinais desta tag. Sinais `sheet_name`, `coluna:SIGLA` e `coluna:MODULO*` (homogêneo) continuam pela lógica atual (um `tipo` via `nome_ref`), byte-idêntica.
+- **Assinatura preservada:** `aplicar_identidade` continua retornando `(sinais, confianca:str)` e `particionar_por_confianca` continua recebendo `(sinais, str)` — os 2 testes que desempacotam `novos, conf` seguem válidos. Para esta tag a confiança de lote é `"alta"` (como `coluna:SIGLA` hoje); a revisão de célula vazia já foi resolvida em `estruturar` via `status`, não aqui.
+- Célula vazia (revisão) é tratada por linha em `estruturar` (acima), não pela confiança de sheet inteira — evita mandar a sheet toda à revisão.
 
-`particionar_por_confianca` passa a receber a partição já decidida por linha (não um único booleano de sheet).
+Sinais existentes (`sheet_name`, `coluna:SIGLA`, `coluna:MODULO*`) mantêm o fluxo atual intacto; `ResolucaoModulo.por_linha` permanece disponível no contrato mas não é necessário nesta implementação (a atribuição por linha já ocorre em `estruturar`).
 
 ### 5. Reconciliação cross-sheet
 
@@ -176,24 +187,46 @@ Estender para sinais com `origem_contexto == "coluna:MODULO"`:
 |---|---|---|---|
 | `_col_modulo` | acha índice da coluna de módulo | rows, config.mapa_prefixo_modulo | sim (rows sintéticas) |
 | `canonizar_modulo` | string módulo → nome canônico + confiança | config.mapa_* | sim (pura) |
-| `estruturar` (ramo modulo) | célula → Modulo por linha | mapa.colunas | sim |
-| `aplicar_identidade` (ramo coluna) | canoniza + tipo por grupo + revisão vazio | canonizar_modulo | sim |
+| `estruturar` (ramo modulo) | célula → Modulo por linha + vazio→revisão | mapa.colunas | sim |
+| `aplicar_identidade` (ramo tag nova) | canoniza + tipo por grupo | canonizar_modulo | sim |
 
-Mudança de interface mínima: `MapaColunas.colunas` ganha chave opcional `"modulo"`; `ResolucaoModulo.por_linha` deixa de ser sempre `None` (contrato já existia). Nenhuma assinatura pública removida.
+Mudança de interface mínima e **aditiva**: `analisar` ganha `config=None` (default preserva chamadas atuais); `MapaColunas.colunas` ganha chave opcional `"modulo"`; `canonizar_modulo` ganha kwarg `explicito=False` (default = comportamento de `resolver_modulo`); nova `origem_contexto="coluna:MODULO_POR_LINHA"`. Nenhuma assinatura removida; nenhuma assinatura de `aplicar_identidade`/`particionar_por_confianca` alterada.
+
+---
+
+## Preservação de comportamento (auditoria 2026-07-10)
+
+Cada caminho existente e por que **não muda**:
+
+| Caminho | Entra em `_col_modulo`? | Entra nos novos ramos? | Resultado |
+|---|---|---|---|
+| **Homogêneo** (1 sheet=1 módulo) | Não — usa `estruturar_homogeneo`, nunca chama `analisar` | Não — origem é `coluna:MODULO*`, ≠ tag nova | Idêntico |
+| **Não-homog. sheet_name** (sem coluna módulo) | Sim, mas `_col_modulo`→`None` (sem coluna que canonize em bloco) | Não | Idêntico |
+| **Não-homog. coluna:SIGLA** (SAN2) | Sim, mas `_col_modulo`→`None` (regressão a validar) | Não — origem `coluna:SIGLA` | Idêntico |
+| **`resolver_modulo`** (qualquer sheet_name) | — | Delega `canonizar_modulo(explicito=False)` | Byte-idêntico (fallback raw/baixa) |
+| **Testes `analisar` sem config** | `_col_modulo` não roda (config None) | — | Idêntico |
+| **Testes `estruturar` sem `"modulo"`** | — | Ramo gated pulado | Idêntico |
+
+**Gate crítico:** o único ponto que pode vazar é um **falso positivo de `_col_modulo`** num input não-homogêneo existente — isso ativaria o ramo novo de `estruturar` e trocaria a origem do módulo. Mitigações: (1) `_col_modulo` só roda com `config`; (2) threshold conservador exigindo estrutura de bloco **e** taxa de canonização por prefixo **e** diversidade mínima; (3) **critério de aceite:** a suíte de testes atual (incl. `test_analise_colunas.py`, `test_estruturador.py`, `test_identidade_modulo.py`) passa sem alteração, e os inputs não-homogêneos de regressão (SAN2) produzem saída idêntica à baseline.
 
 ---
 
 ## Testes
 
-Unitários:
-- `_col_modulo` escolhe col A (módulo), **não** col D (IED `SEL-411L`) nem col B (descrição); retorna `None` numa sheet sem coluna de módulo (regressão do gênero homogêneo/SAN2).
-- `canonizar_modulo`: `AL 11 - 13.8kV`→`AL11`, `AL15 - 13.8kV (FUTURO)`→`AL15`, `TR1`→`TR1`, `TIE-AT`→`TIE-AT`, `LTSM3C1`→`LTSM3C1`, vazio→baixa.
-- `estruturar`: módulo atribuído por linha, muda ao cruzar bloco (LTSM3C1→LTSM3C2).
-- `aplicar_identidade`: 2 módulos na mesma sheet → 2 tipos distintos; célula vazia → `modulo_indefinido`.
-- `resolver_modulo` inalterado (regressão via delegação a `canonizar_modulo`).
+Unitários (novos):
+- `_col_modulo` escolhe col A (módulo), **não** col D (IED `SEL-411L`) nem col B (descrição); retorna `None` numa sheet sem coluna de módulo.
+- `canonizar_modulo(explicito=True)`: `AL 11 - 13.8kV`→`AL11`, `AL15 - 13.8kV (FUTURO)`→`AL15`, `TR1`→`TR1`, `TIE-AT`→`TIE-AT` (cru limpo, alta), `LTSM3C1`→`LTSM3C1` (cru limpo, alta).
+- `canonizar_modulo(explicito=False)`: `"SLOT GERAL"`→`("SLOT GERAL", "baixa")` (igual a `resolver_modulo`, sem limpeza de sufixo).
+- `estruturar` (com `"modulo"` no mapa): módulo atribuído por linha, muda ao cruzar bloco (LTSM3C1→LTSM3C2); célula vazia → `status="revisao"`, `justificativa="modulo_indefinido"`.
+- `aplicar_identidade` (tag `coluna:MODULO_POR_LINHA`): 2 módulos na mesma sheet → 2 tipos distintos.
+
+Regressão (existentes devem passar sem edição):
+- `test_resolver_modulo_*`, `test_aplicar_identidade_*`, `test_particionar_*` (`test_identidade_modulo.py`) — inclui `test_aplicar_identidade_preserva_nome_de_coluna`, que usa `coluna:MODULO` (homogêneo) e **não** deve entrar no ramo novo.
+- `test_analise_colunas.py` e `test_estruturador.py` inteiros.
 
 Integração (smoke, `input_não_homogeneo_5_SMF.xlsx`):
 - 3 sheets processadas; módulos por linha corretos; `AL 11`/`AL11` unificados em `AL11` cross-sheet; contagem de módulos canônicos distintos coerente (~36 base, unificada).
+- Baseline: um input não-homogêneo existente (ex. SAN2) produz saída idêntica à de antes da mudança (guarda contra falso positivo de `_col_modulo`).
 
 ---
 
