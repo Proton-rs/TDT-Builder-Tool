@@ -8,7 +8,7 @@ from tdt.contracts import (
 )
 from tdt.dados.lista_padrao import ListaPadraoADMS, SinalPadrao
 from tdt.ui.estado import AppState
-from tdt.ui.modelo_tabela import ModeloSinais
+from tdt.ui.modelo_tabela import ModeloSinais, _MOTIVO_LABEL
 
 
 def _rec(status="decidido", sigla="DJF1", eletrico=None):
@@ -352,3 +352,42 @@ def test_texto_faixa_cores():
 def test_header_data_vertical_mostra_numero_da_linha(qtbot):
     m = ModeloSinais(_state(_rec()))
     assert m.headerData(0, Qt.Vertical, Qt.DisplayRole) == 1
+
+
+def test_motivo_sem_label_exibe_motivo_cru():
+    assert _MOTIVO_LABEL.get("motivo_futuro_desconhecido", "motivo_futuro_desconhecido") != "—"
+
+
+def test_todos_motivos_emitidos_tem_label():
+    emitidos = {
+        "sem_endereco", "score_baixo", "categoria_ambigua", "endereco_duplicado",
+        "sem_fix", "modulo_indefinido", "nome_sigla_inconsistente",
+        "qualificador_ambiguo", "pareamento_ambiguo", "comando_sem_discreto",
+        "custom_id_duplicado", "posicao_ambigua", "comando_tap_nao_modelado",
+        "decisao_por_projeto", "descartado_indefinido", "descartado_redundante",
+    }
+    assert emitidos <= set(_MOTIVO_LABEL)
+
+
+def test_sem_endereco_nao_diz_futuro():
+    assert "futuro" not in _MOTIVO_LABEL["sem_endereco"].lower()
+
+
+def test_motivo_desconhecido_mostra_motivo_cru_na_coluna():
+    st = _state(_rec())
+    st.resultado = type("R", (), {"revisao": (
+        type("Item", (), {"registro": st.registros[0], "motivo": "motivo_futuro_desconhecido"})(),
+    )})()
+    m = ModeloSinais(st)
+    v = m.data(m.index(0, _col("Motivo")), Qt.DisplayRole)
+    assert v == "motivo_futuro_desconhecido"
+
+
+def test_tooltip_motivo_traz_texto_explicativo():
+    st = _state(_rec())
+    st.resultado = type("R", (), {"revisao": (
+        type("Item", (), {"registro": st.registros[0], "motivo": "score_baixo"})(),
+    )})()
+    m = ModeloSinais(st)
+    tip = m.data(m.index(0, _col("Motivo")), Qt.ToolTipRole)
+    assert tip and "confiança" in tip.lower()

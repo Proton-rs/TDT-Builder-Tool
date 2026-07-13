@@ -20,15 +20,47 @@ COLUNAS = [
 ]
 
 _MOTIVO_LABEL = {
-    "sem_endereco": "Futuro (sem endereço)",
+    "sem_endereco": "Sem endereço",
     "score_baixo": "Score baixo",
     "categoria_ambigua": "Categoria ambígua",
+    "categoria_incompativel": "Categoria incompatível",
     "endereco_duplicado": "Endereço duplicado",
     "sem_fix": "Sem correção automática",
     "modulo_indefinido": "Módulo indefinido",
     "equipamento_ambiguo": "Equipamento ambíguo",
     "nome_sigla_inconsistente": "Sigla ≠ NOME",
     "qualificador_ambiguo": "Qualificador ambíguo",
+    "pareamento_ambiguo": "Comando sem par claro",
+    "comando_sem_discreto": "Comando sem status",
+    "custom_id_duplicado": "Custom ID duplicado",
+    "posicao_ambigua": "Posição sem palavra-chave",
+    "estado_sem_candidato": "Estado sem candidato",
+    "comando_tap_nao_modelado": "Comando de TAP (não vira ponto)",
+    "decisao_por_projeto": "Decisão por projeto",
+    "descartado_indefinido": "Descartado (indefinido)",
+    "descartado_redundante": "Descartado (redundante)",
+}
+
+_MOTIVO_TOOLTIP = {
+    "sem_endereco": "Sinal sem endereço mapeado. Confirme o endereço ou descarte a linha.",
+    "score_baixo": "Nenhum candidato bateu confiança mínima. Revise a descrição ou escolha a sigla manualmente.",
+    "categoria_ambigua": "Sinal decidiu tanto como Discrete quanto Analog. Escolha a categoria correta.",
+    "categoria_incompativel": "Só decidiu fora da categoria admitida pra esse tipo de sinal. Revise o tipo ou a sigla.",
+    "endereco_duplicado": "Mesmo endereço usado por mais de um sinal. Corrija o endereçamento.",
+    "sem_fix": "Não há correção automática aplicável. Ajuste manualmente.",
+    "modulo_indefinido": "Sinal sem módulo identificado. Informe o módulo.",
+    "equipamento_ambiguo": "Mais de um equipamento candidato pro sinal. Escolha o equipamento correto.",
+    "nome_sigla_inconsistente": "Sigla da coluna diverge do NOME do sinal. Confirme qual prevalece.",
+    "qualificador_ambiguo": "Qualificador (fase/estado/etc.) não ficou claro na descrição. Complete manualmente.",
+    "pareamento_ambiguo": "Comando sem discreto correspondente claro pro par D+C. Revise o pareamento.",
+    "comando_sem_discreto": "Comando identificado sem status (discreto) associado. Verifique se falta o par.",
+    "custom_id_duplicado": "Custom ID já usado por outro sinal. Corrija a duplicidade.",
+    "posicao_ambigua": "Não achou palavra-chave de posição (aberto/fechado) na descrição. Informe manualmente.",
+    "estado_sem_candidato": "Nenhum candidato de estado bateu com a descrição. Escolha manualmente.",
+    "comando_tap_nao_modelado": "Comando de TAP não vira ponto no modelo atual. Nenhuma ação necessária, apenas ciente.",
+    "decisao_por_projeto": "Sigla marcada como revisão obrigatória por decisão de projeto.",
+    "descartado_indefinido": "Linha descartada por falta de dados suficientes pra decidir.",
+    "descartado_redundante": "Linha descartada por ser redundante com outra já processada.",
 }
 
 # Cores por faixa de confiança (texto). ponytail: faixas fixas; threshold de
@@ -142,7 +174,7 @@ class ModeloSinais(QAbstractTableModel):
             return rec.status
         if nome == "Motivo":
             motivo = self._estado.motivo_por_id().get(rec.id)
-            return _MOTIVO_LABEL.get(motivo, "—") if motivo else "—"
+            return _MOTIVO_LABEL.get(motivo, motivo) if motivo else "—"
         # ponytail: motivo_por_id() reconstroi o dict a cada chamada de _texto
         # -- ok pro tamanho de lista atual (centenas de linhas); cachear no
         # AppState se a tabela ficar lenta com listas grandes.
@@ -204,6 +236,9 @@ class ModeloSinais(QAbstractTableModel):
                 return cor_faixa(None)
         if role == Qt.ToolTipRole and nome in ("Sinal", "Descr. ADMS"):
             return self._adms(rec) or None
+        if role == Qt.ToolTipRole and nome == "Motivo":
+            motivo = self._estado.motivo_por_id().get(rec.id)
+            return _MOTIVO_TOOLTIP.get(motivo, "") if motivo else None
         if role == Qt.FontRole and nome in _COLUNAS_MONO:
             return QFont("Consolas")
         return None
