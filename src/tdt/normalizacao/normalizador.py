@@ -70,6 +70,7 @@ _EQUIPAMENTO_PALAVRA: dict[str, str] = {
 _BARRA: dict[str, str] = {"P": "Principal", "A": "Auxiliar"}
 _MARCADOR_BARRA = re.compile(r"\bBARRA\s+([A-Z])\b")
 FASES: tuple[str, ...] = ("ABC", "AB", "BC", "CA", "A", "B", "C", "N")
+_PAR_FASE_ALFABETICO: dict[str, str] = {"AC": "CA", "BA": "AB", "CB": "BC"}
 _FASE_TOKENS: dict[str, str] = {
     "NEUTRO": "N",
     "TRIFASICO": "ABC",
@@ -102,8 +103,10 @@ def _fase_no_texto(tokens: list[str]) -> tuple[str | None, str | None]:
     tokens_limpos = [_tok_limpo(t) for t in tokens]
     if "FASE" in tokens_limpos:
         idx = tokens_limpos.index("FASE")
-        if idx + 1 < len(tokens) and tokens_limpos[idx + 1] in FASES:
-            return tokens_limpos[idx + 1], tokens[idx + 1]
+        if idx + 1 < len(tokens):
+            t = _PAR_FASE_ALFABETICO.get(tokens_limpos[idx + 1], tokens_limpos[idx + 1])
+            if t in FASES:
+                return t, tokens[idx + 1]
     # D2.2: "<líder ANSI 2-3 dígitos> <fase multi-letra>" sem a palavra "FASE"
     # (ex: "50 ABC"). Restrito a multi-letra (ABC/AB/BC/CA): uma letra única
     # (A/B/C/N) sozinha após um número é ambígua demais (não é exclusivamente
@@ -112,11 +115,10 @@ def _fase_no_texto(tokens: list[str]) -> tuple[str | None, str | None]:
     # Só dispara se os padrões acima (prioritários) não capturaram nada.
     for i, tok in enumerate(tokens):
         tok_limpo = _tok_limpo(tok)
-        if (
-            tok_limpo.isdigit() and len(tok_limpo) in (2, 3)
-            and i + 1 < len(tokens) and tokens_limpos[i + 1] in ("ABC", "AB", "BC", "CA")
-        ):
-            return tokens_limpos[i + 1], tokens[i + 1]
+        if tok_limpo.isdigit() and len(tok_limpo) in (2, 3) and i + 1 < len(tokens):
+            t = _PAR_FASE_ALFABETICO.get(tokens_limpos[i + 1], tokens_limpos[i + 1])
+            if t in ("ABC", "AB", "BC", "CA"):
+                return t, tokens[i + 1]
     return None, None
 
 

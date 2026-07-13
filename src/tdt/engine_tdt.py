@@ -24,7 +24,6 @@ from openpyxl.utils import get_column_letter
 
 from tdt.contracts import ItemRevisao, ListaHomogenea, SignalRecord
 from tdt.dados.lista_padrao import ListaPadraoADMS
-from tdt.normalizacao.normalizador import FASES
 
 SHEET_DISCRETOS = "DNP3_DiscreteSignals"
 COLUNAS_ESPERADAS = 43
@@ -141,11 +140,17 @@ def _output_data_type(coords_saida: str | None) -> str | None:
     return "SingleCoord" if len(set(partes)) == 1 else "MultiCoord"
 
 
+_FASE_PHASECODE: dict[str, str] = {"CA": "AC"}  # interno -> PhaseCode ADMS
+_PHASECODE = frozenset({"ABC", "AB", "BC", "AC", "A", "B", "C", "N"})  # DMSMatchingTemplateInfo
+
+
 def _fase_saida(fase: str | None) -> str:
     """Fase para a coluna TDT ``Phases``: default ``ABC`` quando vazia, e
-    fallback ``ABC`` para qualquer valor fora do domínio ``FASES`` (guard de
-    domínio — o ADMS rejeita fase inválida)."""
-    return fase if fase in FASES else "ABC"
+    fallback ``ABC`` para qualquer valor fora do domínio ``PhaseCode`` (guard
+    de domínio — o ADMS rejeita fase inválida). Traduz a convenção interna de
+    campo (``CA``) para o par alfabético do domínio ADMS (``AC``)."""
+    fase = _FASE_PHASECODE.get(fase, fase)
+    return fase if fase in _PHASECODE else "ABC"
 
 
 def _valores(rec: SignalRecord, subestacao: str | None, padrao: ListaPadraoADMS,

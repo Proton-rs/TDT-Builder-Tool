@@ -278,12 +278,15 @@ def test_valores_escritos_dentro_do_dominio_das_dvs(template_dnp3_path, lista_pa
     (valor de Input) que o ADMS rejeita no import."""
     from dataclasses import replace
 
+    from tdt.contracts import Eletrico
+
     base = _rec("LT3:1", "DJ", [5], direcao="InputOutput")
     rw = replace(base, enderecamento=replace(base.enderecamento, indices_saida=(0,)))
     cmd = _rec("LT3:3", "ABRIR2", [42, 43], direcao="Output")
+    analog_ca = replace(_rec_analog("A:2", "IN62", [30]), eletrico=Eletrico(fase="CA"))
     lista = ListaHomogenea(
         subestacao="IMA", protocolo="DNP3",
-        registros=_lista().registros + (rw, cmd) + _lista_analog().registros,
+        registros=_lista().registros + (rw, cmd) + _lista_analog().registros + (analog_ca,),
     )
     lp = ListaPadraoADMS.carregar(lista_padrao_path)
     wb = gerar(lista, template_dnp3_path, lp)
@@ -488,6 +491,13 @@ def test_fase_saida_preserva_fase_valida():
     assert _fase_saida("A") == "A"
     assert _fase_saida("ABC") == "ABC"
     assert _fase_saida("N") == "N"
+
+
+def test_fase_saida_traduz_para_dominio_phasecode():
+    assert _fase_saida("CA") == "AC"      # ADMS PhaseCode usa par alfabetico
+    assert _fase_saida("AB") == "AB"
+    assert _fase_saida(None) == "ABC"     # default preservado
+    assert _fase_saida("XY") == "ABC"     # guard de dominio preservado
 
 
 def test_escreve_sheet_analogica(template_dnp3_path, lista_padrao_path, tmp_path):

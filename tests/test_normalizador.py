@@ -304,6 +304,20 @@ def test_extrai_fase_dupla():
     assert ctx.fase == "AB"
 
 
+def test_par_de_fase_alfabetico_canoniza_para_interno():
+    _, ctx = extrair_contexto_estrutural("TENSAO FASE AC")
+    assert ctx.fase == "CA"
+    _, ctx = extrair_contexto_estrutural("TENSAO FASE BA")
+    assert ctx.fase == "AB"
+    _, ctx = extrair_contexto_estrutural("TENSAO FASE CB")
+    assert ctx.fase == "BC"
+
+
+def test_par_de_fase_interno_inalterado():
+    _, ctx = extrair_contexto_estrutural("TENSAO FASE CA")
+    assert ctx.fase == "CA"
+
+
 def test_extrai_fase_neutro():
     texto, ctx = extrair_contexto_estrutural("CORRENTE NEUTRO")
     assert ctx.fase == "N"
