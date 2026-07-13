@@ -85,9 +85,9 @@ Instrumentação: comparar os ids presentes em `decididos` (pré `dc_pairer.pare
 
 Imprimir: índice/nome da coluna que `analise_colunas._col_tipo` escolheu, e para cada sinal analógico (VAB, VBC, ...) a categoria/direção atribuída pelo `estruturador` e de onde veio (célula TIPO × marcador de seção). Confirmar a hipótese "tipo na linha numa sheet, na coluna em outra".
 
-- [ ] **Step 3b: Instrumentar as tensões entre fases (item 14 — CA×AC)**
+- [ ] **Step 3b: Verificar as tensões entre fases (item 14 — causa já confirmada)**
 
-Para cada tensão entre fases do input (VAB/VBC/VCA, "tensão fase CA" etc.): imprimir o texto bruto, a fase que `extrair_contexto_estrutural` devolveu, o valor final da coluna Phases e o texto do Signal Alias no TDT gerado. Objetivo: localizar exatamente onde o "AC" invertido aparece — extração N0 (texto do input traz "AC"), descrição da lista padrão (Signal Alias), ou outro campo. Se vier da lista padrão, a correção é de dado (proposta à parte), não a Task 4b.
+Causa fechada em 13jul: domínio `PhaseCode` da `DMSMatchingTemplateInfo` = {N, A, B, C, AB, BC, **AC**, ABC} e o pipeline escreve `CA`. Aqui só listar as tensões entre fases da GAU cuja coluna Phases sai fora do domínio (evidência pré-correção da Task 4b).
 
 - [ ] **Step 4: Instrumentar BC1/BC2 (módulo)**
 
@@ -261,20 +261,23 @@ Se `Contexto` não expõe a família, computar o conjunto de finais uma vez em `
 
 - [ ] **Step 6: Commit** `git commit -am "fix(regras): f_r4 mantem sigla base quando familia nao tem variante do estagio (50N E2)"`
 
-### Task 4b: Canonização de par de fases invertido (AC→CA, BA→AB, CB→BC)
+### Task 4b: Fases na ordem certa fim-a-fim (interno `CA` ↔ TDT `AC`)
+
+Duas metades de um deliverable (spec §3 E2.3): extração reconhece o par em qualquer ordem e canoniza pro interno (`CA`); o boundary de saída traduz pro domínio `PhaseCode` do template (`AC`). Interno NÃO muda de convenção.
 
 **Files:**
 - Modify: `src/tdt/normalizacao/normalizador.py:90-120` (`_fase_no_texto` + tupla multi-letra do D2.2)
-- Test: `tests/test_normalizador.py`
+- Modify: `src/tdt/engine_tdt.py:144-148` (`_fase_saida`)
+- Test: `tests/test_normalizador.py`, `tests/test_engine_tdt.py`
 
 **Interfaces:**
-- Consumes: `extrair_contexto_estrutural(texto) -> (texto_remanescente, ContextoEstrutural)` (assinatura atual, `normalizador.py:132`).
-- Produces: `ContextoEstrutural.fase` sempre em ordem canônica (`AB`/`BC`/`CA`); domínio `FASES` inalterado. Beneficia `f_r3` (filtro duro de fase) e a coluna Phases (`engine_tdt._fase_saida`).
+- Consumes: `extrair_contexto_estrutural(texto) -> (texto_remanescente, ContextoEstrutural)` (`normalizador.py:132`); `_fase_saida(fase: str | None) -> str` (`engine_tdt.py:144`).
+- Produces: `ContextoEstrutural.fase` sempre na convenção interna (`AB`/`BC`/`CA`), mesmo com input "AC"/"BA"/"CB"; coluna Phases do TDT sempre dentro do domínio `PhaseCode` da `DMSMatchingTemplateInfo` = {N, A, B, C, AB, BC, AC, ABC} — `CA` interno vira `AC` no xlsx.
 
-- [ ] **Step 1: Teste que falha**
+- [ ] **Step 1: Teste que falha (extração)**
 
 ```python
-def test_par_de_fase_invertido_canoniza():
+def test_par_de_fase_alfabetico_canoniza_para_interno():
     _, ctx = extrair_contexto_estrutural("TENSAO FASE AC")
     assert ctx.fase == "CA"
     _, ctx = extrair_contexto_estrutural("TENSAO FASE BA")
@@ -282,26 +285,53 @@ def test_par_de_fase_invertido_canoniza():
     _, ctx = extrair_contexto_estrutural("TENSAO FASE CB")
     assert ctx.fase == "BC"
 
-def test_par_de_fase_canonico_inalterado():
+def test_par_de_fase_interno_inalterado():
     _, ctx = extrair_contexto_estrutural("TENSAO FASE CA")
     assert ctx.fase == "CA"
 ```
 
-- [ ] **Step 2: Rodar — falha.** `PYTHONPATH=src python -m pytest tests/test_normalizador.py -k fase_invertido -v` → FAIL (fase=None hoje: "AC" não está em `FASES`).
+- [ ] **Step 2: Rodar — falha.** `PYTHONPATH=src python -m pytest tests/test_normalizador.py -k par_de_fase -v` → FAIL (fase=None hoje: "AC" não está em `FASES`).
 
-- [ ] **Step 3: Implementar**
+- [ ] **Step 3: Implementar a extração**
 
 ```python
-_PAR_FASE_INVERTIDO = {"AC": "CA", "BA": "AB", "CB": "BC"}
+_PAR_FASE_ALFABETICO = {"AC": "CA", "BA": "AB", "CB": "BC"}  # input -> convenção interna
 ```
 
-Em `_fase_no_texto`: antes de cada lookup em `FASES` (e na tupla multi-letra do D2.2, `normalizador.py:117`), canonizar o token: `t = _PAR_FASE_INVERTIDO.get(t, t)`. Devolver a fase canonizada — o token original permanece no texto (contrato atual da função).
+Em `_fase_no_texto`: antes de cada lookup em `FASES` (e na tupla multi-letra do D2.2, `normalizador.py:117`), canonizar o token: `t = _PAR_FASE_ALFABETICO.get(t, t)`. O token original permanece no texto (contrato atual da função).
 
-- [ ] **Step 4: Rodar — passa.** Suíte inteira de `test_normalizador.py` PASS.
+- [ ] **Step 4: Teste que falha (boundary de saída)**
 
-- [ ] **Step 5: Gate individual.** `PYTHONPATH=src python bench/gate_tdt_real.py` → `pct >= baseline`. Regrediu → revert + `bench/resultados/spGAU_task4b.txt`.
+```python
+def test_fase_saida_traduz_para_dominio_phasecode():
+    assert _fase_saida("CA") == "AC"      # ADMS PhaseCode usa par alfabético
+    assert _fase_saida("AB") == "AB"
+    assert _fase_saida(None) == "ABC"     # default preservado
+    assert _fase_saida("XY") == "ABC"     # guard de domínio preservado
+```
 
-- [ ] **Step 6: Commit** `git commit -am "fix(normalizacao): canoniza par de fases invertido (AC->CA, BA->AB, CB->BC)"`
+- [ ] **Step 5: Implementar o boundary**
+
+```python
+_FASE_PHASECODE = {"CA": "AC"}  # interno (convenção de campo) -> PhaseCode ADMS
+_PHASECODE = frozenset({"ABC", "AB", "BC", "AC", "A", "B", "C", "N"})  # DMSMatchingTemplateInfo
+
+def _fase_saida(fase: str | None) -> str:
+    fase = _FASE_PHASECODE.get(fase, fase)
+    return fase if fase in _PHASECODE else "ABC"
+```
+
+(Substitui a validação atual contra `FASES` — o domínio de SAÍDA é o do template, não o interno.)
+
+- [ ] **Step 6: Fechar o buraco do teste guarda-chuva**
+
+`test_valores_escritos_dentro_do_dominio_das_dvs` (test_engine_tdt) valida todo valor escrito contra os domínios da sheet oculta e NÃO pegou o `CA` — provavelmente nenhuma fixture tem sinal com fase entre fases. Adicionar à fixture desse teste um registro analógico com `eletrico.fase="CA"` — a partir daí o guarda-chuva cobre a regressão sozinho.
+
+- [ ] **Step 7: Rodar — passa.** Suítes de `test_normalizador.py` e `test_engine_tdt.py` PASS.
+
+- [ ] **Step 8: Gate individual.** `PYTHONPATH=src python bench/gate_tdt_real.py` → `pct >= baseline`. Regrediu → revert + `bench/resultados/spGAU_task4b.txt`.
+
+- [ ] **Step 9: Commit** `git commit -am "fix(fases): extracao reconhece AC/BA/CB; coluna Phases usa dominio PhaseCode (CA->AC)"`
 
 ### Task 5: Piso absoluto de decisão (51F → FC87)
 
@@ -668,7 +698,7 @@ def test_roundtrip_edicao_nao_altera_valor():
 ## Self-Review (cobertura spec → plano)
 
 - E1 diagnóstico (itens 1b/3/5/8/10/11) → Task 1 ✓
-- E2 f_r4 estágio (item 2) → Task 4 ✓ | piso absoluto (item 4) → Task 5 ✓ | par de fases invertido (item 14) → Task 4b ✓ (+ rastreio no diag, Task 1 Step 3b)
+- E2 f_r4 estágio (item 2) → Task 4 ✓ | piso absoluto (item 4) → Task 5 ✓ | fases CA↔AC / domínio PhaseCode (item 14) → Task 4b ✓ (+ verificação no diag, Task 1 Step 3b)
 - E3 invariante → Task 7 ✓ | correções GAU → Task 8 (bloqueada por dado, hipóteses H1-H4) ✓
 - E1→fix VAB (item 8) → Task 9 (bloqueada por dado) ✓
 - E4 aviso módulo (item 11) → Task 6 ✓
