@@ -64,6 +64,26 @@ class AppState:
             return {}
         return {item.registro.id: item.motivo for item in self.resultado.revisao}
 
+    def aprovar_ids(self, ids: list[str]) -> int:
+        """Aprova em lote os registros com os `ids` dados, usando a mesma
+        transição de `definir_sigla` (sigla do candidato top ou já atribuída).
+        Um único snapshot para o lote inteiro: 1 `desfazer()` reverte tudo.
+        """
+        self._snapshot()
+        indice_por_id = {r.id: i for i, r in enumerate(self.registros)}
+        aprovados = 0
+        for id_ in ids:
+            indice = indice_por_id.get(id_)
+            if indice is None:
+                continue
+            r = self.registros[indice]
+            sigla = r.candidatos[0].sigla if r.candidatos else r.sigla_sinal
+            if not sigla:
+                continue
+            self.definir_sigla(indice, sigla, snapshot=False)
+            aprovados += 1
+        return aprovados
+
     def definir_sigla(self, indice: int, sigla: str, *, snapshot: bool = True) -> None:
         if snapshot:
             self._snapshot()

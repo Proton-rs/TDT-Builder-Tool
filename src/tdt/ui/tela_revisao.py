@@ -637,6 +637,15 @@ class TelaRevisao(QWidget):
     def _aprovar_e_proximo(self, indice_candidato: int | None = None) -> None:
         if not hasattr(self, "_proxy"):
             return
+        indices_selecionados = self._linhas_selecionadas()
+        if len(indices_selecionados) >= 2:
+            ids = [self._estado.registros[i].id for i in indices_selecionados]
+            self._estado.aprovar_ids(ids)
+            topo = self._modelo.index(0, 0)
+            fim = self._modelo.index(self._modelo.rowCount() - 1, len(ModeloSinais.COLUNAS) - 1)
+            self._modelo.dataChanged.emit(topo, fim)
+            self._atualizar_painel()
+            return
         r = self._registro()
         if r is None:
             return
