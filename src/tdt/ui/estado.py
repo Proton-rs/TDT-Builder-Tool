@@ -9,8 +9,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 
 from tdt.config import Config
-from tdt.contracts import ResultadoPipeline, SignalRecord
+from tdt.contracts import Enderecamento, ResultadoPipeline, SignalRecord
 from tdt.dados.lista_padrao import ListaPadraoADMS
+from tdt.pareamento_polaridade import _SIGLAS_POSICAO
 
 
 @dataclass
@@ -127,3 +128,59 @@ class AppState:
 
     def definir_enderecos(self, indice: int, campo: str, indices: tuple[int, ...]) -> None:
         self._editar_nested(indice, "enderecamento", **{campo: indices})
+
+    def formar_par_posicao(self, id_a: str, id_b: str, sigla: str) -> str | None:
+        """Funde 2 registros num único MultiCoord (mesmo formato de
+        `normalizador_estrutural.corrigir`), com a `sigla` escolhida pelo
+        operador (ex. corrigir DJA1 -> DJF1 quando o pareamento automático
+        errou a polaridade). Valida mesmo módulo + mesmo equipamento + 1
+        endereço cada; devolve mensagem de erro sem mutar nada se inválido.
+        """
+        indice_por_id = {r.id: i for i, r in enumerate(self.registros)}
+        ia = indice_por_id.get(id_a)
+        ib = indice_por_id.get(id_b)
+        if ia is None or ib is None:
+            return "Registro não encontrado."
+        a, b = self.registros[ia], self.registros[ib]
+        if a.modulo.nome != b.modulo.nome:
+            return "Os dois sinais precisam ser do mesmo módulo."
+        if a.eletrico.nome_equipamento != b.eletrico.nome_equipamento:
+            return "Os dois sinais precisam ser do mesmo equipamento."
+        if len(a.enderecamento.indices) != 1 or len(b.enderecamento.indices) != 1:
+            return "Cada sinal precisa ter exatamente 1 endereço."
+        self._snapshot()
+        primeiro, segundo = (
+            (a, b) if a.enderecamento.indices[0] <= b.enderecamento.indices[0] else (b, a)
+        )
+        fundido = replace(
+            primeiro,
+            enderecamento=Enderecamento(
+                primeiro.enderecamento.protocolo,
+                primeiro.enderecamento.indices + segundo.enderecamento.indices,
+            ),
+            tipo_sinal=replace(primeiro.tipo_sinal, datatype="MultiCoord"),
+            sigla_sinal=sigla, status="decidido",
+            justificativa="par de posição formado manualmente",
+        )
+        novos = [r for i, r in enumerate(self.registros) if i not in (ia, ib)]
+        novos.insert(min(ia, ib), fundido)
+        self.registros = novos
+        return None
+
+    def trocar_sigla_par(self, id_: str, nova_sigla: str) -> None:
+        """Troca a sigla de um par de posição já fundido (ex. DJA1 <-> DJF1),
+        preservando `enderecamento`/`tipo_sinal` intactos. No-op se
+        `nova_sigla` não estiver no catálogo de siglas de posição.
+        """
+        if (nova_sigla or "").upper() not in _SIGLAS_POSICAO:
+            return
+        indice_por_id = {r.id: i for i, r in enumerate(self.registros)}
+        indice = indice_por_id.get(id_)
+        if indice is None:
+            return
+        self._snapshot()
+        r = self.registros[indice]
+        self.registros[indice] = replace(
+            r, sigla_sinal=nova_sigla, status="decidido",
+            justificativa="sigla de par trocada manualmente",
+        )

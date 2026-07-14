@@ -11,14 +11,16 @@ import uuid
 from PySide6.QtCore import Qt, QSettings, Signal
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
-    QApplication, QButtonGroup, QCheckBox, QDialog, QDialogButtonBox, QHBoxLayout, QLabel,
-    QLineEdit, QListWidget, QListWidgetItem, QMenu, QMessageBox, QProgressBar,
-    QPushButton, QSizePolicy, QSplitter, QTableView, QTabBar, QVBoxLayout, QWidget,
+    QApplication, QButtonGroup, QCheckBox, QDialog, QDialogButtonBox, QHBoxLayout,
+    QInputDialog, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMenu, QMessageBox,
+    QProgressBar, QPushButton, QSizePolicy, QSplitter, QTableView, QTabBar, QVBoxLayout,
+    QWidget,
 )
 
 from tdt.contracts import Descricoes, Enderecamento, Modulo, SignalRecord, TipoSinal
 from tdt.dc_pairer import fundir, separar
 from tdt.engine_tdt import nome_hierarquico
+from tdt.pareamento_polaridade import _SIGLAS_POSICAO
 from tdt.ui.busca_adms import buscar
 from tdt.ui.delegate_sinal import DelegateCombo, DelegateModulo, DelegateSinal
 from tdt.ui.estado import AppState
@@ -196,6 +198,9 @@ class TelaRevisao(QWidget):
         btn_remover = QPushButton("Remover Sinal"); btn_remover.clicked.connect(self._remover_sinais)
         btn_adicionar = QPushButton("Adicionar Sinal"); btn_adicionar.clicked.connect(self._adicionar_sinal)
         btn_parear = QPushButton("Parear D+C"); btn_parear.clicked.connect(self._parear_sinais)
+        self.btn_formar_par = QPushButton("Formar par de posição")
+        self.btn_formar_par.setEnabled(False)
+        self.btn_formar_par.clicked.connect(self._formar_par_posicao)
         self.btn_aprovar = QPushButton("Aprovar e ir ao próximo (Enter)")
         self.btn_aprovar.setProperty("acao", "principal")
         self.btn_aprovar.clicked.connect(lambda: self._aprovar_e_proximo())
@@ -207,6 +212,7 @@ class TelaRevisao(QWidget):
         topo.addWidget(btn_remover)
         topo.addWidget(btn_adicionar)
         topo.addWidget(btn_parear)
+        topo.addWidget(self.btn_formar_par)
         topo.addWidget(self.btn_aprovar)
 
         # --- painel de detalhe ---
@@ -372,6 +378,7 @@ class TelaRevisao(QWidget):
     def _atualizar_selecao(self, *_args) -> None:
         n = len(self.tabela.selectionModel().selectedRows())
         self.lbl_selecao.setText(f"{n} selecionado" + ("" if n == 1 else "s"))
+        self.btn_formar_par.setEnabled(n == 2)
 
     def _linha_mudou(self, atual, _anterior):
         fonte = self._proxy.mapToSource(atual)
@@ -624,6 +631,24 @@ class TelaRevisao(QWidget):
             self._modelo.remover_linhas(indices)
             self._modelo.adicionar_registro(status_rec)
             self._modelo.adicionar_registro(comando_rec)
+
+    def _formar_par_posicao(self):
+        """Funde as 2 linhas selecionadas num MultiCoord com a sigla de
+        posição escolhida (ex. corrigir DJA1 -> DJF1)."""
+        indices = self._linhas_selecionadas()
+        if len(indices) != 2:
+            return
+        ids = [self._estado.registros[i].id for i in indices]
+        siglas = sorted(_SIGLAS_POSICAO)
+        sigla, ok = QInputDialog.getItem(
+            self, "Formar par de posição", "Sigla:", siglas, 0, False)
+        if not ok:
+            return
+        erro = self._estado.formar_par_posicao(ids[0], ids[1], sigla)
+        if erro is not None:
+            QMessageBox.warning(self, "Formar par de posição", erro)
+            return
+        self.refresh()
 
     def _descricao_confirmacao(self, acao: str, dados) -> str:
         if acao == "parear":
