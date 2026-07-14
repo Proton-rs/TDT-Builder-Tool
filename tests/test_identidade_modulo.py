@@ -182,7 +182,7 @@ from tdt.identidade_modulo import aplicar_identidade
 
 def test_aplicar_identidade_sobrescreve_nome_de_sheet_e_classifica():
     sinais = [_rec("DISJUNTOR LIGADO")]  # _rec usa Modulo("X","sheet_name")
-    novos, conf = aplicar_identidade(sinais, "AL FWB15", [], Config())
+    novos, conf, _ = aplicar_identidade(sinais, "AL FWB15", [], Config())
     assert novos[0].modulo.nome == "AL15"
     assert novos[0].modulo.tipo == "Alimentador"
     assert conf == "alta"
@@ -191,7 +191,7 @@ def test_aplicar_identidade_sobrescreve_nome_de_sheet_e_classifica():
 def test_aplicar_identidade_preserva_nome_de_coluna():
     base = _rec("DISJUNTOR")
     base = base.__class__(**{**base.__dict__, "modulo": Modulo("AL11", "coluna:MODULO")})
-    novos, _ = aplicar_identidade([base], "GTD_11", [], Config())
+    novos, _, _ = aplicar_identidade([base], "GTD_11", [], Config())
     assert novos[0].modulo.nome == "AL11"  # não sobrescreve módulo de coluna
     assert novos[0].modulo.tipo == "Alimentador"  # mas classifica o tipo
 
@@ -267,12 +267,45 @@ def _rec_mod(norm: str, nome_mod: str) -> SignalRecord:
     )
 
 
+def _sinal_coluna(rid, nome_mod):
+    return SignalRecord(
+        id=rid,
+        modulo=Modulo(nome_mod, "coluna:MODULO_POR_LINHA"),
+        tipo_sinal=TipoSinal("Discrete"),
+        enderecamento=Enderecamento("DNP3", (1,)),
+        descricoes=Descricoes("x", "X"),
+    )
+
+
+def test_canonizar_modulo_marca_canonico():
+    cfg = Config()
+    assert canonizar_modulo("BC1_DJ_ABERTO", cfg, explicito=True).canonico
+    # dois prefixos conhecidos (BC + IB) -> ambíguo -> fallback cru, não-canônico
+    res = canonizar_modulo("BC1_CORRENTE_IB", cfg, explicito=True)
+    assert not res.canonico and res.nome == "BC1_CORRENTE_IB"
+
+
+def test_identidade_por_linha_sanea_lixo_pro_modulo_dominante():
+    """SP-CVA2 E5.1 — célula fora do padrão herda o módulo dominante da sheet
+    (com aviso) em vez de virar nome de módulo lixo."""
+    sinais = [
+        _sinal_coluna("BC2:5", "BC1_VAB"),
+        _sinal_coluna("BC2:9", "BC1_CORRENTE_IB"),
+        _sinal_coluna("BC2:21", "BC1_DJ_ABERTO"),
+        _sinal_coluna("BC2:26", "(LogicaInterna!)"),
+    ]
+    novos, conf, avisos = aplicar_identidade(sinais, "BC2", [], Config())
+    assert {s.modulo.nome for s in novos} == {"BC1"}
+    assert len(avisos) == 2  # BC2:9 e BC2:26
+    assert any("BC2:9" in a for a in avisos)
+
+
 def test_aplicar_identidade_por_linha_canoniza_e_classifica_por_grupo():
     sinais = [
         _rec_mod("DISJUNTOR", "AL 11 - 13.8kV"),
         _rec_mod("CORRENTE", "TR1"),
     ]
-    novos, conf = aplicar_identidade(sinais, "ESTADOS", [], Config())
+    novos, conf, _ = aplicar_identidade(sinais, "ESTADOS", [], Config())
     assert novos[0].modulo.nome == "AL11"
     assert novos[0].modulo.tipo == "Alimentador"
     assert novos[1].modulo.nome == "TR1"
@@ -283,7 +316,7 @@ def test_aplicar_identidade_por_linha_canoniza_e_classifica_por_grupo():
 def test_aplicar_identidade_por_linha_reconcilia_variantes():
     # 'AL 11' e 'AL11' (variantes cross-sheet) canonizam para o mesmo nome
     sinais = [_rec_mod("SINAL A", "AL 11 - 13.8kV"), _rec_mod("SINAL B", "AL11 - 13.8kV")]
-    novos, _ = aplicar_identidade(sinais, "MEDIDAS", [], Config())
+    novos, _, _ = aplicar_identidade(sinais, "MEDIDAS", [], Config())
     assert novos[0].modulo.nome == novos[1].modulo.nome == "AL11"
 
 
@@ -292,6 +325,6 @@ def test_aplicar_identidade_por_linha_canonizacao_vazia_vai_pra_revisao():
     # vazia na origem, mas canoniza (explicito=True) para "" -- equivale a
     # módulo ausente e não pode seguir pro scoring em silêncio.
     sinais = [_rec_mod("DISJUNTOR", "- 13.8kV")]
-    novos, _ = aplicar_identidade(sinais, "ESTADOS", [], Config())
+    novos, _, _ = aplicar_identidade(sinais, "ESTADOS", [], Config())
     assert novos[0].status == "revisao"
     assert novos[0].justificativa == "modulo_indefinido"

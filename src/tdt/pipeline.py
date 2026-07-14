@@ -609,7 +609,9 @@ def executar(
             mapa = analisar(rows, encoder, ref_emb, siglas_set=lp.siglas, config=config)
             sinais = list(estruturar(rows, mapa, sheet_name=sn, config=config, vocab=vocab,
                                      siglas_set=lp.siglas))
-        sinais, conf_mod = aplicar_identidade(sinais, sn, rows, config)
+        sinais, conf_mod, avisos_mod = aplicar_identidade(sinais, sn, rows, config)
+        for msg in avisos_mod:
+            aud.evento("identidade_modulo", msg, "AVISO")
         alias_sheet = aliases.get(sn) if aliases else None
         if alias_sheet:
             sinais = [

@@ -28,6 +28,7 @@ class ResolucaoModulo:
     nome: str
     confianca: str  # "alta" | "baixa"
     por_linha: dict[int, str] | None = None  # slot (follow-up); None aqui
+    canonico: bool = False  # True só quando saiu das estratégias 1/2 (SP-CVA2 E5.1)
 
 
 _SUFIXO_RUIDO = re.compile(
@@ -54,7 +55,7 @@ def canonizar_modulo(valor: str, config: Config, *, explicito: bool = False) -> 
     toks = _tokens(valor)
     chave = "".join(toks)
     if chave in config.mapa_sheet_modulo:
-        return ResolucaoModulo(nome=config.mapa_sheet_modulo[chave], confianca="alta")
+        return ResolucaoModulo(nome=config.mapa_sheet_modulo[chave], confianca="alta", canonico=True)
     ocorr = [
         (i, config.mapa_prefixo_modulo[t])
         for i, t in enumerate(toks)
@@ -69,7 +70,7 @@ def canonizar_modulo(valor: str, config: Config, *, explicito: bool = False) -> 
         if len(nums) == 1:
             (prefixo,) = canonicos
             (num,) = nums
-            return ResolucaoModulo(nome=f"{prefixo}{num}", confianca="alta")
+            return ResolucaoModulo(nome=f"{prefixo}{num}", confianca="alta", canonico=True)
     if explicito:
         return ResolucaoModulo(nome=_limpar_modulo(valor), confianca="alta")
     return ResolucaoModulo(nome=valor, confianca="baixa")
@@ -105,20 +106,40 @@ def classificar_tipo(modulo_nome: str, registros: list[SignalRecord], config: Co
 
 def _identidade_por_linha(
     sinais: list[SignalRecord], config: Config
-) -> list[SignalRecord]:
-    """Gênero módulo-por-coluna: canoniza cada nome de módulo (explícito) e
-    classifica o tipo POR GRUPO de módulo canônico (não 1 tipo/sheet)."""
-    canon: list[SignalRecord] = []
+) -> tuple[list[SignalRecord], list[str]]:
+    """Gênero módulo-por-coluna: canoniza cada nome (explícito), SANEIA os que
+    não canonizam pro módulo dominante da sheet (SP-CVA2 E5.1 — evita módulo
+    lixo tipo 'BC1_CORRENTE_IB') e classifica o tipo POR GRUPO de módulo."""
+    resolvidos: list[tuple[SignalRecord, ResolucaoModulo | None]] = []
     for s in sinais:
         if s.modulo.origem_contexto == "coluna:MODULO_POR_LINHA" and s.modulo.nome:
-            res = canonizar_modulo(s.modulo.nome, config, explicito=True)
-            s = replace(s, modulo=replace(s.modulo, nome=res.nome))
-            if not res.nome:
-                # Canonizou para vazio (ex.: célula era só sufixo de classe de
-                # tensão) -- equivale a módulo ausente, mesma trilha de revisão
-                # do caminho de célula vazia em estruturador.py.
-                s = replace(s, status="revisao", justificativa="modulo_indefinido")
+            resolvidos.append((s, canonizar_modulo(s.modulo.nome, config, explicito=True)))
+        else:
+            resolvidos.append((s, None))
+
+    canonicos = [r.nome for _, r in resolvidos if r is not None and r.canonico and r.nome]
+    dominante = max(set(canonicos), key=canonicos.count) if canonicos else None
+
+    avisos: list[str] = []
+    canon: list[SignalRecord] = []
+    for s, res in resolvidos:
+        if res is None:
+            canon.append(s)
+            continue
+        nome = res.nome
+        if not res.canonico and dominante is not None:
+            avisos.append(
+                f"{s.id}: módulo {s.modulo.nome!r} fora do padrão — saneado para {dominante!r}"
+            )
+            nome = dominante
+        s = replace(s, modulo=replace(s.modulo, nome=nome))
+        if not nome:
+            # Canonizou para vazio (ex.: célula era só sufixo de classe de
+            # tensão) -- equivale a módulo ausente, mesma trilha de revisão
+            # do caminho de célula vazia em estruturador.py.
+            s = replace(s, status="revisao", justificativa="modulo_indefinido")
         canon.append(s)
+
     grupos: dict[str, list[SignalRecord]] = {}
     for s in canon:
         grupos.setdefault(s.modulo.nome or "", []).append(s)
@@ -126,14 +147,15 @@ def _identidade_por_linha(
     return [
         replace(s, modulo=replace(s.modulo, tipo=tipo_de[s.modulo.nome or ""]))
         for s in canon
-    ]
+    ], avisos
 
 
 def aplicar_identidade(
     sinais: list[SignalRecord], sheet_name: str, rows: list[tuple], config: Config
-) -> tuple[list[SignalRecord], str]:
+) -> tuple[list[SignalRecord], str, list[str]]:
     if any(s.modulo.origem_contexto == "coluna:MODULO_POR_LINHA" for s in sinais):
-        return _identidade_por_linha(sinais, config), "alta"
+        novos, avisos = _identidade_por_linha(sinais, config)
+        return novos, "alta", avisos
     res = resolver_modulo(sheet_name, rows, config)
     # nome: resolve só onde veio do nome da sheet; preserva módulo de coluna.
     com_nome = [
@@ -147,7 +169,7 @@ def aplicar_identidade(
     com_tipo = [replace(s, modulo=replace(s.modulo, tipo=tipo)) for s in com_nome]
     # confiança só importa quando o nome veio da sheet (caminho não-homogêneo).
     veio_de_sheet = any(s.modulo.origem_contexto == "sheet_name" for s in sinais)
-    return com_tipo, (res.confianca if veio_de_sheet else "alta")
+    return com_tipo, (res.confianca if veio_de_sheet else "alta"), []
 
 
 def particionar_por_confianca(
