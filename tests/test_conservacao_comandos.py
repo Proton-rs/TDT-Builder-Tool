@@ -4,7 +4,8 @@ revisão; nunca some silenciosamente.
 
 Composição replica ``pipeline.gerar_tdt`` (normalizador_estrutural.
 fundir_pares_posicao -> dc_pairer.parear -> normalizador_estrutural.corrigir
--> criador_lista_homogenea.montar -> engine_tdt.particionar_custom_id_duplicado).
+-> criador_lista_homogenea.montar -> engine_tdt.particionar_custom_id_duplicado
+-> engine_tdt.particionar_endereco_duplicado).
 
 Nota sobre ids: ``dc_pairer.fundir`` preserva o id do STATUS, não o do
 comando (ver docstring de ``dc_pairer.separar`` — o id original do Output é
@@ -79,8 +80,9 @@ def test_nenhum_comando_some_silenciosamente():
     corrigidos, rev2 = corrigir(list(pareados), frozenset())
     lista = criador_lista_homogenea.montar(list(corrigidos), subestacao="SE1")
     lista, rev3 = engine_tdt.particionar_custom_id_duplicado(lista)
+    lista, rev4 = engine_tdt.particionar_endereco_duplicado(lista)
 
-    registros_revisao = [ir.registro for ir in (*rev1, *rev2, *rev3)]
+    registros_revisao = [ir.registro for ir in (*rev1, *rev2, *rev3, *rev4)]
     ids_diretos = {r.id for r in lista.registros} | {r.id for r in registros_revisao}
     ids_fundidos = _comandos_fundidos(entrada, lista.registros, registros_revisao)
 
@@ -136,8 +138,9 @@ def test_nenhum_sinal_some_silenciosamente():
     corrigidos, rev2 = corrigir(list(pareados), frozenset({"DJF1"}))
     lista = criador_lista_homogenea.montar(list(corrigidos), subestacao="SE1")
     lista, rev3 = engine_tdt.particionar_custom_id_duplicado(lista)
+    lista, rev4 = engine_tdt.particionar_endereco_duplicado(lista)
 
-    registros_revisao = [ir.registro for ir in (*rev1, *rev2, *rev3)]
+    registros_revisao = [ir.registro for ir in (*rev1, *rev2, *rev3, *rev4)]
     ids_diretos = {r.id for r in lista.registros} | {r.id for r in registros_revisao}
     ids_fundidos = _comandos_fundidos(entrada, lista.registros, registros_revisao)
     ids_absorvidos = _sinais_absorvidos(entrada, lista.registros, registros_revisao)
