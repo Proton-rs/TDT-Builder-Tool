@@ -347,6 +347,19 @@ def test_linha_de_dados_nao_e_marcador():
     )
 
 
+def test_codigo_curto_de_tipo_sozinho_nao_e_marcador():
+    """Revisão final de branch (SP-CVA2): composição E3.1 (marcador tolera
+    numeração) + E3.2 (códigos AI/AO/DI/DO no vocabulário) pode fazer uma
+    linha com descrição vazia, só o código de tipo e numeração de índice
+    passar como marcador de seção (categoria via CODIGOS_TIPO, não VOCAB) —
+    abriria seção nova e inverteria a direção das linhas seguintes. Célula
+    classificadora de marcador só pode casar VOCAB (MEDIÇÃO/CONTROLE/
+    SINALIZAÇÃO...), nunca um código curto por-linha."""
+    assert not _eh_marcador(("17", None, None, None, None, "DI"), 0)
+    assert not _eh_marcador(("17", None, None, None, None, "A"), 0)
+    assert not _eh_marcador(("17", None, None, None, None, "C"), 0)
+
+
 def test_marcador_de_secao_define_direcao_e_nao_vira_registro():
     """Fim-a-fim no estruturar: seção CONTROLE dá Output às linhas seguintes e
     a linha do marcador não vira SignalRecord (E6.4)."""

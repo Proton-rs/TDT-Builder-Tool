@@ -28,16 +28,27 @@ from .parse_nome import (
     extrair_modulo_do_nome,
     sigla_esta_no_nome,
 )
-from .vocabulario_tipo import classificar as _classificar, norm as _norm
+from .vocabulario_tipo import VOCAB as _VOCAB, classificar as _classificar, norm as _norm
 
 
 def _eh_marcador(row: tuple, col0: int) -> bool:
     """Linha de marcador de seção: UMA célula classifica como categoria e as
     demais preenchidas são vazias ou numeração de sequência (inteiro curto) —
     o layout CVA11 tem contador na col 0 ('1'/'MEDIÇÃO', '10'/'CONTROLE'),
-    que invalidava a regra antiga de "exatamente 1 célula" (SP-CVA2 E3.1)."""
+    que invalidava a regra antiga de "exatamente 1 célula" (SP-CVA2 E3.1).
+
+    A célula classificadora precisa casar o VOCAB de seção (substring —
+    MEDIÇÃO/CONTROLE/SINALIZAÇÃO e sinônimos), NUNCA um código curto de
+    `CODIGOS_TIPO` (A/C/D/AI/AO/DI/DO) — esses são evidência POR LINHA (coluna
+    Tipo, SP-CVA2 E3.2), não marcador de seção; uma linha de dados com
+    descrição vazia e só a célula de código + numeração preenchidos não pode
+    abrir uma seção nova e inverter a direção das linhas seguintes (achado da
+    revisão final de branch, composição E3.1+E3.2 — não reproduzido no dado
+    real da SE CVA, mas via de regressão latente)."""
     preenchidas = [i for i, c in enumerate(row) if _norm(c)]
-    classificam = [i for i in preenchidas if _classificar(row[i]) is not None]
+    classificam = [
+        i for i in preenchidas if any(k in _norm(row[i]) for k in _VOCAB)
+    ]
     if len(classificam) != 1:
         return False
     outras = [i for i in preenchidas if i not in classificam]
