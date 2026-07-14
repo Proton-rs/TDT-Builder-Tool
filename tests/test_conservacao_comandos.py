@@ -2,9 +2,9 @@
 (direção Output) que entra no pipeline aparece no TDT final OU num item de
 revisão; nunca some silenciosamente.
 
-Composição replica ``pipeline.gerar_tdt`` (dc_pairer.parear ->
-normalizador_estrutural.corrigir -> criador_lista_homogenea.montar ->
-engine_tdt.particionar_custom_id_duplicado).
+Composição replica ``pipeline.gerar_tdt`` (normalizador_estrutural.
+fundir_pares_posicao -> dc_pairer.parear -> normalizador_estrutural.corrigir
+-> criador_lista_homogenea.montar -> engine_tdt.particionar_custom_id_duplicado).
 
 Nota sobre ids: ``dc_pairer.fundir`` preserva o id do STATUS, não o do
 comando (ver docstring de ``dc_pairer.separar`` — o id original do Output é
@@ -17,7 +17,7 @@ fundido), que sobrevive intacto por todas as etapas deste pipeline parcial.
 from tdt import criador_lista_homogenea, dc_pairer, engine_tdt
 from tdt.config import Config
 from tdt.contracts import Descricoes, Enderecamento, Modulo, SignalRecord, TipoSinal
-from tdt.normalizador_estrutural import corrigir
+from tdt.normalizador_estrutural import corrigir, fundir_pares_posicao
 
 
 def _rec(rid, sigla, direcao, modulo, indices, desc):
@@ -74,7 +74,8 @@ def test_nenhum_comando_some_silenciosamente():
     ]
     ids_comando = {r.id for r in entrada if r.tipo_sinal.direcao == "Output"}
 
-    pareados, rev1 = dc_pairer.parear(entrada, Config())
+    fundidos = fundir_pares_posicao(entrada, frozenset())
+    pareados, rev1 = dc_pairer.parear(fundidos, Config())
     corrigidos, rev2 = corrigir(list(pareados), frozenset())
     lista = criador_lista_homogenea.montar(list(corrigidos), subestacao="SE1")
     lista, rev3 = engine_tdt.particionar_custom_id_duplicado(lista)

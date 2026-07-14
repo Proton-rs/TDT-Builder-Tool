@@ -1,7 +1,9 @@
+from tdt.config import Config
+from tdt import dc_pairer
 from tdt.contracts import (
     Descricoes, Enderecamento, Modulo, SignalRecord, TipoSinal,
 )
-from tdt.normalizador_estrutural import corrigir
+from tdt.normalizador_estrutural import corrigir, fundir_pares_posicao
 
 WL = frozenset({"SECC", "DJF1", "SECG"})
 
@@ -91,3 +93,53 @@ def test_nao_consecutivos_seguem_independentes():
     corrigidos, erros = corrigir(regs, WL)
     assert len(corrigidos) == 2
     assert erros == ()
+
+
+def _rec_fp(rid, sigla, direcao, indices, desc, modulo="BC2"):
+    return SignalRecord(
+        id=rid,
+        modulo=Modulo(modulo, "sheet_name"),
+        tipo_sinal=TipoSinal("Discrete", "SingleBit", direcao),
+        enderecamento=Enderecamento("DNP3", tuple(indices)),
+        descricoes=Descricoes(desc, desc),
+        sigla_sinal=sigla,
+        status="decidido",
+    )
+
+
+def test_fundir_pares_posicao_forma_multicoord():
+    """SP-CVA2 E4: par ABERTO/FECHADO (mesma sigla de posição, endereços
+    consecutivos) vira UM MultiCoord ANTES do dc_pairer."""
+    aberto = _rec_fp("BC2:21", "DJF1", "Input", [320], "52 06 ABERTO")
+    fechado = _rec_fp("BC2:22", "DJF1", "Input", [321], "52 06 FECHADO")
+    comando = _rec_fp("BC2:14", "DJF1", "Output", [90], "52 06 ABRIR FECHAR")
+    saida = fundir_pares_posicao([aberto, fechado, comando], frozenset({"DJF1"}))
+    inputs = [r for r in saida if r.tipo_sinal.direcao == "Input"]
+    assert len(inputs) == 1
+    assert inputs[0].enderecamento.indices == (320, 321)
+    assert inputs[0].tipo_sinal.datatype == "MultiCoord"
+    assert len(saida) == 2  # MultiCoord + comando
+
+
+def test_fundir_pares_posicao_readwrite_completo_no_pairer():
+    """Encadeado com dc_pairer: 1 MultiCoord x 1 comando -> InputOutput com
+    INCOORDS do par e OUTCOORDS do comando (antes: catch-all N x M)."""
+    aberto = _rec_fp("BC2:21", "DJF1", "Input", [320], "52 06 ABERTO")
+    fechado = _rec_fp("BC2:22", "DJF1", "Input", [321], "52 06 FECHADO")
+    comando = _rec_fp("BC2:14", "DJF1", "Output", [90], "52 06 ABRIR FECHAR")
+    fundidos = fundir_pares_posicao([aberto, fechado, comando], frozenset({"DJF1"}))
+    pareados, rev = dc_pairer.parear(fundidos, Config())
+    rw = [r for r in pareados if r.tipo_sinal.direcao == "InputOutput"]
+    assert len(rw) == 1
+    assert rw[0].enderecamento.indices == (320, 321)
+    assert rw[0].enderecamento.indices_saida == (90,)
+    assert not rev
+
+
+def test_fundir_pares_posicao_ignora_fora_da_whitelist_e_nao_consecutivos():
+    a = _rec_fp("Z:1", "MOLA", "Input", [10], "MOLA CARREGADA")
+    b = _rec_fp("Z:2", "MOLA", "Input", [11], "MOLA DESCARREGADA")
+    c = _rec_fp("Z:3", "DJF1", "Input", [20], "52 06 ABERTO")
+    d = _rec_fp("Z:4", "DJF1", "Input", [22], "52 06 FECHADO")  # gap: 20->22
+    saida = fundir_pares_posicao([a, b, c, d], frozenset({"DJF1"}))
+    assert len(saida) == 4  # nada fundido

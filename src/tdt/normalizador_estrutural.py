@@ -49,6 +49,45 @@ def _fundir_multicoord(a: SignalRecord, b: SignalRecord) -> SignalRecord:
     )
 
 
+def fundir_pares_posicao(
+    registros: list[SignalRecord],
+    whitelist_posicao: frozenset[str],
+) -> list[SignalRecord]:
+    """Funde pares de POSIÇÃO (2 Inputs de 1 índice, sigla na whitelist
+    SwitchStatus, polaridade oposta, endereços consecutivos) num único
+    MultiCoord ANTES do dc_pairer — o comando pareia com o par inteiro
+    (1 input x 1 output) em vez de cair no catch-all N x M (SP-CVA2 E4).
+    Mesmo predicado `fundivel` de `corrigir`; puro, não emite revisão."""
+    grupos: dict[tuple, list[SignalRecord]] = defaultdict(list)
+    saida: list[SignalRecord] = []
+    for rec in registros:
+        if (
+            rec.tipo_sinal.direcao == "Input"
+            and len(rec.enderecamento.indices) == 1
+            and (rec.sigla_sinal or "").upper() in whitelist_posicao
+        ):
+            grupos[_chave(rec)].append(rec)
+        else:
+            saida.append(rec)
+    for grupo in grupos.values():
+        ordenados = sorted(grupo, key=lambda r: r.enderecamento.indices[0])
+        i = 0
+        while i < len(ordenados):
+            a = ordenados[i]
+            b = ordenados[i + 1] if i + 1 < len(ordenados) else None
+            if (
+                b is not None
+                and b.enderecamento.indices[0] == a.enderecamento.indices[0] + 1
+                and _par_posicao_oposta(a, b)
+            ):
+                saida.append(_fundir_multicoord(a, b))
+                i += 2
+            else:
+                saida.append(a)
+                i += 1
+    return saida
+
+
 def corrigir(
     registros: list[SignalRecord],
     whitelist_posicao: frozenset[str] = frozenset(),

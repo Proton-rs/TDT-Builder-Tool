@@ -43,7 +43,7 @@ from tdt.inferencia_topologia import (
 )
 from tdt.matchers.fuzzy_match import FuzzyMatcher
 from tdt.normalizacao.normalizador import canonizar, normalizar
-from tdt.normalizador_estrutural import corrigir
+from tdt.normalizador_estrutural import corrigir, fundir_pares_posicao
 from tdt.pareamento_polaridade import forcar_polaridade_equipamento
 from tdt.scoring import mescla
 from tdt.scoring.calibracao import aplicar_calibrador_confianca, calibrar_candidatos
@@ -527,8 +527,10 @@ def gerar_tdt(registros, template_path, lp, subestacao=None, aliases=None, confi
     """Gera o workbook TDT a partir de uma lista (já decidida/editada) de registros."""
     aud = auditoria or Auditoria()
     lst = _aplicar_aliases(list(registros), aliases)
+    wl_pos = _whitelist_posicao(lp, config)
+    lst = fundir_pares_posicao(lst, wl_pos)
     pareados, _rev = dc_pairer.parear(lst, config)
-    corrigidos, _rev2 = corrigir(list(pareados), _whitelist_posicao(lp, config))
+    corrigidos, _rev2 = corrigir(list(pareados), wl_pos)
     lista = criador_lista_homogenea.montar(list(corrigidos), subestacao=subestacao)
     lista, rev_dup = engine_tdt.particionar_custom_id_duplicado(lista)
     if rev_dup:
@@ -713,8 +715,10 @@ def executar(
     wb_in.close()
 
     with _timer("dc_pairer + corrigir + montar + tdt", aud):
+        wl_pos = _whitelist_posicao(lp, config)
+        decididos = fundir_pares_posicao(decididos, wl_pos)
         pareados, rev_pair = dc_pairer.parear(decididos, config)
-        corrigidos, rev_estrut = corrigir(list(pareados), _whitelist_posicao(lp, config))
+        corrigidos, rev_estrut = corrigir(list(pareados), wl_pos)
         revisao.extend(rev_pair)
         revisao.extend(rev_estrut)
 
