@@ -1,6 +1,6 @@
 import numpy as np
 
-from tdt.analise.analise_colunas import analisar, normalizar_emb
+from tdt.analise.analise_colunas import _col_tipo, analisar, normalizar_emb
 from tdt.config import Config
 
 # vocab compartilhado entre valores das colunas e a referência ADMS
@@ -334,6 +334,26 @@ def test_coluna_ruido_nao_e_classificada_como_endereco():
     ]
     mapa = analisar(rows, encoder=_fake_encoder, ref_emb=_REF)
     assert mapa.colunas["indice"] == 3  # Addr, não Tensao (1) nem Corrente (2)
+
+
+# --- _col_tipo() códigos de 2 letras (SP-CVA2 E3.2) -------------------------
+
+
+def test_col_tipo_codigos_dois_chars_com_ruido_tolerado():
+    """SP-CVA2 E3.2 — coluna de códigos AI/DI/DO com <=10% de ruído ('-')
+    é detectada (antes o issubset estrito zerava com 1 célula fora)."""
+    rows = [("DESC", "TIPO")]
+    codigos = ["AI", "AI", "DO", "DI", "DI", "DI", "DO", "AI", "DI", "DI",
+               "DO", "DI", "AI", "DI", "DI", "DO", "DI", "AI", "DI", "-"]
+    rows += [(f"sinal {i}", c) for i, c in enumerate(codigos)]
+    assert _col_tipo(rows, 1, 2) == 1
+
+
+def test_col_tipo_nao_pega_coluna_com_muito_ruido():
+    rows = [("DESC", "TIPO")]
+    codigos = ["AI", "DI", "N", "N", "N", "N", "N", "N", "N", "N"]
+    rows += [(f"sinal {i}", c) for i, c in enumerate(codigos)]
+    assert _col_tipo(rows, 1, 2) is None
 
 
 def test_indice_por_padrao_sequencial_sheet_wide_permanece_correto():

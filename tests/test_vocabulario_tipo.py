@@ -1,3 +1,5 @@
+import pytest
+
 from tdt.normalizacao.vocabulario_tipo import classificar
 
 
@@ -49,3 +51,20 @@ def test_classifica_codigos_curtos_reais_fredw_v13():
     assert classificar("A") == ("Analog", "Input")
     assert classificar("C") == ("Discrete", "Output")
     assert classificar("D") == ("Discrete", "Input")
+
+
+@pytest.mark.parametrize("codigo,esperado", [
+    ("AI", ("Analog", "Input")),
+    ("AO", ("Analog", "Output")),
+    ("DI", ("Discrete", "Input")),
+    ("DO", ("Discrete", "Output")),
+    ("di", ("Discrete", "Input")),   # norm() upper
+])
+def test_codigos_dois_chars_ai_ao_di_do(codigo, esperado):
+    """SP-CVA2 E3.2 — listas RGE (BC2/CVA11) usam códigos de 2 letras na
+    coluna de tipo. Match por célula EXATA (não substring)."""
+    assert classificar(codigo) == esperado
+
+
+def test_codigo_nao_casa_por_substring():
+    assert classificar("DIREITA") != ("Discrete", "Input")

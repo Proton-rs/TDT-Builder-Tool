@@ -227,7 +227,7 @@ def _col_tipo(rows, inicio, ncols) -> int | None:
 
         distintos = set(normalizados)
         score_codigo = 0.0
-        if distintos and distintos.issubset(CODIGOS_TIPO.keys()) and len(distintos) >= 2:
+        if len(distintos & set(CODIGOS_TIPO)) >= 2:
             casam_codigo = sum(1 for n in normalizados if n in CODIGOS_TIPO)
             score_codigo = casam_codigo / len(vals)
 

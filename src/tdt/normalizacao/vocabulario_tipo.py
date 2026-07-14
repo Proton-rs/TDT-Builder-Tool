@@ -27,6 +27,12 @@ CODIGOS_TIPO: dict[str, tuple[str, str]] = {
     "C": ("Discrete", "Output"),
     "D": ("Discrete", "Input"),
     "A/D": ("DiscreteAnalog", "Input"),  # TAP (spec 2026-07-10)
+    # Códigos de 2 letras das listas RGE (BC2/CVA11, SP-CVA2 E3.2) — célula
+    # exata, nunca substring.
+    "AI": ("Analog", "Input"),
+    "AO": ("Analog", "Output"),
+    "DI": ("Discrete", "Input"),
+    "DO": ("Discrete", "Output"),
 }
 
 
