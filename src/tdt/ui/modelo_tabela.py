@@ -134,6 +134,7 @@ class ModeloSinais(QAbstractTableModel):
     def __init__(self, estado: AppState):
         super().__init__()
         self._estado = estado
+        self.ultima_edicao: tuple[str, object] | None = None
 
     def rowCount(self, parent=QModelIndex()):
         return 0 if parent.isValid() else len(self._estado.registros)
@@ -274,10 +275,38 @@ class ModeloSinais(QAbstractTableModel):
             self._estado.definir_escala(linha, valor)
         else:
             return False
+        self.ultima_edicao = (nome, value)
         topo = self.index(linha, 0)
         fim = self.index(linha, len(COLUNAS) - 1)
         self.dataChanged.emit(topo, fim)
         return True
+
+    def aplicar_valor_em_lote(self, ids: list[str], coluna: str, valor) -> int:
+        """Propaga `valor` na `coluna` para todos os registros com `ids`.
+
+        Reusa `setData` (mesma validação/transição da edição individual). Um
+        único snapshot para o lote inteiro (padrão de `AppState.aprovar_ids`):
+        suprime os snapshots internos de cada `setData` e faz só um antes do
+        loop, para que 1 `desfazer()` reverta o lote inteiro.
+        """
+        if coluna not in _EDITAVEIS:
+            return 0
+        col = COLUNAS.index(coluna)
+        indice_por_id = {r.id: i for i, r in enumerate(self._estado.registros)}
+        linhas = [indice_por_id[id_] for id_ in ids if id_ in indice_por_id]
+        if not linhas:
+            return 0
+        self._estado._snapshot()
+        snapshot_original = self._estado._snapshot
+        self._estado._snapshot = lambda: None
+        aplicados = 0
+        try:
+            for linha in linhas:
+                if self.setData(self.index(linha, col), valor, Qt.EditRole):
+                    aplicados += 1
+        finally:
+            self._estado._snapshot = snapshot_original
+        return aplicados
 
     def definir_sigla(self, linha: int, sigla: str) -> None:
         self._estado.definir_sigla(linha, sigla)

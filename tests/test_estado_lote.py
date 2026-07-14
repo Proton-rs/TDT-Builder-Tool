@@ -2,6 +2,7 @@ from tdt.contracts import (
     Candidato, Descricoes, Enderecamento, Modulo, SignalRecord, TipoSinal,
 )
 from tdt.ui.estado import AppState
+from tdt.ui.modelo_tabela import ModeloSinais
 
 
 def _rec(id_):
@@ -65,3 +66,32 @@ def test_aprovar_ids_retorna_quantidade_aprovada_parcial():
     assert n == 1
     assert _aprovado(estado.registros[0])
     assert not _aprovado(estado.registros[1])
+
+
+def _modelo_com(n):
+    return ModeloSinais(_estado_com(n))
+
+
+def _ids(modelo):
+    return [r.id for r in modelo._estado.registros]
+
+
+def _regs(modelo):
+    return modelo._estado.registros
+
+
+def test_aplicar_valor_em_lote_propaga_coluna_editavel():
+    modelo = _modelo_com(3)
+    n = modelo.aplicar_valor_em_lote(_ids(modelo), "Módulo", "BC2")
+    assert n == 3 and all(r.modulo.nome == "BC2" for r in _regs(modelo))
+
+
+def test_aplicar_valor_em_lote_recusa_coluna_nao_editavel():
+    modelo = _modelo_com(2)
+    assert modelo.aplicar_valor_em_lote(_ids(modelo), "Confiança", 1.0) == 0
+
+
+def test_aplicar_valor_em_lote_um_snapshot_para_lote_inteiro():
+    modelo = _modelo_com(3)
+    modelo.aplicar_valor_em_lote(_ids(modelo), "Módulo", "BC2")
+    assert len(modelo._estado._historico) == 1

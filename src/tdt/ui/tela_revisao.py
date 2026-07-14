@@ -326,6 +326,8 @@ class TelaRevisao(QWidget):
         self.tabela.horizontalHeader().setSortIndicatorClearable(True)
         self.tabela.horizontalHeader().setContextMenuPolicy(Qt.CustomContextMenu)
         self.tabela.horizontalHeader().customContextMenuRequested.connect(self._filtrar_coluna)
+        self.tabela.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.tabela.customContextMenuRequested.connect(self._menu_contexto_tabela)
         self.tabela.setEditTriggers(QTableView.DoubleClicked)
         self.tabela.horizontalHeader().setSectionsMovable(True)  # arrastar colunas
         col_sinal = ModeloSinais.COLUNAS.index("Sinal")
@@ -569,6 +571,25 @@ class TelaRevisao(QWidget):
     def _linhas_selecionadas(self) -> list[int]:
         selecionadas = self.tabela.selectionModel().selectedRows()
         return [self._proxy.mapToSource(idx).row() for idx in selecionadas]
+
+    def _menu_contexto_tabela(self, pos) -> None:
+        """Ação explícita "Aplicar às selecionadas": só aparece com 2+ linhas
+        selecionadas e após uma edição bem-sucedida de coluna editável (nunca
+        propaga sozinha -- exige clique do usuário na ação do menu)."""
+        linhas = self._linhas_selecionadas()
+        ultima = getattr(self, "_modelo", None) and self._modelo.ultima_edicao
+        if len(linhas) < 2 or not ultima:
+            return
+        coluna, valor = ultima
+        menu = QMenu(self.tabela)
+        acao = menu.addAction(f"Aplicar '{valor}' às {len(linhas)} selecionadas")
+        acao.triggered.connect(lambda: self._aplicar_em_lote(coluna, valor, linhas))
+        menu.exec(self.tabela.viewport().mapToGlobal(pos))
+
+    def _aplicar_em_lote(self, coluna: str, valor, linhas: list[int]) -> None:
+        ids = [self._estado.registros[i].id for i in linhas]
+        self._modelo.aplicar_valor_em_lote(ids, coluna, valor)
+        self.refresh()
 
     def _parear_sinais(self):
         indices = self._linhas_selecionadas()
