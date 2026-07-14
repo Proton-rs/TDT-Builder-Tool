@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - Branch de trabalho: `feature/sp-cva2-rodada2` (criada na Task 0).
-- Gate de regressão: `PYTHONPATH=src python bench/gate_tdt_real.py` — `pct >= baseline` (congelado na Task 0) em TODA task que toca pipeline (Tasks 1-10), medido individualmente antes do commit.
+- Gate de regressão: `PYTHONPATH=src python -m bench.regressao` — `pct >= baseline` (congelado na Task 0) em TODA task que toca pipeline (Tasks 1-10), medido individualmente antes do commit.
 - Suíte: `python -m pytest -q tests/` verde antes de cada commit.
 - TDD: teste falhando primeiro, sempre. Atalhos deliberados marcados `# ponytail:` com teto e upgrade path.
 - Nunca editar os `.xlsx` de origem (`docs/`); o input real CVA é PESSOAL (fora do repo): `C:\Users\vinic\Documents\docs importantes\RGE\CVA\CVA - Pontos Por Equipamentos DNP_V03 - COS - resumida.xlsx`.
@@ -36,7 +36,7 @@ git checkout -b feature/sp-cva2-rodada2
 
 - [ ] **Step 2: Rodar o gate**
 
-Run: `PYTHONPATH=src python bench/gate_tdt_real.py`
+Run: `PYTHONPATH=src python -m bench.regressao`
 Expected: imprime `pct` (e contagens). Anotar o valor.
 
 - [ ] **Step 3: Registrar em `bench/resultados/spCVA2_baseline.txt`**
@@ -152,7 +152,7 @@ Expected: PASS.
 
 - [ ] **Step 5: Gate**
 
-Run: `PYTHONPATH=src python bench/gate_tdt_real.py`
+Run: `PYTHONPATH=src python -m bench.regressao`
 Expected: `pct >= baseline` (Task 0). Se cair, investigar antes de commitar (parar e reportar).
 
 - [ ] **Step 6: Commit**
@@ -340,7 +340,7 @@ Adicionar `"posicao_divergente"` à enumeração do comentário de `ItemRevisao.
 
 Run: `python -m pytest -q tests/test_dc_pairer.py && python -m pytest -q tests/`
 Expected: PASS.
-Run: `PYTHONPATH=src python bench/gate_tdt_real.py`
+Run: `PYTHONPATH=src python -m bench.regressao`
 Expected: `pct >= baseline`.
 
 - [ ] **Step 7: Commit**
@@ -444,7 +444,7 @@ def _eh_marcador(row: tuple, col0: int) -> bool:
 
 Run: `python -m pytest -q tests/test_estruturador.py && python -m pytest -q tests/`
 Expected: PASS.
-Run: `PYTHONPATH=src python bench/gate_tdt_real.py`
+Run: `PYTHONPATH=src python -m bench.regressao`
 Expected: `pct >= baseline`.
 
 - [ ] **Step 5: Commit**
@@ -556,7 +556,7 @@ CODIGOS_TIPO: dict[str, tuple[str, str]] = {
 
 Run: `python -m pytest -q tests/test_vocabulario_tipo.py tests/test_analise_colunas.py && python -m pytest -q tests/`
 Expected: PASS.
-Run: `PYTHONPATH=src python bench/gate_tdt_real.py`
+Run: `PYTHONPATH=src python -m bench.regressao`
 Expected: `pct >= baseline`. (Esta task muda detecção de colunas — se o gate cair, olhar QUAL sheet ganhou coluna de tipo nova antes de decidir.)
 
 - [ ] **Step 5: Commit**
@@ -628,7 +628,7 @@ def _grandeza_continua(bruta) -> tuple[str, str] | None:
 
 Run: `python -m pytest -q tests/test_estruturador.py && python -m pytest -q tests/`
 Expected: PASS.
-Run: `PYTHONPATH=src python bench/gate_tdt_real.py`
+Run: `PYTHONPATH=src python -m bench.regressao`
 Expected: `pct >= baseline`.
 
 - [ ] **Step 5: Commit**
@@ -807,7 +807,7 @@ com o import `from tdt.normalizador_estrutural import corrigir, fundir_pares_pos
 
 Run: `python -m pytest -q tests/test_normalizador_estrutural.py tests/test_conservacao_comandos.py tests/test_pipeline_gerar_tdt.py && python -m pytest -q tests/`
 Expected: PASS.
-Run: `PYTHONPATH=src python bench/gate_tdt_real.py`
+Run: `PYTHONPATH=src python -m bench.regressao`
 Expected: `pct >= baseline`. (Mudança de ordem no pipeline — se cair, parar e reportar com o diff de casos do gate.)
 
 - [ ] **Step 7: Commit**
@@ -972,7 +972,7 @@ Run: `grep -rn "aplicar_identidade" src tests bench` — atualizar TODOS:
 
 Run: `python -m pytest -q tests/test_identidade_modulo.py tests/test_pipeline.py && python -m pytest -q tests/`
 Expected: PASS.
-Run: `PYTHONPATH=src python bench/gate_tdt_real.py`
+Run: `PYTHONPATH=src python -m bench.regressao`
 Expected: `pct >= baseline`.
 
 - [ ] **Step 6: Commit**
@@ -1060,7 +1060,7 @@ Import: adicionar `aviso_divergencia_sheet` ao import de `tdt.identidade_modulo`
 - [ ] **Step 5: Rodar testes + suíte + gate; commit**
 
 Run: `python -m pytest -q tests/test_identidade_modulo.py && python -m pytest -q tests/`
-Run: `PYTHONPATH=src python bench/gate_tdt_real.py` → `pct >= baseline` (só logging, não deve mexer).
+Run: `PYTHONPATH=src python -m bench.regressao` → `pct >= baseline` (só logging, não deve mexer).
 
 ```bash
 git add src/tdt/identidade_modulo.py src/tdt/pipeline.py tests/test_identidade_modulo.py
@@ -1321,7 +1321,7 @@ Em `gerar_tdt` (espelho, com `aud.evento` análogo ao bloco `rev_dup` existente)
 
 Run: `python -m pytest -q tests/test_engine_tdt.py tests/test_pipeline_gerar_tdt.py && python -m pytest -q tests/`
 Expected: PASS.
-Run: `PYTHONPATH=src python bench/gate_tdt_real.py`
+Run: `PYTHONPATH=src python -m bench.regressao`
 Expected: `pct >= baseline` E nenhum registro novo removido do TDT do gate (se o gate cair, é colisão legítima no fixture — voltar ao Step 4/decision gate).
 
 - [ ] **Step 7: Commit**
@@ -1486,7 +1486,7 @@ Atualizar a linha do fluxo do pipeline (§Local Contracts): inserir `normalizado
 
 - [ ] **Step 3: Suíte completa + gate final**
 
-Run: `python -m pytest -q tests/ && PYTHONPATH=src python bench/gate_tdt_real.py`
+Run: `python -m pytest -q tests/ && PYTHONPATH=src python -m bench.regressao`
 Expected: PASS, `pct >= baseline`.
 
 - [ ] **Step 4: Commit**
