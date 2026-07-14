@@ -472,3 +472,32 @@ def test_tooltip_motivo_traz_texto_explicativo():
     m = ModeloSinais(st)
     tip = m.data(m.index(0, _col("Motivo")), Qt.ToolTipRole)
     assert tip and "confiança" in tip.lower()
+
+
+def test_pareado_comando_sem_par_e_endereco_visiveis(qtbot):
+    """SP-CVA2 E6.3 (fato 3 do anot.txt): comando sem par precisa ser
+    LOCALIZÁVEL na revisão — rótulo próprio + endereço na coluna Endereço."""
+    rec = replace(
+        _rec(status="revisao", sigla="DJA1"),
+        tipo_sinal=TipoSinal("Discrete", "SingleBit", "Output"),
+        enderecamento=Enderecamento("DNP3", (90,)),
+    )
+    m = ModeloSinais(_state(rec))
+    assert m.data(m.index(0, _col("Pareado"))) == "Comando (sem par)"
+    assert m.data(m.index(0, _col("Endereço"))) == "90"
+
+
+def test_pareado_orfao_continua_para_output_sem_endereco(qtbot):
+    rec = replace(
+        _rec(),
+        tipo_sinal=TipoSinal("Discrete", "SingleBit", "Output"),
+        enderecamento=Enderecamento("DNP3", ()),
+    )
+    m = ModeloSinais(_state(rec))
+    assert m.data(m.index(0, _col("Pareado"))) == "Órfão"
+
+
+def test_motivo_posicao_divergente_tem_label_e_tooltip(qtbot):
+    from tdt.ui.modelo_tabela import _MOTIVO_TOOLTIP
+    assert _MOTIVO_LABEL["posicao_divergente"] == "Posição diverge do status"
+    assert "status" in _MOTIVO_TOOLTIP["posicao_divergente"].lower()

@@ -41,6 +41,7 @@ _MOTIVO_LABEL = {
     "decisao_por_projeto": "Decisão por projeto",
     "descartado_indefinido": "Descartado (indefinido)",
     "descartado_redundante": "Descartado (redundante)",
+    "posicao_divergente": "Posição diverge do status",
 }
 
 _MOTIVO_TOOLTIP = {
@@ -64,6 +65,7 @@ _MOTIVO_TOOLTIP = {
     "decisao_por_projeto": "Sigla marcada como revisão obrigatória por decisão de projeto.",
     "descartado_indefinido": "Linha descartada por falta de dados suficientes pra decidir.",
     "descartado_redundante": "Linha descartada por ser redundante com outra já processada.",
+    "posicao_divergente": "Comando de posição com sigla diferente do status do mesmo equipamento, e o status é ambíguo (mais de uma sigla de posição). Escolha a sigla correta e paree manualmente.",
 }
 
 # Cores por faixa de confiança (texto). ponytail: faixas fixas; threshold de
@@ -224,8 +226,10 @@ class ModeloSinais(QAbstractTableModel):
             direcao = rec.tipo_sinal.direcao
             if direcao == "InputOutput":
                 return "Sim"
-            if direcao == "Output" and not rec.enderecamento.indices:
-                return "Órfão"
+            if direcao == "Output":
+                # comando ainda sem par: rótulo próprio p/ o operador ACHAR o
+                # comando na revisão (SP-CVA2 E6.3 — antes renderizava "—")
+                return "Comando (sem par)" if rec.enderecamento.indices else "Órfão"
             return "—"
         if nome == "Sheet origem":
             return sheet_origem(rec)
