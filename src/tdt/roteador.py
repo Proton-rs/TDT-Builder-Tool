@@ -147,6 +147,21 @@ def _quadrante(
     pct_ok = topo.score >= config.threshold_pct
     gap_ok = gap >= config.threshold_gap
 
+    # Piso absoluto (SP-CVA E2): confiança calibrada do top-1 -- desconta o
+    # ajuste do motor de regras (unbounded, spB-B2 pendente) de volta pro
+    # score calibrado [0,1] pré-regras. Top-1 fraco não decide só por ter
+    # gap grande.
+    confianca_top1 = topo.score - (ajustes or {}).get(topo.sigla, 0.0)
+    if config.piso_decisao and confianca_top1 < config.piso_decisao:
+        return replace(
+            rec,
+            status="revisao",
+            justificativa=(
+                f"score_baixo: confiança calibrada {confianca_top1:.2f} "
+                f"< piso {config.piso_decisao:.2f}"
+            ),
+        )
+
     if pct_ok and gap_ok:
         return replace(
             rec,

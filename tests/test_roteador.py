@@ -239,3 +239,32 @@ def test_resgate_desligado_por_config():
     rec = _rec(_CANDS_ZONA_CINZENTA)
     out = rotear(rec, cfg, ajustes={"SGFT": 0.15})
     assert out.status == "revisao"
+
+
+# --- piso absoluto de confiança calibrada (SP-CVA E2) ---
+#
+# gap grande não deve decidir sozinho quando a confiança calibrada real do
+# top-1 (score pós-mescla/calibração, ANTES do ajuste do motor de regras --
+# esse é unbounded, spB-B2 pendente) é baixa. Ex. real: BC2 51F/51F1 -> FC87
+# decidia hoje só pelo gap, mesmo com confiança calibrada ridícula.
+
+_CANDS_PISO = [Candidato("FC87", 0.55, "mesclado"), Candidato("51F", 0.10, "mesclado")]
+# pct_ok (0.55>=0.45) e gap_ok (0.45>=0.08) só por causa do ajuste de regra
+# (+0.43); confiança calibrada real = 0.55-0.43 = 0.12.
+
+
+def test_top1_abaixo_do_piso_calibrado_vai_para_revisao():
+    rec = _rec(_CANDS_PISO)
+    cfg = replace(CFG, piso_decisao=0.20)
+    out = rotear(rec, cfg, ajustes={"FC87": 0.43, "51F": 0.0})
+    assert out.status == "revisao"
+    assert "score_baixo" in out.justificativa
+    assert out.sigla_sinal is None
+
+
+def test_piso_zero_preserva_comportamento_atual():
+    rec = _rec(_CANDS_PISO)
+    cfg = replace(CFG, piso_decisao=0.0)
+    out = rotear(rec, cfg, ajustes={"FC87": 0.43, "51F": 0.0})
+    assert out.status == "decidido"
+    assert out.sigla_sinal == "FC87"

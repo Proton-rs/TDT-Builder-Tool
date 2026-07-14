@@ -8,7 +8,7 @@ from tdt.contracts import (
 )
 from tdt.dados.lista_padrao import ListaPadraoADMS, SinalPadrao
 from tdt.ui.estado import AppState
-from tdt.ui.modelo_tabela import ModeloSinais
+from tdt.ui.modelo_tabela import ModeloSinais, _EDITAVEIS, _MOTIVO_LABEL
 
 
 def _rec(status="decidido", sigla="DJF1", eletrico=None):
@@ -238,7 +238,7 @@ def test_remover_linhas_emite_sinais_de_remocao(qtbot):
 def test_flags_colunas_dominio_sao_editaveis():
     m = ModeloSinais(_state(_rec()))
     for nome in ("Sinal", "Tipo", "Fase", "Nível Tensão", "Barra",
-                 "Tipo Equip.", "Módulo", "Escala"):
+                 "Tipo Equip.", "Módulo", "Escala", "Endereço", "Endereço Output"):
         flags = m.flags(m.index(0, _col(nome)))
         assert flags & Qt.ItemIsEditable, nome
 
@@ -305,6 +305,34 @@ def test_set_data_escala_invalida_retorna_false_sem_mutar():
     assert st.registros[0].grandezas_analogicas.escala_transmissao is None
 
 
+def test_set_data_endereco_grava_indices():
+    st = _state(_rec())
+    m = ModeloSinais(st)
+    ok = m.setData(m.index(0, _col("Endereço")), "900;901", Qt.EditRole)
+    assert ok is True
+    assert st.registros[0].enderecamento.indices == (900, 901)
+
+
+def test_set_data_endereco_output_grava_indices():
+    st = _state(_rec())
+    m = ModeloSinais(st)
+    ok = m.setData(m.index(0, _col("Endereço Output")), "902", Qt.EditRole)
+    assert ok is True
+    assert st.registros[0].enderecamento.indices_saida == (902,)
+
+
+def test_set_data_endereco_invalido_retorna_false_sem_mutar():
+    st = _state(_rec())
+    m = ModeloSinais(st)
+    antes = st.registros[0].enderecamento.indices
+    ok = m.setData(m.index(0, _col("Endereço")), "abc", Qt.EditRole)
+    assert ok is False
+    assert st.registros[0].enderecamento.indices == antes
+    ok = m.setData(m.index(0, _col("Endereço")), "70000", Qt.EditRole)
+    assert ok is False
+    assert st.registros[0].enderecamento.indices == antes
+
+
 def test_set_data_coluna_nao_editavel_retorna_false():
     st = _state(_rec())
     m = ModeloSinais(st)
@@ -341,6 +369,17 @@ def test_pendentes_por_sheet_conta_so_revisao(qtbot):
     assert modelo.pendentes_por_sheet() == {"SAN2": 1, "TRAFO": 1}
 
 
+def test_contagem_por_sheet_pendentes_e_total(qtbot):
+    st = AppState()
+    st.registros = [
+        replace(_rec("decidido", sigla="DJF1"), id="SAN2:1"),
+        replace(_rec("revisao", sigla="DJF2"), id="SAN2:2"),
+        replace(_rec("revisao", sigla="DJA1"), id="TRAFO:1"),
+    ]
+    modelo = ModeloSinais(st)
+    assert modelo.contagem_por_sheet() == {"SAN2": (1, 2), "TRAFO": (1, 1)}
+
+
 def test_texto_faixa_cores():
     from tdt.ui.modelo_tabela import texto_faixa
     assert texto_faixa(0.9).name() == "#0d2e21"
@@ -352,3 +391,84 @@ def test_texto_faixa_cores():
 def test_header_data_vertical_mostra_numero_da_linha(qtbot):
     m = ModeloSinais(_state(_rec()))
     assert m.headerData(0, Qt.Vertical, Qt.DisplayRole) == 1
+
+
+def test_motivo_sem_label_exibe_motivo_cru():
+    assert _MOTIVO_LABEL.get("motivo_futuro_desconhecido", "motivo_futuro_desconhecido") != "—"
+
+
+def test_coluna_pareado():
+    st = _state(_rec())
+    m = ModeloSinais(st)
+    st.registros[0] = replace(
+        st.registros[0], tipo_sinal=TipoSinal("Discrete", "SingleBit", "InputOutput"))
+    assert m.data(m.index(0, _col("Pareado")), Qt.DisplayRole) == "Sim"
+
+
+def test_coluna_pareado_orfao_output_sem_indices():
+    st = _state(_rec())
+    m = ModeloSinais(st)
+    st.registros[0] = replace(
+        st.registros[0],
+        tipo_sinal=TipoSinal("Discrete", "SingleBit", "Output"),
+        enderecamento=Enderecamento("DNP3", ()))
+    assert m.data(m.index(0, _col("Pareado")), Qt.DisplayRole) == "Órfão"
+
+
+def test_coluna_pareado_input_puro():
+    m = ModeloSinais(_state(_rec()))
+    assert m.data(m.index(0, _col("Pareado")), Qt.DisplayRole) == "—"
+
+
+def test_coluna_sheet_origem():
+    st = _state(replace(_rec(), id="BC2:12"))
+    m = ModeloSinais(st)
+    assert m.data(m.index(0, _col("Sheet origem")), Qt.DisplayRole) == "BC2"
+
+
+def test_todos_motivos_emitidos_tem_label():
+    emitidos = {
+        "sem_endereco", "score_baixo", "categoria_ambigua", "endereco_duplicado",
+        "sem_fix", "modulo_indefinido", "nome_sigla_inconsistente",
+        "qualificador_ambiguo", "pareamento_ambiguo", "comando_sem_discreto",
+        "custom_id_duplicado", "posicao_ambigua", "comando_tap_nao_modelado",
+        "decisao_por_projeto", "descartado_indefinido", "descartado_redundante",
+    }
+    assert emitidos <= set(_MOTIVO_LABEL)
+
+
+def test_sem_endereco_nao_diz_futuro():
+    assert "futuro" not in _MOTIVO_LABEL["sem_endereco"].lower()
+
+
+def test_motivo_desconhecido_mostra_motivo_cru_na_coluna():
+    st = _state(_rec())
+    st.resultado = type("R", (), {"revisao": (
+        type("Item", (), {"registro": st.registros[0], "motivo": "motivo_futuro_desconhecido"})(),
+    )})()
+    m = ModeloSinais(st)
+    v = m.data(m.index(0, _col("Motivo")), Qt.DisplayRole)
+    assert v == "motivo_futuro_desconhecido"
+
+
+def test_roundtrip_edicao_nao_altera_valor():
+    """Ler via EditRole e regravar o mesmo valor não pode mudar o dado
+    exibido (reprodução headless do bug "double-click quebra formatação")."""
+    st = _state(_rec())
+    m = ModeloSinais(st)
+    for nome in sorted(_EDITAVEIS - {"Sinal"}):
+        idx = m.index(0, _col(nome))
+        antes_display = m.data(idx, Qt.DisplayRole)
+        antes_edit = m.data(idx, Qt.EditRole)
+        m.setData(idx, antes_edit, Qt.EditRole)
+        assert m.data(idx, Qt.DisplayRole) == antes_display, nome
+
+
+def test_tooltip_motivo_traz_texto_explicativo():
+    st = _state(_rec())
+    st.resultado = type("R", (), {"revisao": (
+        type("Item", (), {"registro": st.registros[0], "motivo": "score_baixo"})(),
+    )})()
+    m = ModeloSinais(st)
+    tip = m.data(m.index(0, _col("Motivo")), Qt.ToolTipRole)
+    assert tip and "confiança" in tip.lower()

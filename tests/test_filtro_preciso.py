@@ -124,6 +124,20 @@ def test_f_r4_sem_estagio_no_texto_mantem():
     assert f_r4(_cand("81E2"), ctx) is True
 
 
+def test_estagio_sem_variante_na_familia_mantem_sigla_base():
+    # texto "50N E2": nenhum candidato termina em 2 -> 50N sobrevive
+    rec = _rec("sobrecorrente neutro 50n e2", "SOBRECORRENTE NEUTRO 50N E2")
+    out = filtrar(rec, [_cand("50N"), _cand("51N")], Config())
+    assert "50N" in [c.sigla for c in out]
+
+
+def test_estagio_com_variante_remove_digito_divergente():
+    # comportamento atual preservado: 81E1 vs 81E2 com texto E2 -> fica 81E2
+    rec = _rec("subfrequencia estagio 2", "SUBFREQUENCIA E2")
+    out = filtrar(rec, [_cand("81E1"), _cand("81E2")], Config())
+    assert [c.sigla for c in out] == ["81E2"]
+
+
 # --- F_R5: comando x status ----------------------------------------------------
 
 

@@ -464,7 +464,7 @@ def test_aba_mostra_contador_e_check(qtbot):
     regs = [replace(r, status="revisao") for r in regs]  # status explícito
     tela = _tela_carregada(qtbot, regs)
     textos = [tela.abas_sheet.tabText(i) for i in range(tela.abas_sheet.count())]
-    assert any("SAN2 · 1" in t for t in textos)
+    assert any("SAN2 (1/1)" in t for t in textos)
     tela._modelo.definir_sigla(0, "DJF1")  # SAN2 zera pendências
     textos = [tela.abas_sheet.tabText(i) for i in range(tela.abas_sheet.count())]
     assert any("SAN2 ✓" in t for t in textos)

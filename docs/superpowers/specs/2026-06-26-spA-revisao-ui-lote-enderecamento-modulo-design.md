@@ -2,6 +2,7 @@
 
 **Data:** 2026-06-26
 **Status:** Aguardando revisão do usuário
+**Status 2026-07-13 (SP-CVA):** A1 (edição em lote/aprovar em lote — Tasks 10-11) e A3 (colunas de endereçamento Input/Output editáveis — Task 12, mais Pareado/Sheet origem — Task 13) cobertos por este SP. A2 (parte redo do undo/redo) e A5 (travar visão no sinal após reordenar) seguem pendentes, fora de escopo do SP-CVA.
 **Origem:** `docs/observacoes26062026.md` §1.1, §1.2, §1.3, §1.4, §2.1, §4.4.
 **Escopo:** 6 melhorias da tela de revisão que ainda faltam (descontado o já implementado pela spec `2026-06-25-sp-revisao-ui`): (A1) edição em lote por propagação à seleção; (A2) undo/redo completo; (A3) colunas de endereçamento Input/Output/Pareado; (A4) módulo + tipo de módulo editáveis; (A5) travar visão no sinal; (A6) reordenar colunas.
 

@@ -11,13 +11,16 @@ import uuid
 from PySide6.QtCore import Qt, QSettings, Signal
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
-    QApplication, QButtonGroup, QCheckBox, QDialog, QDialogButtonBox, QHBoxLayout, QLabel,
-    QLineEdit, QListWidget, QListWidgetItem, QMenu, QMessageBox, QProgressBar,
-    QPushButton, QSizePolicy, QSplitter, QTableView, QTabBar, QVBoxLayout, QWidget,
+    QApplication, QButtonGroup, QCheckBox, QDialog, QDialogButtonBox, QHBoxLayout,
+    QInputDialog, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMenu, QMessageBox,
+    QProgressBar, QPushButton, QSizePolicy, QSplitter, QTableView, QTabBar, QVBoxLayout,
+    QWidget,
 )
 
 from tdt.contracts import Descricoes, Enderecamento, Modulo, SignalRecord, TipoSinal
 from tdt.dc_pairer import fundir, separar
+from tdt.engine_tdt import nome_hierarquico
+from tdt.pareamento_polaridade import _SIGLAS_POSICAO
 from tdt.ui.busca_adms import buscar
 from tdt.ui.delegate_sinal import DelegateCombo, DelegateModulo, DelegateSinal
 from tdt.ui.estado import AppState
@@ -28,7 +31,7 @@ _METODOS = (("emb", "vetorial"), ("tfidf", "tfidf"), ("fuzzy", "fuzzy"))
 
 _COLUNAS_PADRAO = frozenset({
     "Sinal", "Confiança", "Status", "Motivo", "Descr. bruta",
-    "Descr. ADMS", "Módulo", "Endereço",
+    "Descr. ADMS", "Módulo", "Endereço", "Pareado", "Sheet origem",
 })
 
 _OPCOES_COMBO = {
@@ -195,6 +198,9 @@ class TelaRevisao(QWidget):
         btn_remover = QPushButton("Remover Sinal"); btn_remover.clicked.connect(self._remover_sinais)
         btn_adicionar = QPushButton("Adicionar Sinal"); btn_adicionar.clicked.connect(self._adicionar_sinal)
         btn_parear = QPushButton("Parear D+C"); btn_parear.clicked.connect(self._parear_sinais)
+        self.btn_formar_par = QPushButton("Formar par de posição")
+        self.btn_formar_par.setEnabled(False)
+        self.btn_formar_par.clicked.connect(self._formar_par_posicao)
         self.btn_aprovar = QPushButton("Aprovar e ir ao próximo (Enter)")
         self.btn_aprovar.setProperty("acao", "principal")
         self.btn_aprovar.clicked.connect(lambda: self._aprovar_e_proximo())
@@ -206,6 +212,7 @@ class TelaRevisao(QWidget):
         topo.addWidget(btn_remover)
         topo.addWidget(btn_adicionar)
         topo.addWidget(btn_parear)
+        topo.addWidget(self.btn_formar_par)
         topo.addWidget(self.btn_aprovar)
 
         # --- painel de detalhe ---
@@ -301,20 +308,21 @@ class TelaRevisao(QWidget):
         atalho_busca = QShortcut(QKeySequence.Find, self)
         atalho_busca.activated.connect(self.busca.setFocus)
 
-    def _rotulo_aba(self, nome: str, pendentes: int) -> str:
-        return f"{nome} ✓" if pendentes == 0 else f"{nome} · {pendentes}"
+    def _rotulo_aba(self, nome: str, pendentes: int, total: int) -> str:
+        return f"{nome} ✓" if pendentes == 0 else f"{nome} ({pendentes}/{total})"
 
     def _atualizar_abas_sheet(self) -> None:
         if not hasattr(self, "_modelo"):
             return
-        contagem = self._modelo.pendentes_por_sheet()
-        total = sum(contagem.values())
-        self.abas_sheet.setTabText(0, self._rotulo_aba("Tudo", total))
+        contagem = self._modelo.contagem_por_sheet()
+        total_pendentes = sum(p for p, _t in contagem.values())
+        total_geral = sum(t for _p, t in contagem.values())
+        self.abas_sheet.setTabText(0, self._rotulo_aba("Tudo", total_pendentes, total_geral))
         for i in range(1, self.abas_sheet.count()):
             sheet = self.abas_sheet.tabData(i)
-            self.abas_sheet.setTabText(
-                i, self._rotulo_aba(sheet, contagem.get(sheet, 0)))
-        self.pendentes_mudaram.emit(total)
+            pendentes, total = contagem.get(sheet, (0, 0))
+            self.abas_sheet.setTabText(i, self._rotulo_aba(sheet, pendentes, total))
+        self.pendentes_mudaram.emit(total_pendentes)
 
     def carregar(self) -> None:
         self._modelo = ModeloSinais(self._estado)
@@ -326,6 +334,8 @@ class TelaRevisao(QWidget):
         self.tabela.horizontalHeader().setSortIndicatorClearable(True)
         self.tabela.horizontalHeader().setContextMenuPolicy(Qt.CustomContextMenu)
         self.tabela.horizontalHeader().customContextMenuRequested.connect(self._filtrar_coluna)
+        self.tabela.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.tabela.customContextMenuRequested.connect(self._menu_contexto_tabela)
         self.tabela.setEditTriggers(QTableView.DoubleClicked)
         self.tabela.horizontalHeader().setSectionsMovable(True)  # arrastar colunas
         col_sinal = ModeloSinais.COLUNAS.index("Sinal")
@@ -368,6 +378,7 @@ class TelaRevisao(QWidget):
     def _atualizar_selecao(self, *_args) -> None:
         n = len(self.tabela.selectionModel().selectedRows())
         self.lbl_selecao.setText(f"{n} selecionado" + ("" if n == 1 else "s"))
+        self.btn_formar_par.setEnabled(n == 2)
 
     def _linha_mudou(self, atual, _anterior):
         fonte = self._proxy.mapToSource(atual)
@@ -474,6 +485,9 @@ class TelaRevisao(QWidget):
             conf = "—"
         end_in = ";".join(str(i) for i in r.enderecamento.indices) or "—"
         end_out = ";".join(str(i) for i in r.enderecamento.indices_saida) or "—"
+        nome_tdt = nome_hierarquico(
+            self._estado.subestacao, r.modulo.nome if r.modulo else None,
+            r.eletrico.nome_equipamento, r.eletrico.barra, r.sigla_sinal or "?")
         self.lbl_campos.setText(
             f"Sinal: {r.sigla_sinal or '—'}\n"
             f"Status: {r.status}\n"
@@ -482,6 +496,7 @@ class TelaRevisao(QWidget):
             f"Fase: {r.eletrico.fase or '—'}\n"
             f"Endereço Input: {end_in}\n"
             f"Endereço Output: {end_out}\n"
+            f"Custom ID (TDT): {nome_tdt}\n"
             f"Descrição: {r.descricoes.bruta}"
         )
         self._atualizar_barras(r)
@@ -570,6 +585,25 @@ class TelaRevisao(QWidget):
         selecionadas = self.tabela.selectionModel().selectedRows()
         return [self._proxy.mapToSource(idx).row() for idx in selecionadas]
 
+    def _menu_contexto_tabela(self, pos) -> None:
+        """Ação explícita "Aplicar às selecionadas": só aparece com 2+ linhas
+        selecionadas e após uma edição bem-sucedida de coluna editável (nunca
+        propaga sozinha -- exige clique do usuário na ação do menu)."""
+        linhas = self._linhas_selecionadas()
+        ultima = getattr(self, "_modelo", None) and self._modelo.ultima_edicao
+        if len(linhas) < 2 or not ultima:
+            return
+        coluna, valor = ultima
+        menu = QMenu(self.tabela)
+        acao = menu.addAction(f"Aplicar '{valor}' às {len(linhas)} selecionadas")
+        acao.triggered.connect(lambda: self._aplicar_em_lote(coluna, valor, linhas))
+        menu.exec(self.tabela.viewport().mapToGlobal(pos))
+
+    def _aplicar_em_lote(self, coluna: str, valor, linhas: list[int]) -> None:
+        ids = [self._estado.registros[i].id for i in linhas]
+        self._modelo.aplicar_valor_em_lote(ids, coluna, valor)
+        self.refresh()
+
     def _parear_sinais(self):
         indices = self._linhas_selecionadas()
         if not indices:
@@ -597,6 +631,24 @@ class TelaRevisao(QWidget):
             self._modelo.remover_linhas(indices)
             self._modelo.adicionar_registro(status_rec)
             self._modelo.adicionar_registro(comando_rec)
+
+    def _formar_par_posicao(self):
+        """Funde as 2 linhas selecionadas num MultiCoord com a sigla de
+        posição escolhida (ex. corrigir DJA1 -> DJF1)."""
+        indices = self._linhas_selecionadas()
+        if len(indices) != 2:
+            return
+        ids = [self._estado.registros[i].id for i in indices]
+        siglas = sorted(_SIGLAS_POSICAO)
+        sigla, ok = QInputDialog.getItem(
+            self, "Formar par de posição", "Sigla:", siglas, 0, False)
+        if not ok:
+            return
+        erro = self._estado.formar_par_posicao(ids[0], ids[1], sigla)
+        if erro is not None:
+            QMessageBox.warning(self, "Formar par de posição", erro)
+            return
+        self.refresh()
 
     def _descricao_confirmacao(self, acao: str, dados) -> str:
         if acao == "parear":
@@ -636,6 +688,15 @@ class TelaRevisao(QWidget):
 
     def _aprovar_e_proximo(self, indice_candidato: int | None = None) -> None:
         if not hasattr(self, "_proxy"):
+            return
+        indices_selecionados = self._linhas_selecionadas()
+        if len(indices_selecionados) >= 2:
+            ids = [self._estado.registros[i].id for i in indices_selecionados]
+            self._estado.aprovar_ids(ids)
+            topo = self._modelo.index(0, 0)
+            fim = self._modelo.index(self._modelo.rowCount() - 1, len(ModeloSinais.COLUNAS) - 1)
+            self._modelo.dataChanged.emit(topo, fim)
+            self._atualizar_painel()
             return
         r = self._registro()
         if r is None:

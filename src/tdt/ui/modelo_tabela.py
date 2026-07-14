@@ -17,18 +17,53 @@ COLUNAS = [
     "Endereço Output",
     "Score embedding", "Score tf-idf", "Score fuzzy", "Justificativa",
     "Módulo", "Equipamento", "Tipo Equip.", "Barra", "Nível Tensão",
+    "Pareado", "Sheet origem",
 ]
 
 _MOTIVO_LABEL = {
-    "sem_endereco": "Futuro (sem endereço)",
+    "sem_endereco": "Sem endereço",
     "score_baixo": "Score baixo",
     "categoria_ambigua": "Categoria ambígua",
+    "categoria_incompativel": "Categoria incompatível",
     "endereco_duplicado": "Endereço duplicado",
     "sem_fix": "Sem correção automática",
     "modulo_indefinido": "Módulo indefinido",
     "equipamento_ambiguo": "Equipamento ambíguo",
     "nome_sigla_inconsistente": "Sigla ≠ NOME",
     "qualificador_ambiguo": "Qualificador ambíguo",
+    "pareamento_ambiguo": "Comando sem par claro",
+    "comando_sem_discreto": "Comando sem status",
+    "custom_id_duplicado": "Custom ID duplicado",
+    "modulo_duplicado_entre_sheets": "Módulo duplicado entre sheets",
+    "posicao_ambigua": "Posição sem palavra-chave",
+    "estado_sem_candidato": "Estado sem candidato",
+    "comando_tap_nao_modelado": "Comando de TAP (não vira ponto)",
+    "decisao_por_projeto": "Decisão por projeto",
+    "descartado_indefinido": "Descartado (indefinido)",
+    "descartado_redundante": "Descartado (redundante)",
+}
+
+_MOTIVO_TOOLTIP = {
+    "sem_endereco": "Sinal sem endereço mapeado. Confirme o endereço ou descarte a linha.",
+    "score_baixo": "Nenhum candidato bateu confiança mínima. Revise a descrição ou escolha a sigla manualmente.",
+    "categoria_ambigua": "Sinal decidiu tanto como Discrete quanto Analog. Escolha a categoria correta.",
+    "categoria_incompativel": "Só decidiu fora da categoria admitida pra esse tipo de sinal. Revise o tipo ou a sigla.",
+    "endereco_duplicado": "Mesmo endereço usado por mais de um sinal. Corrija o endereçamento.",
+    "sem_fix": "Não há correção automática aplicável. Ajuste manualmente.",
+    "modulo_indefinido": "Sinal sem módulo identificado. Informe o módulo.",
+    "equipamento_ambiguo": "Mais de um equipamento candidato pro sinal. Escolha o equipamento correto.",
+    "nome_sigla_inconsistente": "Sigla da coluna diverge do NOME do sinal. Confirme qual prevalece.",
+    "qualificador_ambiguo": "Qualificador (fase/estado/etc.) não ficou claro na descrição. Complete manualmente.",
+    "pareamento_ambiguo": "Comando sem discreto correspondente claro pro par D+C. Revise o pareamento.",
+    "comando_sem_discreto": "Comando identificado sem status (discreto) associado. Verifique se falta o par.",
+    "custom_id_duplicado": "Custom ID já usado por outro sinal. Corrija a duplicidade.",
+    "modulo_duplicado_entre_sheets": "Sinais idênticos vieram de sheets de origem distintas — o módulo pode estar nomeado errado na planilha de origem. Verifique/corrija o módulo.",
+    "posicao_ambigua": "Não achou palavra-chave de posição (aberto/fechado) na descrição. Informe manualmente.",
+    "estado_sem_candidato": "Nenhum candidato de estado bateu com a descrição. Escolha manualmente.",
+    "comando_tap_nao_modelado": "Comando de TAP não vira ponto no modelo atual. Nenhuma ação necessária, apenas ciente.",
+    "decisao_por_projeto": "Sigla marcada como revisão obrigatória por decisão de projeto.",
+    "descartado_indefinido": "Linha descartada por falta de dados suficientes pra decidir.",
+    "descartado_redundante": "Linha descartada por ser redundante com outra já processada.",
 }
 
 # Cores por faixa de confiança (texto). ponytail: faixas fixas; threshold de
@@ -48,7 +83,7 @@ COR_BAIXO_TEXTO = QColor("#e8ebf2")
 
 _EDITAVEIS = frozenset({
     "Sinal", "Tipo", "Fase", "Nível Tensão", "Barra", "Tipo Equip.",
-    "Módulo", "Escala",
+    "Módulo", "Escala", "Endereço", "Endereço Output",
 })
 
 _COLUNAS_MONO = frozenset({
@@ -100,6 +135,7 @@ class ModeloSinais(QAbstractTableModel):
     def __init__(self, estado: AppState):
         super().__init__()
         self._estado = estado
+        self.ultima_edicao: tuple[str, object] | None = None
 
     def rowCount(self, parent=QModelIndex()):
         return 0 if parent.isValid() else len(self._estado.registros)
@@ -142,7 +178,7 @@ class ModeloSinais(QAbstractTableModel):
             return rec.status
         if nome == "Motivo":
             motivo = self._estado.motivo_por_id().get(rec.id)
-            return _MOTIVO_LABEL.get(motivo, "—") if motivo else "—"
+            return _MOTIVO_LABEL.get(motivo, motivo) if motivo else "—"
         # ponytail: motivo_por_id() reconstroi o dict a cada chamada de _texto
         # -- ok pro tamanho de lista atual (centenas de linhas); cachear no
         # AppState se a tabela ficar lenta com listas grandes.
@@ -184,7 +220,38 @@ class ModeloSinais(QAbstractTableModel):
             return rec.eletrico.barra or "—"
         if nome == "Nível Tensão":
             return rec.eletrico.nivel_tensao or "—"
+        if nome == "Pareado":
+            direcao = rec.tipo_sinal.direcao
+            if direcao == "InputOutput":
+                return "Sim"
+            if direcao == "Output" and not rec.enderecamento.indices:
+                return "Órfão"
+            return "—"
+        if nome == "Sheet origem":
+            return sheet_origem(rec)
         return ""
+
+    def _valor_edicao(self, rec, col):
+        """Valor cru p/ Qt.EditRole -- sem sentinela "—" nem sufixos de
+        exibição (evita o round-trip DisplayRole->setData corromper o dado
+        quando o editor reabre a célula pra edição).
+        """
+        nome = COLUNAS[col]
+        if nome == "Fase":
+            return rec.eletrico.fase or ""
+        if nome == "Nível Tensão":
+            return rec.eletrico.nivel_tensao or ""
+        if nome == "Barra":
+            return rec.eletrico.barra or ""
+        if nome == "Tipo Equip.":
+            return rec.eletrico.equipamento_alvo or ""
+        if nome == "Módulo":
+            return (rec.modulo.nome if rec.modulo else None) or ""
+        if nome == "Endereço Output":
+            return ";".join(str(i) for i in rec.enderecamento.indices_saida)
+        if nome == "Sinal":
+            return rec.sigla_sinal or ""
+        return self._texto(rec, col)
 
     def data(self, index, role=Qt.DisplayRole):
         if not index.isValid():
@@ -193,6 +260,8 @@ class ModeloSinais(QAbstractTableModel):
         nome = COLUNAS[index.column()]
         if role == Qt.DisplayRole:
             return self._texto(rec, index.column())
+        if role == Qt.EditRole:
+            return self._valor_edicao(rec, index.column())
         if role == Qt.ForegroundRole:
             if nome == "Status":
                 return COR_DECIDIDO if rec.status == "decidido" else COR_REVISAO
@@ -204,6 +273,9 @@ class ModeloSinais(QAbstractTableModel):
                 return cor_faixa(None)
         if role == Qt.ToolTipRole and nome in ("Sinal", "Descr. ADMS"):
             return self._adms(rec) or None
+        if role == Qt.ToolTipRole and nome == "Motivo":
+            motivo = self._estado.motivo_por_id().get(rec.id)
+            return _MOTIVO_TOOLTIP.get(motivo, "") if motivo else None
         if role == Qt.FontRole and nome in _COLUNAS_MONO:
             return QFont("Consolas")
         return None
@@ -235,12 +307,49 @@ class ModeloSinais(QAbstractTableModel):
             except ValueError:
                 return False
             self._estado.definir_escala(linha, valor)
+        elif nome in ("Endereço", "Endereço Output"):
+            try:
+                indices = tuple(int(p) for p in texto.split(";")) if texto else ()
+            except ValueError:
+                return False
+            if not all(0 <= v <= 65535 for v in indices):
+                return False
+            campo = "indices" if nome == "Endereço" else "indices_saida"
+            self._estado.definir_enderecos(linha, campo, indices)
         else:
             return False
+        self.ultima_edicao = (nome, value)
         topo = self.index(linha, 0)
         fim = self.index(linha, len(COLUNAS) - 1)
         self.dataChanged.emit(topo, fim)
         return True
+
+    def aplicar_valor_em_lote(self, ids: list[str], coluna: str, valor) -> int:
+        """Propaga `valor` na `coluna` para todos os registros com `ids`.
+
+        Reusa `setData` (mesma validação/transição da edição individual). Um
+        único snapshot para o lote inteiro (padrão de `AppState.aprovar_ids`):
+        suprime os snapshots internos de cada `setData` e faz só um antes do
+        loop, para que 1 `desfazer()` reverta o lote inteiro.
+        """
+        if coluna not in _EDITAVEIS:
+            return 0
+        col = COLUNAS.index(coluna)
+        indice_por_id = {r.id: i for i, r in enumerate(self._estado.registros)}
+        linhas = [indice_por_id[id_] for id_ in ids if id_ in indice_por_id]
+        if not linhas:
+            return 0
+        self._estado._snapshot()
+        snapshot_original = self._estado._snapshot
+        self._estado._snapshot = lambda: None
+        aplicados = 0
+        try:
+            for linha in linhas:
+                if self.setData(self.index(linha, col), valor, Qt.EditRole):
+                    aplicados += 1
+        finally:
+            self._estado._snapshot = snapshot_original
+        return aplicados
 
     def definir_sigla(self, linha: int, sigla: str) -> None:
         self._estado.definir_sigla(linha, sigla)
@@ -266,18 +375,25 @@ class ModeloSinais(QAbstractTableModel):
         """
         return sorted({sheet_origem(r) for r in self._estado.registros if sheet_origem(r)})
 
-    def pendentes_por_sheet(self) -> dict[str, int]:
-        """Sheet -> nº de registros com status "revisao" (sheets sem pendência
-        aparecem com 0, para a aba poder mostrar o check)."""
-        contagem: dict[str, int] = {}
+    def contagem_por_sheet(self) -> dict[str, tuple[int, int]]:
+        """Sheet -> (nº de registros com status "revisao", nº total de
+        registros da sheet). Sheets sem pendência aparecem com (0, total)."""
+        contagem: dict[str, tuple[int, int]] = {}
         for r in self._estado.registros:
             s = sheet_origem(r)
             if not s:
                 continue
-            contagem.setdefault(s, 0)
+            pendentes, total = contagem.get(s, (0, 0))
+            total += 1
             if r.status == "revisao":
-                contagem[s] += 1
+                pendentes += 1
+            contagem[s] = (pendentes, total)
         return contagem
+
+    def pendentes_por_sheet(self) -> dict[str, int]:
+        """Sheet -> nº de registros com status "revisao" (sheets sem pendência
+        aparecem com 0, para a aba poder mostrar o check)."""
+        return {s: pendentes for s, (pendentes, _total) in self.contagem_por_sheet().items()}
 
     def remover_linhas(self, indices: list[int]) -> None:
         """Remove as linhas (índices da fonte, 0-based) da lista subjacente.

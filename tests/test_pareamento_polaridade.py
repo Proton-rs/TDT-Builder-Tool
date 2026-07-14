@@ -13,12 +13,13 @@ def _rec(
     nome_equip: str = "52-2",
     modulo: str = "AL",
     descricao: str | None = None,
+    direcao: str = "Input",
 ) -> SignalRecord:
     desc = descricao if descricao is not None else f"DISJ {nome_equip} {estado}"
     return SignalRecord(
         id=id_,
         modulo=Modulo(modulo, "sheet_name"),
-        tipo_sinal=TipoSinal("Discrete", direcao="Input"),
+        tipo_sinal=TipoSinal("Discrete", direcao=direcao),
         enderecamento=Enderecamento("DNP3", (100,)),
         descricoes=Descricoes(desc, desc),
         eletrico=Eletrico(equipamento_alvo=equipamento, nome_equipamento=nome_equip),
@@ -209,6 +210,25 @@ def test_equipamentos_diferentes_nao_pareiam():
              descricao="SEC CARGA ABERTO")
     by_id, rev = _parear([a, b])
     assert all(r.sigla_sinal is None for r in by_id.values())
+
+
+def test_comando_abrir_fechar_converge_pra_sigla_do_par_forcado():
+    """Comando de 1 linha só ('Abrir/Fechar') no mesmo equipamento do par
+    Fechado/Aberto converge pra sigla forçada do par (Task 8.1 SP-CVA,
+    achado item 1b: hoje o comando não bate LIGAD/FECHAD nem DESLIGAD/ABERT
+    e cai no scorer, que decide DJA1 em vez de DJF1)."""
+    fechado = _rec("a", "FECHADO", nome_equip="52-8")
+    aberto = _rec("b", "ABERTO", nome_equip="52-8")
+    comando = _rec(
+        "c", "COMANDO", nome_equip="52-8",
+        descricao="DISJUNTOR 52-8 ABRIR FECHAR", direcao="Output",
+    )
+    by_id, rev = _parear([fechado, aberto, comando])
+    assert by_id["a"].sigla_sinal == "DJF1"
+    assert by_id["b"].sigla_sinal == "DJF1"
+    assert by_id["c"].sigla_sinal == "DJF1"
+    assert by_id["c"].status == "decidido"
+    assert rev == {}
 
 
 def test_terceiro_sinal_sem_polaridade_passa_intacto():

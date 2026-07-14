@@ -24,7 +24,6 @@ from openpyxl.utils import get_column_letter
 
 from tdt.contracts import ItemRevisao, ListaHomogenea, SignalRecord
 from tdt.dados.lista_padrao import ListaPadraoADMS
-from tdt.normalizacao.normalizador import FASES
 
 SHEET_DISCRETOS = "DNP3_DiscreteSignals"
 COLUNAS_ESPERADAS = 43
@@ -49,7 +48,7 @@ def _mapa_colunas(ws) -> dict[str, int]:
 _BARRA_SUFIXO = {"Principal": "P", "Auxiliar": "A"}
 
 
-def _nome_hierarquico(
+def nome_hierarquico(
     subestacao: str | None,
     modulo_nome: str | None,
     equipamento: str | None,
@@ -72,6 +71,9 @@ def _nome_hierarquico(
         partes.append(sufixo_barra)
     partes.append(sigla)
     return "_".join(partes)
+
+
+_nome_hierarquico = nome_hierarquico  # alias: bench/diag_cva.py e testes ainda importam o nome privado
 
 
 def _eh_alimentador(modulo_nome: str | None) -> bool:
@@ -141,17 +143,23 @@ def _output_data_type(coords_saida: str | None) -> str | None:
     return "SingleCoord" if len(set(partes)) == 1 else "MultiCoord"
 
 
+_FASE_PHASECODE: dict[str, str] = {"CA": "AC"}  # interno -> PhaseCode ADMS
+_PHASECODE = frozenset({"ABC", "AB", "BC", "AC", "A", "B", "C", "N"})  # DMSMatchingTemplateInfo
+
+
 def _fase_saida(fase: str | None) -> str:
     """Fase para a coluna TDT ``Phases``: default ``ABC`` quando vazia, e
-    fallback ``ABC`` para qualquer valor fora do domínio ``FASES`` (guard de
-    domínio — o ADMS rejeita fase inválida)."""
-    return fase if fase in FASES else "ABC"
+    fallback ``ABC`` para qualquer valor fora do domínio ``PhaseCode`` (guard
+    de domínio — o ADMS rejeita fase inválida). Traduz a convenção interna de
+    campo (``CA``) para o par alfabético do domínio ADMS (``AC``)."""
+    fase = _FASE_PHASECODE.get(fase, fase)
+    return fase if fase in _PHASECODE else "ABC"
 
 
 def _valores(rec: SignalRecord, subestacao: str | None, padrao: ListaPadraoADMS,
              alias_v1: "dict[str, str] | None" = None) -> dict:
     sp = padrao.por_sigla(rec.sigla_sinal) if rec.sigla_sinal else None
-    nome = _nome_hierarquico(
+    nome = nome_hierarquico(
         subestacao, rec.modulo.nome, rec.eletrico.nome_equipamento,
         rec.eletrico.barra, rec.sigla_sinal or "?",
     )
@@ -244,7 +252,7 @@ def _signal_type_analog(sp) -> str:
 def _valores_analog(rec: SignalRecord, subestacao: str | None, padrao: ListaPadraoADMS,
                      alias_v1: "dict[str, str] | None" = None) -> dict:
     sp = padrao.por_sigla(rec.sigla_sinal) if rec.sigla_sinal else None
-    nome = _nome_hierarquico(
+    nome = nome_hierarquico(
         subestacao, rec.modulo.nome, rec.eletrico.nome_equipamento,
         rec.eletrico.barra, rec.sigla_sinal or "?",
     )
@@ -287,7 +295,7 @@ def _valores_discrete_analog(rec: SignalRecord, subestacao: str | None,
     Signal Type=TapPosition, Remote Point Type=Analog, Normal Value=9,
     Device Mapping -> comando COMTAP no mesmo módulo."""
     sp = padrao.por_sigla(rec.sigla_sinal) if rec.sigla_sinal else None
-    nome = _nome_hierarquico(
+    nome = nome_hierarquico(
         subestacao, rec.modulo.nome, rec.eletrico.nome_equipamento,
         rec.eletrico.barra, rec.sigla_sinal or "?",
     )
@@ -327,7 +335,7 @@ def particionar_custom_id_duplicado(
     remote_unit = _remote_unit(lista.subestacao)
     por_cid: dict[str, list[SignalRecord]] = defaultdict(list)
     for rec in lista.registros:
-        nome = _nome_hierarquico(
+        nome = nome_hierarquico(
             lista.subestacao, rec.modulo.nome, rec.eletrico.nome_equipamento,
             rec.eletrico.barra, rec.sigla_sinal or "?",
         )
@@ -336,8 +344,17 @@ def particionar_custom_id_duplicado(
     duplicados = {id(r) for grupo in por_cid.values() if len(grupo) > 1 for r in grupo}
     if not duplicados:
         return lista, ()
+    motivo_por_id: dict[int, str] = {}
+    for grupo in por_cid.values():
+        if len(grupo) <= 1:
+            continue
+        # mesma derivação de modelo_tabela.sheet_origem
+        sheets = {r.id.rsplit(":", 1)[0] if ":" in r.id else "" for r in grupo}
+        motivo = "modulo_duplicado_entre_sheets" if len(sheets) > 1 else "custom_id_duplicado"
+        for r in grupo:
+            motivo_por_id[id(r)] = motivo
     revisao = tuple(
-        ItemRevisao(replace(r, status="revisao"), motivo="custom_id_duplicado")
+        ItemRevisao(replace(r, status="revisao"), motivo=motivo_por_id[id(r)])
         for r in lista.registros if id(r) in duplicados
     )
     restantes = tuple(r for r in lista.registros if id(r) not in duplicados)

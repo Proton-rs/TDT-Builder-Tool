@@ -45,6 +45,19 @@ def _parse_indices(cell) -> tuple[int, ...]:
     return tuple(int(p) for p in re.findall(r"-?\d+", str(cell)))
 
 
+# Grandeza elétrica contínua na própria descrição -- fallback quando não há
+# coluna TIPO nem marcador de seção (ex.: CVA11: sheet só com descricao/
+# indice, sinais de tensão entre fases sem nenhuma das duas evidências
+# usuais). Local (não em vocabulario_tipo.VOCAB) para não afetar
+# _col_tipo/_eh_marcador, que buscam evidência explícita de TIPO/seção.
+_GRANDEZA_CONTINUA = ("TENSAO", "CORRENTE", "POTENCIA", "FREQUENCIA")
+
+
+def _grandeza_continua(bruta) -> tuple[str, str] | None:
+    n = _norm(bruta)
+    return ("Analog", "Input") if any(k in n for k in _GRANDEZA_CONTINUA) else None
+
+
 def estruturar(
     rows: list[tuple],
     mapa: MapaColunas,
@@ -86,6 +99,8 @@ def estruturar(
             continue
 
         cat_dir = _classificar(row[c_tipo]) if c_tipo is not None and c_tipo < len(row) else None
+        if cat_dir is None and not secao_explicita:
+            cat_dir = _grandeza_continua(bruta)
         categoria, direcao = cat_dir or secao
         confiavel = cat_dir is not None or secao_explicita
 
