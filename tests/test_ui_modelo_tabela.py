@@ -238,7 +238,7 @@ def test_remover_linhas_emite_sinais_de_remocao(qtbot):
 def test_flags_colunas_dominio_sao_editaveis():
     m = ModeloSinais(_state(_rec()))
     for nome in ("Sinal", "Tipo", "Fase", "Nível Tensão", "Barra",
-                 "Tipo Equip.", "Módulo", "Escala"):
+                 "Tipo Equip.", "Módulo", "Escala", "Endereço", "Endereço Output"):
         flags = m.flags(m.index(0, _col(nome)))
         assert flags & Qt.ItemIsEditable, nome
 
@@ -303,6 +303,34 @@ def test_set_data_escala_invalida_retorna_false_sem_mutar():
     ok = m.setData(m.index(0, _col("Escala")), "abc", Qt.EditRole)
     assert ok is False
     assert st.registros[0].grandezas_analogicas.escala_transmissao is None
+
+
+def test_set_data_endereco_grava_indices():
+    st = _state(_rec())
+    m = ModeloSinais(st)
+    ok = m.setData(m.index(0, _col("Endereço")), "900;901", Qt.EditRole)
+    assert ok is True
+    assert st.registros[0].enderecamento.indices == (900, 901)
+
+
+def test_set_data_endereco_output_grava_indices():
+    st = _state(_rec())
+    m = ModeloSinais(st)
+    ok = m.setData(m.index(0, _col("Endereço Output")), "902", Qt.EditRole)
+    assert ok is True
+    assert st.registros[0].enderecamento.indices_saida == (902,)
+
+
+def test_set_data_endereco_invalido_retorna_false_sem_mutar():
+    st = _state(_rec())
+    m = ModeloSinais(st)
+    antes = st.registros[0].enderecamento.indices
+    ok = m.setData(m.index(0, _col("Endereço")), "abc", Qt.EditRole)
+    assert ok is False
+    assert st.registros[0].enderecamento.indices == antes
+    ok = m.setData(m.index(0, _col("Endereço")), "70000", Qt.EditRole)
+    assert ok is False
+    assert st.registros[0].enderecamento.indices == antes
 
 
 def test_set_data_coluna_nao_editavel_retorna_false():

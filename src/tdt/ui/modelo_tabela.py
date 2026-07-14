@@ -82,7 +82,7 @@ COR_BAIXO_TEXTO = QColor("#e8ebf2")
 
 _EDITAVEIS = frozenset({
     "Sinal", "Tipo", "Fase", "Nível Tensão", "Barra", "Tipo Equip.",
-    "Módulo", "Escala",
+    "Módulo", "Escala", "Endereço", "Endereço Output",
 })
 
 _COLUNAS_MONO = frozenset({
@@ -273,6 +273,15 @@ class ModeloSinais(QAbstractTableModel):
             except ValueError:
                 return False
             self._estado.definir_escala(linha, valor)
+        elif nome in ("Endereço", "Endereço Output"):
+            try:
+                indices = tuple(int(p) for p in texto.split(";")) if texto else ()
+            except ValueError:
+                return False
+            if not all(0 <= v <= 65535 for v in indices):
+                return False
+            campo = "indices" if nome == "Endereço" else "indices_saida"
+            self._estado.definir_enderecos(linha, campo, indices)
         else:
             return False
         self.ultima_edicao = (nome, value)

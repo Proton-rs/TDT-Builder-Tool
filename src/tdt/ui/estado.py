@@ -124,3 +124,6 @@ class AppState:
 
     def definir_escala(self, indice: int, valor: float | None) -> None:
         self._editar_nested(indice, "grandezas_analogicas", escala_transmissao=valor)
+
+    def definir_enderecos(self, indice: int, campo: str, indices: tuple[int, ...]) -> None:
+        self._editar_nested(indice, "enderecamento", **{campo: indices})
