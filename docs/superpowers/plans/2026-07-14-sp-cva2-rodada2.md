@@ -1157,9 +1157,11 @@ git add tests/test_conservacao_comandos.py
 git commit -m "test(conservacao): invariante total - nenhum sinal some do TDT+revisao"
 ```
 
-### Task 10: E6.2 — gate `endereco_duplicado` workbook-wide
+### Task 10: E6.2 — gate `endereco_duplicado` por módulo
 
-Detector genérico do sintoma da hipótese do usuário (CVA11): direção errada → dois pontos no mesmo espaço de endereçamento com o mesmo índice. Medir no dado real ANTES de ligar.
+**Correção pós-execução (14jul, achado pelo decision gate do Step 4 original — ver `.superpowers/sdd/task-10-report.md`):** a 1ª versão desta task chaveava só por `(categoria, in/out, índice)`, workbook-wide. Rodado contra o dado real da SE CVA deu 0 colisões (autorizava ligar o wiring), mas ligar o wiring quebrou 2 testes existentes (`test_pipeline_aplica_aliases_ao_nome_do_modulo`, `test_san2_cobertura_por_sheet_bate_com_a_lista_padrao`): módulos DISTINTOS (linhas de transmissão/IEDs diferentes) legitimamente reusam o mesmo índice local — é o mesmo motivo pelo qual `_chave` em `dc_pairer.py`/`normalizador_estrutural.py` e o Custom ID em `particionar_custom_id_duplicado` SEMPRE incluem `módulo` (e `_remote_unit` é constante por SUBESTAÇÃO inteira, não por módulo — não serve pra desambiguar). A correção: escopar a chave por módulo também, consistente com o resto do codebase. Isso ainda cobre o caso CVA11 (a colisão daquela hipótese é DENTRO do mesmo módulo/sheet).
+
+Detector genérico do sintoma da hipótese do usuário (CVA11): direção errada → dois pontos no mesmo módulo, no mesmo espaço de endereçamento, com o mesmo índice. Medir no dado real ANTES de ligar.
 
 **Files:**
 - Modify: `src/tdt/engine_tdt.py` (nova `particionar_endereco_duplicado`, ao lado de `particionar_custom_id_duplicado`)
@@ -1168,11 +1170,11 @@ Detector genérico do sintoma da hipótese do usuário (CVA11): direção errada
 
 **Interfaces:**
 - Consumes: `ListaHomogenea`, `ItemRevisao` (motivo REUSADO: `"endereco_duplicado"` — já tem label/tooltip na UI).
-- Produces: `particionar_endereco_duplicado(lista: ListaHomogenea) -> tuple[ListaHomogenea, tuple[ItemRevisao, ...]]`. Espaço de endereçamento: `(categoria, "in"|"out", índice)` — Input/InputOutput usam `indices` no espaço "in"; Output usa `indices` no "out"; `indices_saida` sempre "out".
+- Produces: `particionar_endereco_duplicado(lista: ListaHomogenea) -> tuple[ListaHomogenea, tuple[ItemRevisao, ...]]`. Espaço de endereçamento: `(módulo, categoria, "in"|"out", índice)` — Input/InputOutput usam `indices` no espaço "in"; Output usa `indices` no "out"; `indices_saida` sempre "out". Módulo faz parte da chave: índice local reusado entre módulos distintos NÃO é colisão.
 
 - [ ] **Step 1: Testes que falham**
 
-Em `tests/test_engine_tdt.py` — adicionar helper autocontido (se o arquivo já tiver um construtor equivalente, usar o existente):
+Em `tests/test_engine_tdt.py` — adicionar helper autocontido (se o arquivo já tiver um construtor equivalente com nome `_rec`, usar `_rec_end` pra não colidir):
 
 ```python
 from dataclasses import replace
@@ -1181,7 +1183,7 @@ from tdt import criador_lista_homogenea, engine_tdt
 from tdt.contracts import Descricoes, Enderecamento, Modulo, SignalRecord, TipoSinal
 
 
-def _rec(rid, sigla, direcao, modulo, indices, desc):
+def _rec_end(rid, sigla, direcao, modulo, indices, desc):
     return SignalRecord(
         id=rid,
         modulo=Modulo(modulo, "sheet_name"),
@@ -1193,25 +1195,37 @@ def _rec(rid, sigla, direcao, modulo, indices, desc):
     )
 
 
-def test_particionar_endereco_duplicado_mesmo_espaco():
-    """SP-CVA2 E6.2: dois Inputs Discrete com o mesmo índice no workbook ->
-    grupo inteiro pra revisão (sintoma de direção errada na origem)."""
-    a = _rec("S1:1", "27", "Input", "M1", [10], "PROT 27 ATUADO")
-    b = _rec("S2:1", "50BF", "Input", "M2", [10], "ATUADO 50 BF")
+def test_particionar_endereco_duplicado_mesmo_modulo_colide():
+    """SP-CVA2 E6.2: dois Inputs Discrete do MESMO módulo com o mesmo índice
+    -> grupo inteiro pra revisão (sintoma de direção errada na origem)."""
+    a = _rec_end("S1:1", "27", "Input", "M1", [10], "PROT 27 ATUADO")
+    b = _rec_end("S1:2", "50BF", "Input", "M1", [10], "ATUADO 50 BF")
     lista = criador_lista_homogenea.montar([a, b], subestacao="SE1")
     lista2, rev = engine_tdt.particionar_endereco_duplicado(lista)
     assert len(lista2.registros) == 0
-    assert sorted(it.registro.id for it in rev) == ["S1:1", "S2:1"]
+    assert sorted(it.registro.id for it in rev) == ["S1:1", "S1:2"]
     assert {it.motivo for it in rev} == {"endereco_duplicado"}
 
 
+def test_particionar_endereco_duplicado_modulos_distintos_nao_colidem():
+    """Achado do decision gate (14jul): índice local reusado entre módulos
+    (IEDs/linhas) DISTINTOS é endereçamento normal, não colisão — mesmo
+    padrão de `_chave` em dc_pairer/normalizador_estrutural."""
+    a = _rec_end("S1:1", "FCOM", "Input", "M1", [10], "FALHA COMUNICACAO")
+    b = _rec_end("S2:1", "FCOM", "Input", "M2", [10], "FALHA COMUNICACAO")
+    lista = criador_lista_homogenea.montar([a, b], subestacao="SE1")
+    lista2, rev = engine_tdt.particionar_endereco_duplicado(lista)
+    assert not rev and len(lista2.registros) == 2
+
+
 def test_particionar_endereco_duplicado_espacos_distintos_nao_colidem():
-    """Analog@0 e Discrete@0 são espaços distintos; Input@5 e Output@5 idem."""
+    """Analog@0 e Discrete@0 são espaços distintos; Input@5 e Output@5 idem
+    (mesmo módulo em todos os casos)."""
     recs = [
-        _rec("S1:1", "VAB", "Input", "M1", [0], "TENSAO BARRA AB"),
-        _rec("S1:2", "27", "Input", "M1", [0], "PROT 27 ATUADO"),
-        _rec("S1:3", "DJF1", "Output", "M1", [5], "DISJ ABRIR FECHAR"),
-        _rec("S1:4", "MOLA", "Input", "M1", [5], "MOLA DESCARREGADA"),
+        _rec_end("S1:1", "VAB", "Input", "M1", [0], "TENSAO BARRA AB"),
+        _rec_end("S1:2", "27", "Input", "M1", [0], "PROT 27 ATUADO"),
+        _rec_end("S1:3", "DJF1", "Output", "M1", [5], "DISJ ABRIR FECHAR"),
+        _rec_end("S1:4", "MOLA", "Input", "M1", [5], "MOLA DESCARREGADA"),
     ]
     # VAB precisa ser Analog: ajustar helper/replace da categoria
     recs[0] = replace(recs[0], tipo_sinal=replace(recs[0].tipo_sinal, categoria="Analog"))
@@ -1221,11 +1235,11 @@ def test_particionar_endereco_duplicado_espacos_distintos_nao_colidem():
 
 
 def test_particionar_endereco_duplicado_indices_saida_no_espaco_out():
-    fundido = _rec("S1:1", "DJF1", "InputOutput", "M1", [10], "DISJ ABERTO")
+    fundido = _rec_end("S1:1", "DJF1", "InputOutput", "M1", [10], "DISJ ABERTO")
     fundido = replace(
         fundido, enderecamento=replace(fundido.enderecamento, indices_saida=(90,))
     )
-    outro_cmd = _rec("S1:2", "SECC", "Output", "M1", [90], "SEC CARGA ABRIR FECHAR")
+    outro_cmd = _rec_end("S1:2", "SECC", "Output", "M1", [90], "SEC CARGA ABRIR FECHAR")
     lista = criador_lista_homogenea.montar([fundido, outro_cmd], subestacao="SE1")
     lista2, rev = engine_tdt.particionar_endereco_duplicado(lista)
     assert sorted(it.registro.id for it in rev) == ["S1:1", "S1:2"]
@@ -1242,19 +1256,26 @@ Expected: FAIL — função não existe.
 def particionar_endereco_duplicado(
     lista: ListaHomogenea,
 ) -> tuple[ListaHomogenea, tuple[ItemRevisao, ...]]:
-    """Gate workbook-wide (SP-CVA2 E6.2): dois pontos no MESMO espaço de
-    endereçamento (categoria, in/out) com o mesmo índice saem TODOS da lista
-    e vão pra revisão. Sintoma típico: direção errada na origem (comando lido
-    como Input colide com o Input real de mesmo índice — hipótese CVA11).
-    MultiCoord/DoubleBit contribuem cada índice individualmente."""
+    """Gate por módulo (SP-CVA2 E6.2): dois pontos do MESMO módulo, no MESMO
+    espaço de endereçamento (categoria, in/out), com o mesmo índice, saem
+    TODOS da lista e vão pra revisão. Sintoma típico: direção errada na
+    origem (comando lido como Input colide com o Input real de mesmo índice
+    — hipótese CVA11). Módulo entra na chave: índice local reusado entre
+    módulos DISTINTOS (IEDs/linhas diferentes) é endereçamento normal, não
+    colisão (achado do decision gate original, ver nota no topo da task) —
+    mesmo racional de `_chave` em dc_pairer/normalizador_estrutural e do
+    Custom ID em `particionar_custom_id_duplicado` (`_remote_unit` é
+    constante por SUBESTAÇÃO, não desambigua módulo). MultiCoord/DoubleBit
+    contribuem cada índice individualmente."""
     grupos: dict[tuple, dict[str, SignalRecord]] = defaultdict(dict)
     for rec in lista.registros:
+        mod = rec.modulo.nome
         cat = rec.tipo_sinal.categoria
         espaco_in = "out" if rec.tipo_sinal.direcao == "Output" else "in"
         for idx in rec.enderecamento.indices:
-            grupos[(cat, espaco_in, idx)][rec.id] = rec
+            grupos[(mod, cat, espaco_in, idx)][rec.id] = rec
         for idx in rec.enderecamento.indices_saida:
-            grupos[(cat, "out", idx)][rec.id] = rec
+            grupos[(mod, cat, "out", idx)][rec.id] = rec
 
     colididos: dict[str, SignalRecord] = {}
     for regs in grupos.values():
@@ -1319,16 +1340,16 @@ Em `gerar_tdt` (espelho, com `aud.evento` análogo ao bloco `rev_dup` existente)
 
 - [ ] **Step 6: Rodar testes + suíte + gate**
 
-Run: `python -m pytest -q tests/test_engine_tdt.py tests/test_pipeline_gerar_tdt.py && python -m pytest -q tests/`
-Expected: PASS.
+Run: `python -m pytest -q tests/test_engine_tdt.py tests/test_pipeline_gerar_tdt.py tests/test_pipeline.py tests/test_integracao_san2.py && python -m pytest -q tests/`
+Expected: PASS — em particular `test_pipeline_aplica_aliases_ao_nome_do_modulo` e `test_san2_cobertura_por_sheet_bate_com_a_lista_padrao` (os 2 casos que quebraram na 1ª tentativa, chave sem módulo) devem passar agora.
 Run: `PYTHONPATH=src python -m bench.regressao`
-Expected: `pct >= baseline` E nenhum registro novo removido do TDT do gate (se o gate cair, é colisão legítima no fixture — voltar ao Step 4/decision gate).
+Expected: `pct >= baseline` E nenhum registro novo removido do TDT do gate (se o gate cair, é colisão legítima DENTRO do mesmo módulo no fixture — voltar ao Step 4/decision gate, não afrouxar a chave de novo).
 
 - [ ] **Step 7: Commit**
 
 ```bash
 git add src/tdt/engine_tdt.py src/tdt/pipeline.py tests/test_engine_tdt.py
-git commit -m "feat(engine): gate de endereco duplicado por espaco de enderecamento"
+git commit -m "feat(engine): gate de endereco duplicado por modulo"
 ```
 
 ---
