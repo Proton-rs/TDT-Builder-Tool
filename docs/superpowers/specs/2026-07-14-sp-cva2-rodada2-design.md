@@ -1,6 +1,7 @@
 # SP-CVA2 — 2ª rodada de correções da revisão CVA (BC2 posição/comando + CVA11 direção) — Design
 
 **Data:** 2026-07-14
+**Status:** Implementado e validado no dado real (E1-E6 + follow-up; gate `bench.regressao` idêntico ao baseline em todas as tasks — ver ledger em `docs/AGENTS.md`)
 **Fonte:** `docs/anot.txt` (2ª rodada de observações do usuário sobre a lista CVA resumida, pós-SP-CVA 13jul). Input real: `C:\Users\vinic\Documents\docs importantes\RGE\CVA\CVA - Pontos Por Equipamentos DNP_V03 - COS - resumida.xlsx`.
 **Evidência:** rodada nova de `bench/diag_cva.py` sobre o main atual (`bench/resultados/diag_cva_rodada2.log`) + sonda pré-scoring nas sheets BC2/CVA11 (estruturação → identidade → pareamento_polaridade, com dump de células cruas). Números e textos abaixo são do dado real, não estimados.
 **Nota de build:** as 17 tasks do SP-CVA entraram no main DEPOIS da geração dos TDTs revisados (v3 de 13jul). Parte do que o usuário viu já mudou; o diag rodada 2 estabelece o que AINDA falha no código atual — e é só isso que esta spec corrige.
