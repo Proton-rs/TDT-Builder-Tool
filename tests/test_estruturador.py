@@ -1,6 +1,6 @@
 from tdt.config import Config
 from tdt.contracts import MapaColunas
-from tdt.normalizacao.estruturador import estruturar
+from tdt.normalizacao.estruturador import _eh_marcador, estruturar
 
 CFG = Config()
 
@@ -310,3 +310,43 @@ def test_estruturar_modulo_vazio_vai_para_revisao():
     assert recs[1].status == "revisao"
     assert recs[1].justificativa == "modulo_indefinido"
     assert recs[1].modulo.nome is None
+
+
+# --- marcador tolerante a numeracao (SP-CVA2 E3.1) --------------------------
+
+
+def test_marcador_com_numeracao_na_col0():
+    """SP-CVA2 E3.1 — layout CVA11: marcador tem nº de sequência na col 0."""
+    assert _eh_marcador(("1", None, None, None, "MEDIÇÃO", None), 0)
+    assert _eh_marcador(("10", None, None, None, "CONTROLE", None), 0)
+    assert _eh_marcador(("16", None, None, None, "SINALIZAÇÃO", None), 0)
+
+
+def test_marcador_uma_celula_continua_valendo():
+    assert _eh_marcador((None, None, None, None, "CONTROLE", None), 0)
+
+
+def test_linha_de_dados_nao_e_marcador():
+    # linha real CVA11 (descrição + código DI + nome): não é marcador
+    assert not _eh_marcador(
+        ("17", "CVA11", "PP", "N", "Disj. 52-11 (11Q0) - Sup Circ", "DI"), 0
+    )
+
+
+def test_marcador_de_secao_define_direcao_e_nao_vira_registro():
+    """Fim-a-fim no estruturar: seção CONTROLE dá Output às linhas seguintes e
+    a linha do marcador não vira SignalRecord (E6.4)."""
+    rows = [
+        ("", "", "", "", "DESCRIÇÃO", "", "", "", "", "INDEX"),      # header (row 1)
+        ("10", None, None, None, "CONTROLE", None, None, None, None, None),
+        ("11", "CVA11", "PP", "C", "Disjuntor 52-11 - Abrir/Fechar", None, None, None, None, "0"),
+        ("16", None, None, None, "SINALIZAÇÃO", None, None, None, None, None),
+        ("17", "CVA11", "PP", "N", "Disjuntor 52-11 - Aberto", None, None, None, None, "1"),
+    ]
+    mapa = MapaColunas(header_row=1, colunas={"descricao": 4, "indice": 9})
+    sinais = estruturar(rows, mapa, sheet_name="CVA11", config=Config())
+    por_id = {r.id: r for r in sinais}
+    assert "CVA11:2" not in por_id and "CVA11:4" not in por_id  # marcadores
+    assert por_id["CVA11:3"].tipo_sinal.direcao == "Output"
+    assert por_id["CVA11:3"].tipo_sinal.categoria == "Discrete"
+    assert por_id["CVA11:5"].tipo_sinal.direcao == "Input"

@@ -32,11 +32,16 @@ from .vocabulario_tipo import classificar as _classificar, norm as _norm
 
 
 def _eh_marcador(row: tuple, col0: int) -> bool:
-    """Uma única célula tem categoria (em qq coluna) e o resto está vazio."""
+    """Linha de marcador de seção: UMA célula classifica como categoria e as
+    demais preenchidas são vazias ou numeração de sequência (inteiro curto) —
+    o layout CVA11 tem contador na col 0 ('1'/'MEDIÇÃO', '10'/'CONTROLE'),
+    que invalidava a regra antiga de "exatamente 1 célula" (SP-CVA2 E3.1)."""
     preenchidas = [i for i, c in enumerate(row) if _norm(c)]
-    if len(preenchidas) != 1:
+    classificam = [i for i in preenchidas if _classificar(row[i]) is not None]
+    if len(classificam) != 1:
         return False
-    return _classificar(row[preenchidas[0]]) is not None
+    outras = [i for i in preenchidas if i not in classificam]
+    return all(re.fullmatch(r"\d{1,4}", _norm(row[i])) for i in outras)
 
 
 def _parse_indices(cell) -> tuple[int, ...]:
@@ -89,7 +94,11 @@ def estruturar(
             continue
 
         if _eh_marcador(row, col0):
-            idx_marc = [i for i, c in enumerate(row) if _norm(c)][0]
+            # celula que classifica (nao a 1a preenchida -- pode haver
+            # numeracao de sequencia antes dela, SP-CVA2 E3.1)
+            idx_marc = next(
+                i for i, c in enumerate(row) if _norm(c) and _classificar(c) is not None
+            )
             secao = _classificar(row[idx_marc])
             secao_explicita = True
             continue
