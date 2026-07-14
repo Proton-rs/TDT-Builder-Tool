@@ -17,6 +17,7 @@ COLUNAS = [
     "Endereço Output",
     "Score embedding", "Score tf-idf", "Score fuzzy", "Justificativa",
     "Módulo", "Equipamento", "Tipo Equip.", "Barra", "Nível Tensão",
+    "Pareado", "Sheet origem",
 ]
 
 _MOTIVO_LABEL = {
@@ -219,6 +220,15 @@ class ModeloSinais(QAbstractTableModel):
             return rec.eletrico.barra or "—"
         if nome == "Nível Tensão":
             return rec.eletrico.nivel_tensao or "—"
+        if nome == "Pareado":
+            direcao = rec.tipo_sinal.direcao
+            if direcao == "InputOutput":
+                return "Sim"
+            if direcao == "Output" and not rec.enderecamento.indices:
+                return "Órfão"
+            return "—"
+        if nome == "Sheet origem":
+            return sheet_origem(rec)
         return ""
 
     def data(self, index, role=Qt.DisplayRole):

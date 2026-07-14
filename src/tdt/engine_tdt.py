@@ -48,7 +48,7 @@ def _mapa_colunas(ws) -> dict[str, int]:
 _BARRA_SUFIXO = {"Principal": "P", "Auxiliar": "A"}
 
 
-def _nome_hierarquico(
+def nome_hierarquico(
     subestacao: str | None,
     modulo_nome: str | None,
     equipamento: str | None,
@@ -71,6 +71,9 @@ def _nome_hierarquico(
         partes.append(sufixo_barra)
     partes.append(sigla)
     return "_".join(partes)
+
+
+_nome_hierarquico = nome_hierarquico  # alias: bench/diag_cva.py e testes ainda importam o nome privado
 
 
 def _eh_alimentador(modulo_nome: str | None) -> bool:
@@ -156,7 +159,7 @@ def _fase_saida(fase: str | None) -> str:
 def _valores(rec: SignalRecord, subestacao: str | None, padrao: ListaPadraoADMS,
              alias_v1: "dict[str, str] | None" = None) -> dict:
     sp = padrao.por_sigla(rec.sigla_sinal) if rec.sigla_sinal else None
-    nome = _nome_hierarquico(
+    nome = nome_hierarquico(
         subestacao, rec.modulo.nome, rec.eletrico.nome_equipamento,
         rec.eletrico.barra, rec.sigla_sinal or "?",
     )
@@ -249,7 +252,7 @@ def _signal_type_analog(sp) -> str:
 def _valores_analog(rec: SignalRecord, subestacao: str | None, padrao: ListaPadraoADMS,
                      alias_v1: "dict[str, str] | None" = None) -> dict:
     sp = padrao.por_sigla(rec.sigla_sinal) if rec.sigla_sinal else None
-    nome = _nome_hierarquico(
+    nome = nome_hierarquico(
         subestacao, rec.modulo.nome, rec.eletrico.nome_equipamento,
         rec.eletrico.barra, rec.sigla_sinal or "?",
     )
@@ -292,7 +295,7 @@ def _valores_discrete_analog(rec: SignalRecord, subestacao: str | None,
     Signal Type=TapPosition, Remote Point Type=Analog, Normal Value=9,
     Device Mapping -> comando COMTAP no mesmo módulo."""
     sp = padrao.por_sigla(rec.sigla_sinal) if rec.sigla_sinal else None
-    nome = _nome_hierarquico(
+    nome = nome_hierarquico(
         subestacao, rec.modulo.nome, rec.eletrico.nome_equipamento,
         rec.eletrico.barra, rec.sigla_sinal or "?",
     )
@@ -332,7 +335,7 @@ def particionar_custom_id_duplicado(
     remote_unit = _remote_unit(lista.subestacao)
     por_cid: dict[str, list[SignalRecord]] = defaultdict(list)
     for rec in lista.registros:
-        nome = _nome_hierarquico(
+        nome = nome_hierarquico(
             lista.subestacao, rec.modulo.nome, rec.eletrico.nome_equipamento,
             rec.eletrico.barra, rec.sigla_sinal or "?",
         )

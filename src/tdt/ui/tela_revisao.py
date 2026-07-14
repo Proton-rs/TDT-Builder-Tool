@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 
 from tdt.contracts import Descricoes, Enderecamento, Modulo, SignalRecord, TipoSinal
 from tdt.dc_pairer import fundir, separar
+from tdt.engine_tdt import nome_hierarquico
 from tdt.ui.busca_adms import buscar
 from tdt.ui.delegate_sinal import DelegateCombo, DelegateModulo, DelegateSinal
 from tdt.ui.estado import AppState
@@ -28,7 +29,7 @@ _METODOS = (("emb", "vetorial"), ("tfidf", "tfidf"), ("fuzzy", "fuzzy"))
 
 _COLUNAS_PADRAO = frozenset({
     "Sinal", "Confiança", "Status", "Motivo", "Descr. bruta",
-    "Descr. ADMS", "Módulo", "Endereço",
+    "Descr. ADMS", "Módulo", "Endereço", "Pareado", "Sheet origem",
 })
 
 _OPCOES_COMBO = {
@@ -476,6 +477,9 @@ class TelaRevisao(QWidget):
             conf = "—"
         end_in = ";".join(str(i) for i in r.enderecamento.indices) or "—"
         end_out = ";".join(str(i) for i in r.enderecamento.indices_saida) or "—"
+        nome_tdt = nome_hierarquico(
+            self._estado.subestacao, r.modulo.nome if r.modulo else None,
+            r.eletrico.nome_equipamento, r.eletrico.barra, r.sigla_sinal or "?")
         self.lbl_campos.setText(
             f"Sinal: {r.sigla_sinal or '—'}\n"
             f"Status: {r.status}\n"
@@ -484,6 +488,7 @@ class TelaRevisao(QWidget):
             f"Fase: {r.eletrico.fase or '—'}\n"
             f"Endereço Input: {end_in}\n"
             f"Endereço Output: {end_out}\n"
+            f"Custom ID (TDT): {nome_tdt}\n"
             f"Descrição: {r.descricoes.bruta}"
         )
         self._atualizar_barras(r)

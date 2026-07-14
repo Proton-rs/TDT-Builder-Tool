@@ -386,6 +386,35 @@ def test_motivo_sem_label_exibe_motivo_cru():
     assert _MOTIVO_LABEL.get("motivo_futuro_desconhecido", "motivo_futuro_desconhecido") != "—"
 
 
+def test_coluna_pareado():
+    st = _state(_rec())
+    m = ModeloSinais(st)
+    st.registros[0] = replace(
+        st.registros[0], tipo_sinal=TipoSinal("Discrete", "SingleBit", "InputOutput"))
+    assert m.data(m.index(0, _col("Pareado")), Qt.DisplayRole) == "Sim"
+
+
+def test_coluna_pareado_orfao_output_sem_indices():
+    st = _state(_rec())
+    m = ModeloSinais(st)
+    st.registros[0] = replace(
+        st.registros[0],
+        tipo_sinal=TipoSinal("Discrete", "SingleBit", "Output"),
+        enderecamento=Enderecamento("DNP3", ()))
+    assert m.data(m.index(0, _col("Pareado")), Qt.DisplayRole) == "Órfão"
+
+
+def test_coluna_pareado_input_puro():
+    m = ModeloSinais(_state(_rec()))
+    assert m.data(m.index(0, _col("Pareado")), Qt.DisplayRole) == "—"
+
+
+def test_coluna_sheet_origem():
+    st = _state(replace(_rec(), id="BC2:12"))
+    m = ModeloSinais(st)
+    assert m.data(m.index(0, _col("Sheet origem")), Qt.DisplayRole) == "BC2"
+
+
 def test_todos_motivos_emitidos_tem_label():
     emitidos = {
         "sem_endereco", "score_baixo", "categoria_ambigua", "endereco_duplicado",
