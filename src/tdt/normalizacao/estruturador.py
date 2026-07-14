@@ -56,11 +56,18 @@ def _parse_indices(cell) -> tuple[int, ...]:
 # usuais). Local (não em vocabulario_tipo.VOCAB) para não afetar
 # _col_tipo/_eh_marcador, que buscam evidência explícita de TIPO/seção.
 _GRANDEZA_CONTINUA = ("TENSAO", "CORRENTE", "POTENCIA", "FREQUENCIA")
+# Texto que COMEÇA com falta/perda descreve ausência (status discreto), não
+# medição — 'Falta de Potencial', 'Falta Tensão Comando' (SP-CVA2 E3.3).
+_PREFIXOS_AUSENCIA = ("FALTA", "PERDA")
 
 
 def _grandeza_continua(bruta) -> tuple[str, str] | None:
-    n = _norm(bruta)
-    return ("Analog", "Input") if any(k in n for k in _GRANDEZA_CONTINUA) else None
+    tokens = _norm(bruta).split()
+    if not tokens or tokens[0] in _PREFIXOS_AUSENCIA:
+        return None
+    if any(t in _GRANDEZA_CONTINUA for t in tokens):
+        return ("Analog", "Input")
+    return None
 
 
 def estruturar(

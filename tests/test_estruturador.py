@@ -1,6 +1,6 @@
 from tdt.config import Config
 from tdt.contracts import MapaColunas
-from tdt.normalizacao.estruturador import _eh_marcador, estruturar
+from tdt.normalizacao.estruturador import _eh_marcador, _grandeza_continua, estruturar
 
 CFG = Config()
 
@@ -86,6 +86,20 @@ def test_grandeza_continua_sem_coluna_tipo_infere_analog():
         assert r.tipo_sinal.categoria == "Analog"
         assert r.tipo_sinal.direcao == "Input"
         assert r.tipo_sinal.categoria_confiavel is True
+
+
+def test_grandeza_continua_por_token_exato():
+    """SP-CVA2 E3.3: 'POTENCIAL' não é 'POTENCIA'; 'SUBTENSAO' não é 'TENSAO'."""
+    assert _grandeza_continua("Falta de Potencial") is None
+    assert _grandeza_continua("Proteção Subtensão (27) - Excluida") is None
+    assert _grandeza_continua("Tensão Barra AB") == ("Analog", "Input")
+    assert _grandeza_continua("Potência Reativa") == ("Analog", "Input")
+    assert _grandeza_continua("Corrente de Desbalanço (IBX)") == ("Analog", "Input")
+
+
+def test_grandeza_continua_guarda_falta_perda():
+    assert _grandeza_continua("Falta Tensão Comando") is None
+    assert _grandeza_continua("Perda de Corrente TC") is None
 
 
 def test_categoria_confiavel_com_marcador():
