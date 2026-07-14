@@ -36,7 +36,7 @@ from tdt.dados.lista_padrao import ListaPadraoADMS, descricoes_por_sigla
 from tdt.defaults import DEFAULT_LISTA_ALIAS
 from tdt.normalizacao.estruturador import estruturar
 from tdt.normalizacao.estruturador_homogeneo import detectar_header, estruturar_homogeneo
-from tdt.identidade_modulo import aplicar_identidade, particionar_por_confianca
+from tdt.identidade_modulo import aplicar_identidade, aviso_divergencia_sheet, particionar_por_confianca
 from tdt.analise.identificador import classificar, ler_rows
 from tdt.inferencia_topologia import (
     derivar_secao_por_linha, inferir_equipamento, subdividir_transformador_at_bt,
@@ -612,6 +612,9 @@ def executar(
         sinais, conf_mod, avisos_mod = aplicar_identidade(sinais, sn, rows, config)
         for msg in avisos_mod:
             aud.evento("identidade_modulo", msg, "AVISO")
+        aviso_div = aviso_divergencia_sheet(sn, sinais, config)
+        if aviso_div:
+            aud.evento("identidade_modulo", aviso_div, "AVISO")
         alias_sheet = aliases.get(sn) if aliases else None
         if alias_sheet:
             sinais = [

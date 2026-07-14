@@ -172,6 +172,30 @@ def aplicar_identidade(
     return com_tipo, (res.confianca if veio_de_sheet else "alta"), []
 
 
+def aviso_divergencia_sheet(
+    sheet_name: str, sinais: list[SignalRecord], config: Config
+) -> str | None:
+    """Aviso quando o módulo dominante do CONTEÚDO (coluna por linha) diverge
+    do nome canônico da sheet — caso real BC2 rotulada BC1 na origem
+    (SP-CVA2 E5.2). Não corrige: o operador decide (renomear em lote)."""
+    res_sheet = canonizar_modulo(sheet_name, config)
+    if not res_sheet.canonico:
+        return None
+    nomes = [
+        s.modulo.nome for s in sinais
+        if s.modulo.origem_contexto == "coluna:MODULO_POR_LINHA" and s.modulo.nome
+    ]
+    if not nomes:
+        return None
+    dominante = max(set(nomes), key=nomes.count)
+    if dominante == res_sheet.nome or nomes.count(dominante) / len(nomes) < 0.5:
+        return None
+    return (
+        f"Sheet {sheet_name}: conteúdo rotulado {dominante!r} diverge do nome da "
+        f"sheet ({res_sheet.nome!r}) — verificar módulo na planilha de origem"
+    )
+
+
 def particionar_por_confianca(
     sinais: list[SignalRecord], confianca: str
 ) -> tuple[list[SignalRecord], list[ItemRevisao]]:

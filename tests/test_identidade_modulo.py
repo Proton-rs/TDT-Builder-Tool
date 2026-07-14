@@ -328,3 +328,25 @@ def test_aplicar_identidade_por_linha_canonizacao_vazia_vai_pra_revisao():
     novos, _, _ = aplicar_identidade(sinais, "ESTADOS", [], Config())
     assert novos[0].status == "revisao"
     assert novos[0].justificativa == "modulo_indefinido"
+
+
+from tdt.identidade_modulo import aviso_divergencia_sheet
+
+
+def test_aviso_divergencia_sheet_bc2_rotulada_bc1():
+    """SP-CVA2 E5.2 — sheet BC2 com conteúdo (módulo por linha) dominante BC1:
+    aviso explícito; o sistema NÃO corrige (dado do cliente)."""
+    sinais, _, _ = aplicar_identidade(
+        [_sinal_coluna(f"BC2:{i}", "BC1_VAB") for i in range(4)], "BC2", [], Config()
+    )
+    aviso = aviso_divergencia_sheet("BC2", sinais, Config())
+    assert aviso is not None and "BC1" in aviso and "BC2" in aviso
+
+
+def test_aviso_divergencia_none_quando_coerente_ou_sem_evidencia():
+    cfg = Config()
+    sinais, _, _ = aplicar_identidade(
+        [_sinal_coluna(f"BC1:{i}", "BC1_VAB") for i in range(4)], "BC1", [], cfg
+    )
+    assert aviso_divergencia_sheet("BC1", sinais, cfg) is None  # coerente
+    assert aviso_divergencia_sheet("BC2", [], cfg) is None      # sem módulo por coluna
