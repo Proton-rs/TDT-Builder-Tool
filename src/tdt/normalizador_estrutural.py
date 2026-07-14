@@ -132,7 +132,9 @@ def corrigir(
         while i < len(ordenados) - 1:
             a, b = ordenados[i], ordenados[i + 1]
             fundivel = (
-                len(a.enderecamento.indices) == 1
+                a.tipo_sinal.direcao == "Input"
+                and b.tipo_sinal.direcao == "Input"
+                and len(a.enderecamento.indices) == 1
                 and len(b.enderecamento.indices) == 1
                 and b.enderecamento.indices[0] == a.enderecamento.indices[0] + 1
                 and (a.sigla_sinal or "").upper() in whitelist_posicao

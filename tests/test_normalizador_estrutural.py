@@ -95,6 +95,35 @@ def test_nao_consecutivos_seguem_independentes():
     assert erros == ()
 
 
+def test_nao_funde_input_com_output_mesmo_par_posicao():
+    # Guarda de direção: fundir_pares_posicao já exige direcao=="Input";
+    # corrigir() não tinha essa checagem. Hoje é inerte porque comando de
+    # verbo duplo ("ABRIR FECHAR") vira polaridade None e nunca casa, mas um
+    # comando de verbo único (ex. só "ABRIR") resolveria para 1 polaridade e,
+    # sem a guarda, fundiria Input+Output num "MultiCoord" (semanticamente
+    # errado — MultiCoord é reservado a 2 INPUTS de status).
+    regs = [
+        SignalRecord(
+            id="LT3:1", modulo=Modulo("3", "sheet_name"),
+            tipo_sinal=TipoSinal("Discrete", "SingleBit", "Input"),
+            enderecamento=Enderecamento("DNP3", (100,)),
+            descricoes=Descricoes("SECC FECHADO", "SECC FECHADO"),
+            sigla_sinal="SECC", status="decidido",
+        ),
+        SignalRecord(
+            id="LT3:2", modulo=Modulo("3", "sheet_name"),
+            tipo_sinal=TipoSinal("Discrete", "SingleBit", "Output"),
+            enderecamento=Enderecamento("DNP3", (101,)),
+            descricoes=Descricoes("ABRIR", "ABRIR"),
+            sigla_sinal="SECC", status="decidido",
+        ),
+    ]
+    corrigidos, erros = corrigir(regs, WL)
+    assert len(corrigidos) == 2
+    assert all(c.tipo_sinal.datatype == "SingleBit" for c in corrigidos)
+    assert erros == ()
+
+
 def _rec_fp(rid, sigla, direcao, indices, desc, modulo="BC2"):
     return SignalRecord(
         id=rid,
