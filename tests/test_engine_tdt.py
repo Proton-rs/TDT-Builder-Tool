@@ -686,6 +686,20 @@ def test_particionar_endereco_duplicado_mesmo_modulo_colide():
     assert {it.motivo for it in rev} == {"endereco_duplicado"}
 
 
+def test_particionar_endereco_duplicado_carimba_status_revisao():
+    """Consistência com particionar_custom_id_duplicado (mesmo gate): o
+    registro dentro do ItemRevisao precisa sair com status="revisao",
+    porque ui/estado.py:61 propaga esse .registro cru pra UI e vários
+    consumidores (app.py, tela_geracao.py, modelo_tabela.py,
+    relatorio_revisao.py) decidem "pendente" vs "decidido" olhando só
+    pro .status do registro, não pra lista em que ele está."""
+    a = _rec_end("S1:1", "27", "Input", "M1", [10], "PROT 27 ATUADO")
+    b = _rec_end("S1:2", "50BF", "Input", "M1", [10], "ATUADO 50 BF")
+    lista = criador_lista_homogenea.montar([a, b], subestacao="SE1")
+    _, rev = engine_tdt.particionar_endereco_duplicado(lista)
+    assert all(it.registro.status == "revisao" for it in rev)
+
+
 def test_particionar_endereco_duplicado_modulos_distintos_nao_colidem():
     """Achado do decision gate (14jul): índice local reusado entre módulos
     (IEDs/linhas) DISTINTOS é endereçamento normal, não colisão — mesmo

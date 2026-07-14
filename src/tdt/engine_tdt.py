@@ -393,7 +393,8 @@ def particionar_endereco_duplicado(
         return lista, ()
     restantes = tuple(r for r in lista.registros if r.id not in colididos)
     revisao = tuple(
-        ItemRevisao(r, motivo="endereco_duplicado") for r in colididos.values()
+        ItemRevisao(replace(r, status="revisao"), motivo="endereco_duplicado")
+        for r in colididos.values()
     )
     return replace(lista, registros=restantes), revisao
 
