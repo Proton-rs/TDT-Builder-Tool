@@ -8,7 +8,7 @@ from tdt.contracts import (
 )
 from tdt.dados.lista_padrao import ListaPadraoADMS, SinalPadrao
 from tdt.ui.estado import AppState
-from tdt.ui.modelo_tabela import ModeloSinais, _MOTIVO_LABEL
+from tdt.ui.modelo_tabela import ModeloSinais, _EDITAVEIS, _MOTIVO_LABEL
 
 
 def _rec(status="decidido", sigla="DJF1", eletrico=None):
@@ -449,6 +449,19 @@ def test_motivo_desconhecido_mostra_motivo_cru_na_coluna():
     m = ModeloSinais(st)
     v = m.data(m.index(0, _col("Motivo")), Qt.DisplayRole)
     assert v == "motivo_futuro_desconhecido"
+
+
+def test_roundtrip_edicao_nao_altera_valor():
+    """Ler via EditRole e regravar o mesmo valor não pode mudar o dado
+    exibido (reprodução headless do bug "double-click quebra formatação")."""
+    st = _state(_rec())
+    m = ModeloSinais(st)
+    for nome in sorted(_EDITAVEIS - {"Sinal"}):
+        idx = m.index(0, _col(nome))
+        antes_display = m.data(idx, Qt.DisplayRole)
+        antes_edit = m.data(idx, Qt.EditRole)
+        m.setData(idx, antes_edit, Qt.EditRole)
+        assert m.data(idx, Qt.DisplayRole) == antes_display, nome
 
 
 def test_tooltip_motivo_traz_texto_explicativo():

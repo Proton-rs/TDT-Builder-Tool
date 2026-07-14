@@ -231,6 +231,28 @@ class ModeloSinais(QAbstractTableModel):
             return sheet_origem(rec)
         return ""
 
+    def _valor_edicao(self, rec, col):
+        """Valor cru p/ Qt.EditRole -- sem sentinela "—" nem sufixos de
+        exibição (evita o round-trip DisplayRole->setData corromper o dado
+        quando o editor reabre a célula pra edição).
+        """
+        nome = COLUNAS[col]
+        if nome == "Fase":
+            return rec.eletrico.fase or ""
+        if nome == "Nível Tensão":
+            return rec.eletrico.nivel_tensao or ""
+        if nome == "Barra":
+            return rec.eletrico.barra or ""
+        if nome == "Tipo Equip.":
+            return rec.eletrico.equipamento_alvo or ""
+        if nome == "Módulo":
+            return (rec.modulo.nome if rec.modulo else None) or ""
+        if nome == "Endereço Output":
+            return ";".join(str(i) for i in rec.enderecamento.indices_saida)
+        if nome == "Sinal":
+            return rec.sigla_sinal or ""
+        return self._texto(rec, col)
+
     def data(self, index, role=Qt.DisplayRole):
         if not index.isValid():
             return None
@@ -238,6 +260,8 @@ class ModeloSinais(QAbstractTableModel):
         nome = COLUNAS[index.column()]
         if role == Qt.DisplayRole:
             return self._texto(rec, index.column())
+        if role == Qt.EditRole:
+            return self._valor_edicao(rec, index.column())
         if role == Qt.ForegroundRole:
             if nome == "Status":
                 return COR_DECIDIDO if rec.status == "decidido" else COR_REVISAO

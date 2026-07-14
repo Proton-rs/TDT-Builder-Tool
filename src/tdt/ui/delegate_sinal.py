@@ -70,7 +70,7 @@ class DelegateCombo(QStyledItemDelegate):
         return combo
 
     def setEditorData(self, editor, index):
-        _preselecionar(editor, index.data(Qt.DisplayRole))
+        _preselecionar(editor, index.data(Qt.EditRole))
 
     def setModelData(self, editor, model, index):
         model.setData(index, editor.currentText().strip(), Qt.EditRole)
@@ -96,7 +96,7 @@ class DelegateModulo(QStyledItemDelegate):
         return combo
 
     def setEditorData(self, editor, index):
-        _preselecionar(editor, index.data(Qt.DisplayRole))
+        _preselecionar(editor, index.data(Qt.EditRole))
 
     def setModelData(self, editor, model, index):
         model.setData(index, editor.currentText().strip(), Qt.EditRole)
