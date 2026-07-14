@@ -231,6 +231,31 @@ def test_comando_abrir_fechar_converge_pra_sigla_do_par_forcado():
     assert rev == {}
 
 
+def test_par_forcado_mesmo_com_ruido_de_supervisao_no_grupo():
+    """SP-CVA2 E1 — grupo real BC2: 'SUPERVISAO CIRC ABERTURA' tem token
+    ABERTURA que batia o prefixo ABERT e inflava `desligado` -> par nunca
+    forçado -> comando ia pro scorer e virava DJA1. A seleção do PAR passa a
+    exigir palavra exata de particípio (ABERTO/FECHADO/...)."""
+    grupo = [
+        _rec("a", "FECHADO", nome_equip="52-06", descricao="52 06 FECHADO"),
+        _rec("b", "ABERTO", nome_equip="52-06", descricao="52 06 ABERTO"),
+        _rec("s1", "X", nome_equip="52-06", descricao="52 06 SUPERVISAO CIRC FECHAMENTO"),
+        _rec("s2", "X", nome_equip="52-06", descricao="52 06 SUPERVISAO CIRC ABERTURA"),
+        _rec("s3", "X", nome_equip="52-06", descricao="52 06 SUPERVISAO CIRCUITO ABERTURA"),
+        _rec("m", "X", nome_equip="52-06", descricao="52 06 MOLA DESCARREGADA"),
+        _rec("c", "X", nome_equip="52-06", descricao="52 06 ABRIR FECHAR", direcao="Output"),
+    ]
+    by_id, rev = _parear(grupo)
+    assert by_id["a"].sigla_sinal == "DJF1" and by_id["a"].status == "decidido"
+    assert by_id["b"].sigla_sinal == "DJF1"
+    # comando toggle do mesmo equipamento converge junto (código existente)
+    assert by_id["c"].sigla_sinal == "DJF1" and by_id["c"].status == "decidido"
+    # ruído não é forçado
+    assert by_id["s1"].sigla_sinal is None
+    assert by_id["s2"].sigla_sinal is None
+    assert not rev
+
+
 def test_terceiro_sinal_sem_polaridade_passa_intacto():
     """Dois sinais pareiam; um terceiro sem polaridade segue para o scorer."""
     a = _rec("a", "FECHADO", descricao="DISJ 52-5 FECHADO")

@@ -51,6 +51,30 @@ def _eh_comando_toggle(tokens: list[str]) -> bool:
     return _tem_prefixo(tokens, _ABERTURA_PREFIXOS) and _tem_prefixo(tokens, _FECHAMENTO_PREFIXOS)
 
 
+# Seleção do PAR ligado/desligado por PALAVRA EXATA de particípio — não por
+# prefixo. 'ABERTURA' (Supervisão Circ Abertura) bate o prefixo ABERT mas não
+# é estado de posição; com prefixo, o grupo real infla `desligado` e o par
+# nunca é forçado (SP-CVA2 E1). Prefixos continuam em eh_texto_de_posicao
+# (gate de decisão — papel diferente).
+_PARTICIPIOS_LIGADO = frozenset({"LIGADO", "LIGADA", "FECHADO", "FECHADA"})
+_PARTICIPIOS_DESLIGADO = frozenset({"DESLIGADO", "DESLIGADA", "ABERTO", "ABERTA"})
+
+
+def _polaridade_pura(rec: SignalRecord) -> str | None:
+    """"ligado"/"desligado" quando o texto tem exatamente UMA polaridade em
+    palavra exata de particípio; None p/ comando (Output), toggle ou ruído."""
+    if rec.tipo_sinal.direcao == "Output":
+        return None
+    tokens = set(rec.descricoes.normalizada.upper().split())
+    lig = bool(tokens & _PARTICIPIOS_LIGADO)
+    des = bool(tokens & _PARTICIPIOS_DESLIGADO)
+    if lig and not des:
+        return "ligado"
+    if des and not lig:
+        return "desligado"
+    return None
+
+
 # Siglas que representam POSIÇÃO de equipamento (aberto/fechado, ligado/
 # desligado) — só podem decidir um sinal se o texto tiver evidência real de
 # posição (ver eh_texto_de_posicao). Task 6 / SP-G: gate contra decisão "por
@@ -128,8 +152,8 @@ def forcar_polaridade_equipamento(
 
     for chave, grupo in grupos.items():
         eq = chave[1]  # "Disjuntor" | "Seccionadora"
-        ligado = [r for r in grupo if _tem_prefixo(r.descricoes.normalizada.split(), _LIGADO_PREFIXOS)]
-        desligado = [r for r in grupo if _tem_prefixo(r.descricoes.normalizada.split(), _DESLIGADO_PREFIXOS)]
+        ligado = [r for r in grupo if _polaridade_pura(r) == "ligado"]
+        desligado = [r for r in grupo if _polaridade_pura(r) == "desligado"]
         if not (len(ligado) == 1 and len(desligado) == 1 and ligado[0] is not desligado[0]):
             continue  # par incompleto ou múltiplo — scorer decide
 
