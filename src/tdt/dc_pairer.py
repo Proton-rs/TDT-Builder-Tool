@@ -15,6 +15,7 @@ from dataclasses import replace
 from rapidfuzz import fuzz
 
 from tdt.contracts import ItemRevisao, SignalRecord
+from tdt.pareamento_polaridade import SIGLAS_POSICAO, eh_comando_toggle
 from tdt.semantica_estados import compatibilidade_texto
 
 
@@ -73,6 +74,64 @@ def separar(fundido: SignalRecord, novo_id_saida: str) -> tuple[SignalRecord, Si
     return status, comando
 
 
+def _reconciliar_posicao(
+    registros: list[SignalRecord],
+) -> tuple[list[SignalRecord], list[ItemRevisao]]:
+    """Comando toggle ('Abrir/Fechar') com sigla de POSIÇÃO divergente do
+    status de posição do MESMO (módulo, equipamento) re-chaveia pra sigla do
+    status — rede de segurança quando o scorer divergiu (SP-CVA2 E2). Só
+    quando o status é único e inequívoco; status ambíguo (2 siglas de posição
+    distintas) manda o comando pra revisão `posicao_divergente`. Determinístico,
+    restrito ao catálogo SIGLAS_POSICAO; nunca mexe em score."""
+    por_equip: dict[tuple, list[SignalRecord]] = defaultdict(list)
+    for r in registros:
+        if r.eletrico.nome_equipamento:
+            por_equip[(r.modulo.nome, r.eletrico.nome_equipamento)].append(r)
+
+    troca: dict[str, str] = {}
+    divergentes: set[str] = set()
+    for grupo in por_equip.values():
+        siglas_status = {
+            (r.sigla_sinal or "").upper()
+            for r in grupo
+            if r.tipo_sinal.direcao == "Input"
+            and (r.sigla_sinal or "").upper() in SIGLAS_POSICAO
+        }
+        cmds = [
+            r for r in grupo
+            if r.tipo_sinal.direcao == "Output"
+            and (r.sigla_sinal or "").upper() in SIGLAS_POSICAO
+            and (r.sigla_sinal or "").upper() not in siglas_status
+            and eh_comando_toggle(r.descricoes.normalizada.split())
+        ]
+        if not cmds or not siglas_status:
+            continue
+        if len(siglas_status) == 1:
+            (alvo,) = siglas_status
+            for c in cmds:
+                troca[c.id] = alvo
+        else:
+            divergentes.update(c.id for c in cmds)
+
+    revisao = [
+        ItemRevisao(r, motivo="posicao_divergente")
+        for r in registros
+        if r.id in divergentes
+    ]
+    novos = [
+        replace(
+            r,
+            sigla_sinal=troca[r.id],
+            justificativa="posicao reconciliada com status do equipamento",
+        )
+        if r.id in troca
+        else r
+        for r in registros
+        if r.id not in divergentes
+    ]
+    return novos, revisao
+
+
 def parear(
     registros: list[SignalRecord],
     config=None,
@@ -81,12 +140,13 @@ def parear(
     siglas_write = (
         config.siglas_write_legitimo if config is not None else frozenset({"CDC"})
     )
+    registros, revisao_reconc = _reconciliar_posicao(registros)
     grupos: dict[tuple, list[SignalRecord]] = defaultdict(list)
     for rec in registros:
         grupos[_chave(rec)].append(rec)
 
     saida: list[SignalRecord] = []
-    revisao: list[ItemRevisao] = []
+    revisao: list[ItemRevisao] = list(revisao_reconc)
 
     for grupo in grupos.values():
         inputs = [r for r in grupo if r.tipo_sinal.direcao == "Input"]

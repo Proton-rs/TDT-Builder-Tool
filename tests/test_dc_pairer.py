@@ -1,11 +1,13 @@
 from tdt.config import Config
 from tdt.contracts import (
     Descricoes,
+    Eletrico,
     Enderecamento,
     Modulo,
     SignalRecord,
     TipoSinal,
 )
+from tdt import dc_pairer
 from tdt.dc_pairer import fundir, parear, separar
 
 
@@ -255,3 +257,59 @@ def test_fundir_propaga_comando_duplo():
     fundido = fundir(status, comando)
     assert fundido.tipo_sinal.comando_duplo is False
     assert fundido.enderecamento.indices_saida == (1504,)
+
+
+def _rec_pos(rid, sigla, direcao, indices, desc, equip="52-06", modulo="BC1"):
+    return SignalRecord(
+        id=rid,
+        modulo=Modulo(modulo, "sheet_name"),
+        tipo_sinal=TipoSinal("Discrete", "SingleBit", direcao),
+        enderecamento=Enderecamento("DNP3", tuple(indices)),
+        descricoes=Descricoes(desc, desc),
+        eletrico=Eletrico(equipamento_alvo="Disjuntor", nome_equipamento=equip),
+        sigla_sinal=sigla,
+        status="decidido",
+    )
+
+
+def test_reconcilia_comando_toggle_com_sigla_do_status_de_posicao():
+    """SP-CVA2 E2: comando 'ABRIR FECHAR' decidido DJA1 pelo scorer, status do
+    mesmo equipamento decidido DJF1 -> re-chaveia o comando pra DJF1 (status
+    único e inequívoco)."""
+    status = _rec_pos("BC2:21", "DJF1", "Input", [320], "52 06 ABERTO")
+    comando = _rec_pos("BC2:14", "DJA1", "Output", [90], "52 06 ABRIR FECHAR")
+    novos, rev = dc_pairer._reconciliar_posicao([status, comando])
+    by_id = {r.id: r for r in novos}
+    assert by_id["BC2:14"].sigla_sinal == "DJF1"
+    assert not rev
+
+
+def test_posicao_divergente_vai_pra_revisao_quando_status_ambiguo():
+    """Dois status de posição com siglas DIFERENTES no mesmo equipamento:
+    não re-chaveia — revisão `posicao_divergente`."""
+    s1 = _rec_pos("X:1", "DJF1", "Input", [10], "52 06 ABERTO")
+    s2 = _rec_pos("X:2", "DJA1", "Input", [11], "52 06 FECHADO NA")
+    comando = _rec_pos("X:3", "SECC", "Output", [90], "52 06 ABRIR FECHAR")
+    novos, rev = dc_pairer._reconciliar_posicao([s1, s2, comando])
+    assert [it.motivo for it in rev] == ["posicao_divergente"]
+    assert all(r.id != "X:3" for r in novos)
+
+
+def test_reconciliacao_nao_toca_comando_nao_toggle_nem_sigla_fora_do_catalogo():
+    status = _rec_pos("Y:1", "DJF1", "Input", [10], "52 06 ABERTO")
+    cmd_nao_toggle = _rec_pos("Y:2", "CDC", "Output", [20], "COMANDO SUBIR DESCER")
+    novos, rev = dc_pairer._reconciliar_posicao([status, cmd_nao_toggle])
+    by_id = {r.id: r for r in novos}
+    assert by_id["Y:2"].sigla_sinal == "CDC"
+    assert not rev
+
+
+def test_parear_funde_apos_reconciliacao():
+    """Fim-a-fim no parear: comando DJA1 + status DJF1 do mesmo equipamento
+    fundem (antes: comando_sem_discreto)."""
+    status = _rec_pos("BC2:21", "DJF1", "Input", [320], "52 06 ABERTO")
+    comando = _rec_pos("BC2:14", "DJA1", "Output", [90], "52 06 ABRIR FECHAR")
+    pareados, rev = dc_pairer.parear([status, comando], Config())
+    assert not any(it.motivo == "comando_sem_discreto" for it in rev)
+    rw = [r for r in pareados if r.tipo_sinal.direcao == "InputOutput"]
+    assert len(rw) == 1 and rw[0].enderecamento.indices_saida == (90,)

@@ -199,3 +199,8 @@ def forcar_polaridade_equipamento(
         if rec.id not in ambiguos
     ]
     return saida, revisao
+
+
+# Consumidos por dc_pairer (SP-CVA2 E2) — aliases públicos, mesma referência.
+SIGLAS_POSICAO = _SIGLAS_POSICAO
+eh_comando_toggle = _eh_comando_toggle
