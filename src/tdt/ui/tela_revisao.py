@@ -302,20 +302,21 @@ class TelaRevisao(QWidget):
         atalho_busca = QShortcut(QKeySequence.Find, self)
         atalho_busca.activated.connect(self.busca.setFocus)
 
-    def _rotulo_aba(self, nome: str, pendentes: int) -> str:
-        return f"{nome} ✓" if pendentes == 0 else f"{nome} · {pendentes}"
+    def _rotulo_aba(self, nome: str, pendentes: int, total: int) -> str:
+        return f"{nome} ✓" if pendentes == 0 else f"{nome} ({pendentes}/{total})"
 
     def _atualizar_abas_sheet(self) -> None:
         if not hasattr(self, "_modelo"):
             return
-        contagem = self._modelo.pendentes_por_sheet()
-        total = sum(contagem.values())
-        self.abas_sheet.setTabText(0, self._rotulo_aba("Tudo", total))
+        contagem = self._modelo.contagem_por_sheet()
+        total_pendentes = sum(p for p, _t in contagem.values())
+        total_geral = sum(t for _p, t in contagem.values())
+        self.abas_sheet.setTabText(0, self._rotulo_aba("Tudo", total_pendentes, total_geral))
         for i in range(1, self.abas_sheet.count()):
             sheet = self.abas_sheet.tabData(i)
-            self.abas_sheet.setTabText(
-                i, self._rotulo_aba(sheet, contagem.get(sheet, 0)))
-        self.pendentes_mudaram.emit(total)
+            pendentes, total = contagem.get(sheet, (0, 0))
+            self.abas_sheet.setTabText(i, self._rotulo_aba(sheet, pendentes, total))
+        self.pendentes_mudaram.emit(total_pendentes)
 
     def carregar(self) -> None:
         self._modelo = ModeloSinais(self._estado)
