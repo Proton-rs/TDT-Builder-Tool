@@ -361,6 +361,43 @@ def particionar_custom_id_duplicado(
     return replace(lista, registros=restantes), revisao
 
 
+def particionar_endereco_duplicado(
+    lista: ListaHomogenea,
+) -> tuple[ListaHomogenea, tuple[ItemRevisao, ...]]:
+    """Gate por módulo (SP-CVA2 E6.2): dois pontos do MESMO módulo, no MESMO
+    espaço de endereçamento (categoria, in/out), com o mesmo índice, saem
+    TODOS da lista e vão pra revisão. Sintoma típico: direção errada na
+    origem (comando lido como Input colide com o Input real de mesmo índice
+    — hipótese CVA11). Módulo entra na chave: índice local reusado entre
+    módulos DISTINTOS (IEDs/linhas diferentes) é endereçamento normal, não
+    colisão (achado do decision gate original, ver nota no topo da task) —
+    mesmo racional de `_chave` em dc_pairer/normalizador_estrutural e do
+    Custom ID em `particionar_custom_id_duplicado` (`_remote_unit` é
+    constante por SUBESTAÇÃO, não desambigua módulo). MultiCoord/DoubleBit
+    contribuem cada índice individualmente."""
+    grupos: dict[tuple, dict[str, SignalRecord]] = defaultdict(dict)
+    for rec in lista.registros:
+        mod = rec.modulo.nome
+        cat = rec.tipo_sinal.categoria
+        espaco_in = "out" if rec.tipo_sinal.direcao == "Output" else "in"
+        for idx in rec.enderecamento.indices:
+            grupos[(mod, cat, espaco_in, idx)][rec.id] = rec
+        for idx in rec.enderecamento.indices_saida:
+            grupos[(mod, cat, "out", idx)][rec.id] = rec
+
+    colididos: dict[str, SignalRecord] = {}
+    for regs in grupos.values():
+        if len(regs) > 1:
+            colididos.update(regs)
+    if not colididos:
+        return lista, ()
+    restantes = tuple(r for r in lista.registros if r.id not in colididos)
+    revisao = tuple(
+        ItemRevisao(r, motivo="endereco_duplicado") for r in colididos.values()
+    )
+    return replace(lista, registros=restantes), revisao
+
+
 def gerar(
     lista: ListaHomogenea,
     template_path: str | Path,

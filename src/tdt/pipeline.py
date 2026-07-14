@@ -537,6 +537,10 @@ def gerar_tdt(registros, template_path, lp, subestacao=None, aliases=None, confi
         ids = tuple(it.registro.id for it in rev_dup)
         aud.evento("engine", f"{len(rev_dup)} registros com Custom ID duplicado -> revisão", "AVISO",
                    dados={"ids": ids})
+    lista, rev_end = engine_tdt.particionar_endereco_duplicado(lista)
+    if rev_end:
+        aud.evento("engine", f"{len(rev_end)} registros com endereço duplicado -> revisão", "AVISO",
+                   dados={"ids": tuple(it.registro.id for it in rev_end)})
     return engine_tdt.gerar(
         lista, template_path, lp, alias_v1=descricoes_por_sigla(DEFAULT_LISTA_ALIAS)
     )
@@ -734,6 +738,10 @@ def executar(
         if rev_dup:
             aud.evento("engine", f"{len(rev_dup)} registros com Custom ID duplicado -> revisão", "AVISO")
             revisao.extend(rev_dup)
+        lista, rev_end = engine_tdt.particionar_endereco_duplicado(lista)
+        if rev_end:
+            aud.evento("engine", f"{len(rev_end)} registros com endereço duplicado -> revisão", "AVISO")
+            revisao.extend(rev_end)
         alias_v1 = descricoes_por_sigla(DEFAULT_LISTA_ALIAS)
         if not alias_v1:
             aud.evento(

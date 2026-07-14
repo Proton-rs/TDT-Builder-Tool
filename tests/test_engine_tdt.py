@@ -1,8 +1,10 @@
 import re
+from dataclasses import replace
 from datetime import date
 
 import openpyxl
 
+from tdt import criador_lista_homogenea, engine_tdt
 from tdt.contracts import (
     Descricoes,
     Enderecamento,
@@ -656,3 +658,67 @@ def test_colisao_mesma_sheet_mantem_motivo_atual():
     ))
     lista_ok, rev = particionar_custom_id_duplicado(lista)
     assert {it.motivo for it in rev} == {"custom_id_duplicado"}
+
+
+# ── SP-CVA2 E6.2: gate de endereço duplicado por módulo ─────────────────────
+
+def _rec_end(rid, sigla, direcao, modulo, indices, desc):
+    return SignalRecord(
+        id=rid,
+        modulo=Modulo(modulo, "sheet_name"),
+        tipo_sinal=TipoSinal("Discrete", "SingleBit", direcao),
+        enderecamento=Enderecamento("DNP3", tuple(indices)),
+        descricoes=Descricoes(desc, desc),
+        sigla_sinal=sigla,
+        status="decidido",
+    )
+
+
+def test_particionar_endereco_duplicado_mesmo_modulo_colide():
+    """SP-CVA2 E6.2: dois Inputs Discrete do MESMO módulo com o mesmo índice
+    -> grupo inteiro pra revisão (sintoma de direção errada na origem)."""
+    a = _rec_end("S1:1", "27", "Input", "M1", [10], "PROT 27 ATUADO")
+    b = _rec_end("S1:2", "50BF", "Input", "M1", [10], "ATUADO 50 BF")
+    lista = criador_lista_homogenea.montar([a, b], subestacao="SE1")
+    lista2, rev = engine_tdt.particionar_endereco_duplicado(lista)
+    assert len(lista2.registros) == 0
+    assert sorted(it.registro.id for it in rev) == ["S1:1", "S1:2"]
+    assert {it.motivo for it in rev} == {"endereco_duplicado"}
+
+
+def test_particionar_endereco_duplicado_modulos_distintos_nao_colidem():
+    """Achado do decision gate (14jul): índice local reusado entre módulos
+    (IEDs/linhas) DISTINTOS é endereçamento normal, não colisão — mesmo
+    padrão de `_chave` em dc_pairer/normalizador_estrutural."""
+    a = _rec_end("S1:1", "FCOM", "Input", "M1", [10], "FALHA COMUNICACAO")
+    b = _rec_end("S2:1", "FCOM", "Input", "M2", [10], "FALHA COMUNICACAO")
+    lista = criador_lista_homogenea.montar([a, b], subestacao="SE1")
+    lista2, rev = engine_tdt.particionar_endereco_duplicado(lista)
+    assert not rev and len(lista2.registros) == 2
+
+
+def test_particionar_endereco_duplicado_espacos_distintos_nao_colidem():
+    """Analog@0 e Discrete@0 são espaços distintos; Input@5 e Output@5 idem
+    (mesmo módulo em todos os casos)."""
+    recs = [
+        _rec_end("S1:1", "VAB", "Input", "M1", [0], "TENSAO BARRA AB"),
+        _rec_end("S1:2", "27", "Input", "M1", [0], "PROT 27 ATUADO"),
+        _rec_end("S1:3", "DJF1", "Output", "M1", [5], "DISJ ABRIR FECHAR"),
+        _rec_end("S1:4", "MOLA", "Input", "M1", [5], "MOLA DESCARREGADA"),
+    ]
+    # VAB precisa ser Analog: ajustar helper/replace da categoria
+    recs[0] = replace(recs[0], tipo_sinal=replace(recs[0].tipo_sinal, categoria="Analog"))
+    lista = criador_lista_homogenea.montar(recs, subestacao="SE1")
+    lista2, rev = engine_tdt.particionar_endereco_duplicado(lista)
+    assert not rev and len(lista2.registros) == 4
+
+
+def test_particionar_endereco_duplicado_indices_saida_no_espaco_out():
+    fundido = _rec_end("S1:1", "DJF1", "InputOutput", "M1", [10], "DISJ ABERTO")
+    fundido = replace(
+        fundido, enderecamento=replace(fundido.enderecamento, indices_saida=(90,))
+    )
+    outro_cmd = _rec_end("S1:2", "SECC", "Output", "M1", [90], "SEC CARGA ABRIR FECHAR")
+    lista = criador_lista_homogenea.montar([fundido, outro_cmd], subestacao="SE1")
+    lista2, rev = engine_tdt.particionar_endereco_duplicado(lista)
+    assert sorted(it.registro.id for it in rev) == ["S1:1", "S1:2"]
