@@ -26,7 +26,7 @@ from dataclasses import replace
 
 from tdt.config import Config
 from tdt.contracts import SignalRecord
-from tdt.normalizacao.normalizador import _EQUIPAMENTO_PALAVRA
+from tdt.normalizacao.normalizador import _EQUIPAMENTO_PALAVRA, familia_do_id
 
 _TOKENS = re.compile(r"[A-Za-z]+")
 
@@ -231,3 +231,47 @@ def subdividir_transformador_at_bt(
             saida[i] = replace(rec, modulo=replace(rec.modulo, nome=f"{modulo_nome}{lado}"))
 
     return saida
+
+
+# --- registro de equipamentos por módulo (SP-DEVICE-MAPPING-RGE, task 3) ----
+
+
+def atribuir_id_por_registro(
+    registros: list[SignalRecord],
+) -> tuple[list[SignalRecord], list[str]]:
+    """Preenche ``eletrico.nome_equipamento`` a partir dos equipamentos REAIS
+    achados na sheet (spec 2026-07-15): por módulo, se existe exatamente 1
+    equipamento da família do sinal, atribui o ID. 2+ da mesma família ->
+    aviso (1 por módulo+família) e o ID fica vazio (o fallback do device
+    mapping em engine_tdt resolve). Nunca inventa ID — só reusa o que outra
+    linha do mesmo módulo declarou. Complementa ``inferir_equipamento`` (C2),
+    que preenche só a FAMÍLIA; roda depois dele no pipeline.
+    """
+    registro: dict[str | None, dict[str, set[str]]] = defaultdict(lambda: defaultdict(set))
+    for rec in registros:
+        ne = rec.eletrico.nome_equipamento
+        fam = familia_do_id(ne)
+        if ne and fam:
+            registro[rec.modulo.nome][fam].add(ne)
+
+    avisos: list[str] = []
+    avisados: set[tuple[str | None, str]] = set()
+    saida = list(registros)
+    for i, rec in enumerate(saida):
+        fam = rec.eletrico.equipamento_alvo
+        if fam is None or rec.eletrico.nome_equipamento is not None:
+            continue
+        ids = registro[rec.modulo.nome].get(fam, set())
+        if len(ids) == 1:
+            (unico,) = ids
+            saida[i] = replace(
+                rec, eletrico=replace(rec.eletrico, nome_equipamento=unico),
+            )
+        elif len(ids) > 1 and (rec.modulo.nome, fam) not in avisados:
+            avisados.add((rec.modulo.nome, fam))
+            avisos.append(
+                f"módulo {rec.modulo.nome}: {len(ids)} equipamentos da família "
+                f"{fam} na sheet ({', '.join(sorted(ids))}) — ID não atribuído "
+                f"aos sinais sem equipamento explícito"
+            )
+    return saida, avisos
