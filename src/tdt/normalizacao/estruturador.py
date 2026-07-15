@@ -22,7 +22,7 @@ from ..contracts import (
     SignalRecord,
     TipoSinal,
 )
-from .normalizador import canonizar, extrair_contexto_estrutural
+from .normalizador import canonizar, equipamentos_no_texto, extrair_contexto_estrutural
 from .parse_nome import (
     extrair_equipamento_do_nome,
     extrair_modulo_do_nome,
@@ -196,6 +196,34 @@ def estruturar(
                             eletrico = replace(eletrico, nome_equipamento=equip_extraido)
             # sv não-vazia mas fora da LP -> status fica "pendente": recai no scoring
         # -------------------------------------------------------------------
+
+        # --- varredura da linha inteira por ID de equipamento (spec 15/07):
+        # a descrição já foi parseada pelo N0; as demais células só
+        # contribuem identidade de equipamento. Módulo (c_modulo) fica de
+        # fora: é identidade de módulo, não de equipamento.
+        ids_linha: dict[str, str | None] = {}
+        if eletrico.nome_equipamento:
+            ids_linha[eletrico.nome_equipamento] = eletrico.equipamento_alvo
+        for c, cel in enumerate(row):
+            if c == c_desc or c == c_modulo or cel is None:
+                continue
+            for alvo, nome_eq in equipamentos_no_texto(str(cel)):
+                ids_linha.setdefault(nome_eq, alvo)
+        if len(ids_linha) > 1 and status != "revisao":
+            # 2 equipamentos distintos na mesma linha -> operador decide
+            status = "revisao"
+            motivo_revisao = "equipamento_conflitante"
+        elif len(ids_linha) == 1 and eletrico.nome_equipamento is None:
+            nome_eq, alvo = next(iter(ids_linha.items()))
+            eletrico = replace(
+                eletrico, nome_equipamento=nome_eq,
+                # ponytail: alvo do ID só preenche quando N0 não achou nada
+                # pela palavra; divergência palavra×ID não é colisão (spec
+                # define colisão = 2 IDs), o ID ganha o nome e o alvo textual
+                # fica. Upgrade: tratar divergência como conflito se aparecer
+                # em dado real.
+                equipamento_alvo=eletrico.equipamento_alvo or alvo,
+            )
 
         registros.append(
             SignalRecord(

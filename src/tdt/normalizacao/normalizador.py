@@ -82,6 +82,20 @@ def familia_do_id(nome: str | None) -> str | None:
     return _EQUIPAMENTO_ANSI.get(nome.split("-", 1)[0])
 
 
+def equipamentos_no_texto(texto: str) -> list[tuple[str | None, str]]:
+    """Todos os IDs de equipamento no texto: [(família, id), ...]. Usado pela
+    varredura de linha inteira do estruturador (spec 2026-07-15)."""
+    if not texto:
+        return []
+    base = _sem_acentos(str(texto)).upper()
+    achados = [
+        (_EQUIPAMENTO_ANSI.get(m.group(1)), f"{m.group(1)}-{m.group(2)}")
+        for m in _ID_EQUIPAMENTO.finditer(base)
+    ]
+    achados += [("Transformador", m.group(0)) for m in _ID_TRANSFORMADOR.finditer(base)]
+    return achados
+
+
 _BARRA: dict[str, str] = {"P": "Principal", "A": "Auxiliar"}
 _MARCADOR_BARRA = re.compile(r"\bBARRA\s+([A-Z])\b")
 FASES: tuple[str, ...] = ("ABC", "AB", "BC", "CA", "A", "B", "C", "N")
