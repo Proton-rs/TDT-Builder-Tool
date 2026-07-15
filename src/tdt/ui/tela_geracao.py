@@ -10,8 +10,8 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
-    QFileDialog, QGridLayout, QGroupBox, QHBoxLayout, QLabel, QMessageBox,
-    QPushButton, QVBoxLayout, QWidget,
+    QFileDialog, QGridLayout, QGroupBox, QHBoxLayout, QLabel, QListWidget,
+    QListWidgetItem, QMessageBox, QPushButton, QVBoxLayout, QWidget,
 )
 
 from tdt.auditoria import Auditoria
@@ -34,6 +34,13 @@ def enderecos_duplicados(registros) -> dict[tuple[str, int], list[str]]:
         for i in r.enderecamento.indices_saida:
             por_chave.setdefault(("out", i), []).append(r.id)
     return {k: v for k, v in por_chave.items() if len(v) > 1}
+
+
+def filtrar_por_modulos(registros, marcados: set) -> list:
+    """Subconjunto de registros cujos módulos estão marcados p/ geração
+    (spec 2026-07-15 §3). `None` no set = registros sem módulo."""
+    return [r for r in registros
+            if (r.modulo.nome if r.modulo else None) in marcados]
 
 
 class TelaGeracao(QWidget):
@@ -59,6 +66,13 @@ class TelaGeracao(QWidget):
             self._cards[chave] = lbl_val
         grupo_resumo = QGroupBox("Resumo")
         grupo_resumo.setLayout(grid)
+
+        self.lista_modulos = QListWidget()
+        self.lista_modulos.itemChanged.connect(self._modulos_alterados)
+        lay_modulos = QVBoxLayout()
+        lay_modulos.addWidget(self.lista_modulos)
+        grupo_modulos = QGroupBox("Módulos")
+        grupo_modulos.setLayout(lay_modulos)
 
         self._avisos_box = QVBoxLayout()
         grupo_avisos = QGroupBox("Avisos")
@@ -89,6 +103,7 @@ class TelaGeracao(QWidget):
         raiz = QVBoxLayout(self)
         raiz.addWidget(self.lbl_titulo)
         raiz.addWidget(grupo_resumo)
+        raiz.addWidget(grupo_modulos)
         raiz.addWidget(grupo_avisos)
         raiz.addWidget(grupo_saida)
         linha_gerar = QHBoxLayout()
@@ -101,11 +116,42 @@ class TelaGeracao(QWidget):
 
     def carregar(self) -> None:
         regs = self._estado.registros
+        self.lbl_titulo.setText(f"Geração — {self._estado.subestacao or '—'}")
+        self.lista_modulos.blockSignals(True)
+        self.lista_modulos.clear()
+        modulos = sorted(
+            {(r.modulo.nome if r.modulo else None) for r in regs},
+            key=lambda m: (m is None, m or ""))
+        for mod in modulos:
+            it = QListWidgetItem(mod if mod is not None else "(sem módulo)")
+            it.setData(Qt.UserRole, mod)
+            it.setFlags(it.flags() | Qt.ItemIsUserCheckable)
+            it.setCheckState(Qt.Checked)
+            self.lista_modulos.addItem(it)
+        self.lista_modulos.blockSignals(False)
+        out = self._estado.paths.get("output", "")
+        self.lbl_saida.setText(f"TDT + Auditoria → {out or '—'}")
+        self.lbl_resultado.setVisible(False)
+        self.btn_abrir_pasta.setVisible(False)
+        self._atualizar_contadores()
+
+    def _modulos_marcados(self) -> set:
+        return {
+            self.lista_modulos.item(i).data(Qt.UserRole)
+            for i in range(self.lista_modulos.count())
+            if self.lista_modulos.item(i).checkState() == Qt.Checked
+        }
+
+    def _modulos_alterados(self, _it) -> None:
+        self._atualizar_contadores()
+
+    def _atualizar_contadores(self) -> None:
+        regs = filtrar_por_modulos(
+            self._estado.registros, self._modulos_marcados())
         total = len(regs)
         pendentes = sum(1 for r in regs if r.status == "revisao")
         decididos = sum(1 for r in regs if r.status == "decidido")
         taxa = f"{decididos / total * 100:.0f}%" if total else "—"
-        self.lbl_titulo.setText(f"Geração — {self._estado.subestacao or '—'}")
         self._cards["total"].setText(str(total))
         self._cards["decididos"].setText(str(decididos))
         self._cards["pendentes"].setText(str(pendentes))
@@ -114,18 +160,15 @@ class TelaGeracao(QWidget):
         pend_lbl.setProperty("nivel", "aviso" if pendentes else "ok")
         pend_lbl.style().unpolish(pend_lbl)
         pend_lbl.style().polish(pend_lbl)
-        self._montar_avisos(pendentes)
-        out = self._estado.paths.get("output", "")
-        self.lbl_saida.setText(f"TDT + Auditoria → {out or '—'}")
-        self.lbl_resultado.setVisible(False)
-        self.btn_abrir_pasta.setVisible(False)
+        self._montar_avisos(pendentes, regs)
+        self.btn_gerar.setEnabled(bool(self._modulos_marcados()))
 
-    def _montar_avisos(self, pendentes: int) -> None:
+    def _montar_avisos(self, pendentes: int, regs) -> None:
         while self._avisos_box.count():
             w = self._avisos_box.takeAt(0).widget()
             if w is not None:
                 w.deleteLater()
-        dups = enderecos_duplicados(self._estado.registros)
+        dups = enderecos_duplicados(regs)
         if pendentes:
             self._avisos_box.addWidget(self._aviso(
                 "aviso",
@@ -172,6 +215,8 @@ class TelaGeracao(QWidget):
         return resp == QMessageBox.StandardButton.Yes
 
     def _gerar(self) -> None:
+        regs = filtrar_por_modulos(
+            self._estado.registros, self._modulos_marcados())
         lp = self._estado.lista_padrao
         template = self._estado.paths.get("template", "")
         output = self._estado.paths.get("output", "")
@@ -179,8 +224,7 @@ class TelaGeracao(QWidget):
             QMessageBox.warning(
                 self, "Erro", "Lista padrão, template e output são obrigatórios")
             return
-        pendentes = sum(
-            1 for r in self._estado.registros if r.status == "revisao")
+        pendentes = sum(1 for r in regs if r.status == "revisao")
         if pendentes and not self._confirmar(
                 "Pendências", f"Gerar com {pendentes} sinais ainda pendentes?"):
             return
@@ -192,7 +236,7 @@ class TelaGeracao(QWidget):
             from tdt import pipeline
             aud = Auditoria()
             wb = pipeline.gerar_tdt(
-                self._estado.registros, template, lp,
+                regs, template, lp,
                 subestacao=self._estado.subestacao,
                 aliases=self._estado.aliases,
                 auditoria=aud,
@@ -205,14 +249,14 @@ class TelaGeracao(QWidget):
             # ponytail: só gerar_tdt() emite AVISO com dados["ids"] hoje (gate de
             # Custom ID duplicado); se outro evento futuro reusar essa chave com
             # motivo diferente, isto precisa distinguir por `ev.modulo`/msg.
-            por_id = {r.id: r for r in self._estado.registros}
+            por_id = {r.id: r for r in regs}
             for ev in aud.eventos:
                 dup_ids = (ev.dados or {}).get("ids", ()) if ev.nivel == "AVISO" else ()
                 revisao.extend(
                     ItemRevisao(por_id[i], motivo="custom_id_duplicado")
                     for i in dup_ids if i in por_id)
             aud_path = gerar_relatorio_revisao(
-                self._estado.registros, revisao, output, diagnostico=diag,
+                regs, revisao, output, diagnostico=diag,
                 subestacao=self._estado.subestacao)
             self.lbl_resultado.setText(
                 f"TDT gerado:\n{out_path}\n{aud_path}")

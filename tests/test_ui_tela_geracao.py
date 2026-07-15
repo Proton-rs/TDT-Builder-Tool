@@ -2,7 +2,7 @@ import pytest
 
 from tdt.contracts import Descricoes, Enderecamento, Modulo, SignalRecord, TipoSinal
 from tdt.ui.estado import AppState
-from tdt.ui.tela_geracao import TelaGeracao, enderecos_duplicados
+from tdt.ui.tela_geracao import TelaGeracao, enderecos_duplicados, filtrar_por_modulos
 
 pytest.importorskip("PySide6")
 
@@ -28,6 +28,28 @@ def test_input_e_output_iguais_nao_e_duplicata():
 
 def test_sem_duplicatas_dict_vazio():
     assert enderecos_duplicados([_rec("a", indices=(1,))]) == {}
+
+
+def _rec_mod(rid, modulo):
+    return SignalRecord(
+        id=rid, modulo=Modulo(modulo, "sheet_name"),
+        tipo_sinal=TipoSinal("Discrete", "SingleBit", "Input"),
+        enderecamento=Enderecamento("DNP3", (1,)),
+        descricoes=Descricoes("X", "X"), status="decidido",
+    )
+
+
+def test_filtrar_por_modulos():
+    regs = [_rec_mod("a:1", "AL11"), _rec_mod("a:2", "AL12"), _rec_mod("a:3", None)]
+    assert [r.id for r in filtrar_por_modulos(regs, {"AL11"})] == ["a:1"]
+    assert [r.id for r in filtrar_por_modulos(regs, {"AL11", "AL12", None})] == [
+        "a:1", "a:2", "a:3"]
+    assert filtrar_por_modulos(regs, set()) == []
+
+
+def test_filtrar_por_modulos_none_e_o_sem_modulo():
+    regs = [_rec_mod("a:1", None)]
+    assert [r.id for r in filtrar_por_modulos(regs, {None})] == ["a:1"]
 
 
 def _tela(qtbot, registros):
