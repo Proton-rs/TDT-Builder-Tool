@@ -9,6 +9,7 @@ from tdt.contracts import (
 from tdt.dados.lista_padrao import ListaPadraoADMS, SinalPadrao
 from tdt.ui.estado import AppState
 from tdt.ui.modelo_tabela import ModeloSinais, _EDITAVEIS, _MOTIVO_LABEL
+from tdt.ui.modelo_tabela import _ranges_contiguos, LIMIAR_RESET_REMOCAO
 
 
 def _rec(status="decidido", sigla="DJF1", eletrico=None):
@@ -535,3 +536,51 @@ def test_motivo_posicao_divergente_tem_label_e_tooltip(qtbot):
     from tdt.ui.modelo_tabela import _MOTIVO_TOOLTIP
     assert _MOTIVO_LABEL["posicao_divergente"] == "Posição diverge do status"
     assert "status" in _MOTIVO_TOOLTIP["posicao_divergente"].lower()
+
+
+def _state_n(n):
+    st = AppState()
+    st.registros = [replace(_rec(), id=f"S:{i}") for i in range(n)]
+    return st
+
+
+def test_ranges_contiguos():
+    assert _ranges_contiguos([1, 2, 3, 7, 9, 10]) == [(1, 3), (7, 7), (9, 10)]
+    assert _ranges_contiguos([5]) == [(5, 5)]
+    assert _ranges_contiguos([3, 1, 2, 3]) == [(1, 3)]  # dedup + ordena
+    assert _ranges_contiguos([]) == []
+
+
+def test_remover_linhas_lote_pequeno(qtbot):
+    st = _state_n(10)
+    m = ModeloSinais(st)
+    m.remover_linhas([1, 2, 5, 9])
+    assert [r.id for r in st.registros] == [
+        "S:0", "S:3", "S:4", "S:6", "S:7", "S:8"]
+
+
+def test_remover_linhas_lote_grande_via_reset(qtbot):
+    n = LIMIAR_RESET_REMOCAO + 50
+    st = _state_n(n + 10)
+    m = ModeloSinais(st)
+    m.remover_linhas(list(range(n)))  # > limiar -> caminho de reset
+    assert [r.id for r in st.registros] == [f"S:{i}" for i in range(n, n + 10)]
+
+
+def test_remover_linhas_ignora_indices_invalidos(qtbot):
+    st = _state_n(3)
+    m = ModeloSinais(st)
+    m.remover_linhas([-1, 1, 99])
+    assert [r.id for r in st.registros] == ["S:0", "S:2"]
+
+
+def test_lote_emite_um_datachanged_agregado(qtbot):
+    st = _state_n(5)
+    st.lista_padrao = None
+    m = ModeloSinais(st)
+    emitidos = []
+    m.dataChanged.connect(lambda *a: emitidos.append(a))
+    ids = [r.id for r in st.registros]
+    m.aplicar_valor_em_lote(ids, "Fase", "A")
+    assert all(r.eletrico.fase == "A" for r in st.registros)
+    assert len(emitidos) == 1  # agregado, não 1 por linha

@@ -95,6 +95,20 @@ _COLUNAS_MONO = frozenset({
 })
 
 
+LIMIAR_RESET_REMOCAO = 100  # acima disso, reset único em vez de removeRows
+
+
+def _ranges_contiguos(indices: list[int]) -> list[tuple[int, int]]:
+    """[1,2,3,7,9,10] -> [(1,3),(7,7),(9,10)]. Dedupa e ordena a entrada."""
+    ranges: list[tuple[int, int]] = []
+    for i in sorted(set(indices)):
+        if ranges and i == ranges[-1][1] + 1:
+            ranges[-1] = (ranges[-1][0], i)
+        else:
+            ranges.append((i, i))
+    return ranges
+
+
 def sheet_origem(rec: SignalRecord) -> str:
     """Sheet de origem, extraída do ``id`` estável (``f"{sheet}:{linha}"``).
 
@@ -139,6 +153,7 @@ class ModeloSinais(QAbstractTableModel):
         super().__init__()
         self._estado = estado
         self.ultima_edicao: tuple[str, object] | None = None
+        self._suprimir_datachanged = False
 
     def rowCount(self, parent=QModelIndex()):
         return 0 if parent.isValid() else len(self._estado.registros)
@@ -340,9 +355,10 @@ class ModeloSinais(QAbstractTableModel):
         else:
             return False
         self.ultima_edicao = (nome, value)
-        topo = self.index(linha, 0)
-        fim = self.index(linha, len(COLUNAS) - 1)
-        self.dataChanged.emit(topo, fim)
+        if not self._suprimir_datachanged:
+            topo = self.index(linha, 0)
+            fim = self.index(linha, len(COLUNAS) - 1)
+            self.dataChanged.emit(topo, fim)
         return True
 
     def aplicar_valor_em_lote(self, ids: list[str], coluna: str, valor) -> int:
@@ -351,7 +367,9 @@ class ModeloSinais(QAbstractTableModel):
         Reusa `setData` (mesma validação/transição da edição individual). Um
         único snapshot para o lote inteiro (padrão de `AppState.aprovar_ids`):
         suprime os snapshots internos de cada `setData` e faz só um antes do
-        loop, para que 1 `desfazer()` reverta o lote inteiro.
+        loop, para que 1 `desfazer()` reverta o lote inteiro. Mesma ideia pro
+        `dataChanged`: suprime a emissão por linha e emite um único sinal
+        agregado no fim (evita N repaints da view -- spec 2026-07-15 §5).
         """
         if coluna not in _EDITAVEIS:
             return 0
@@ -363,13 +381,19 @@ class ModeloSinais(QAbstractTableModel):
         self._estado._snapshot()
         snapshot_original = self._estado._snapshot
         self._estado._snapshot = lambda: None
+        self._suprimir_datachanged = True
         aplicados = 0
         try:
             for linha in linhas:
                 if self.setData(self.index(linha, col), valor, Qt.EditRole):
                     aplicados += 1
         finally:
+            self._suprimir_datachanged = False
             self._estado._snapshot = snapshot_original
+        if aplicados:
+            self.dataChanged.emit(
+                self.index(min(linhas), 0),
+                self.index(max(linhas), len(COLUNAS) - 1))
         return aplicados
 
     def definir_sigla(self, linha: int, sigla: str) -> None:
@@ -419,12 +443,26 @@ class ModeloSinais(QAbstractTableModel):
     def remover_linhas(self, indices: list[int]) -> None:
         """Remove as linhas (índices da fonte, 0-based) da lista subjacente.
 
-        Notifica a view linha a linha via begin/endRemoveRows -- exigido pelo
-        Qt antes/depois da mutação real, para não desincronizar view/modelo.
+        Lote grande (> LIMIAR_RESET_REMOCAO): um reset único — O(n) — em vez
+        de N cascatas begin/endRemoveRows (o gargalo do "remover 500 trava",
+        spec 2026-07-15 §5). Lote pequeno: begin/endRemoveRows por RANGE
+        contíguo, preservando seleção/scroll da view.
         """
-        for linha in sorted(set(indices), reverse=True):
-            if not (0 <= linha < len(self._estado.registros)):
-                continue
-            self.beginRemoveRows(QModelIndex(), linha, linha)
-            self._estado.registros.pop(linha)
+        validos = [
+            i for i in sorted(set(indices))
+            if 0 <= i < len(self._estado.registros)
+        ]
+        if not validos:
+            return
+        if len(validos) > LIMIAR_RESET_REMOCAO:
+            alvo = set(validos)
+            self.beginResetModel()
+            self._estado.registros = [
+                r for i, r in enumerate(self._estado.registros) if i not in alvo
+            ]
+            self.endResetModel()
+            return
+        for inicio, fim in reversed(_ranges_contiguos(validos)):
+            self.beginRemoveRows(QModelIndex(), inicio, fim)
+            del self._estado.registros[inicio:fim + 1]
             self.endRemoveRows()

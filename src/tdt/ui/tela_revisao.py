@@ -617,7 +617,11 @@ class TelaRevisao(QWidget):
 
     def _aplicar_em_lote(self, coluna: str, valor, linhas: list[int]) -> None:
         ids = [self._estado.registros[i].id for i in linhas]
-        self._modelo.aplicar_valor_em_lote(ids, coluna, valor)
+        self.tabela.setUpdatesEnabled(False)
+        try:
+            self._modelo.aplicar_valor_em_lote(ids, coluna, valor)
+        finally:
+            self.tabela.setUpdatesEnabled(True)
         self.refresh()
 
     def _parear_sinais(self):
