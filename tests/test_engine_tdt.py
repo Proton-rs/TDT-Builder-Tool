@@ -404,8 +404,31 @@ def test_remote_unit():
 
 def test_device_mapping():
     assert _device_mapping("IMA_3_20T", "20T", True) == "IMA_3_PROT_20T"
-    assert _device_mapping("IMA_3_DJ", "DJ", False) == "IMA_3_DJ"
+    # spec 2026-07-15: non-protection signals fall directly to equipment, sans sigla
+    assert _device_mapping("IMA_3_DJ", "DJ", False) == "IMA_3"
     assert _device_mapping("BATA", "BATA", True) == "PROT_BATA"
+
+
+def test_device_mapping_protecao_mantem_prot():
+    assert _device_mapping("LVA_AL11_52-11_CAFL", "CAFL", True) == "LVA_AL11_52-11_PROT_CAFL"
+
+
+def test_device_mapping_nao_protecao_cai_no_equipamento():
+    # spec 2026-07-15: não-proteção cai direto no equipamento, sem sigla.
+    assert _device_mapping("LVA_AL11_52-11_CAFL", "CAFL", False) == "LVA_AL11_52-11"
+
+
+def test_device_mapping_nao_protecao_seccionadora():
+    assert _device_mapping("LVA_AL11_89-1_SECC", "SECC", False) == "LVA_AL11_89-1"
+
+
+def test_device_mapping_nao_protecao_sem_equipamento_cai_no_modulo():
+    # nome_hierarquico repete o módulo quando não há equipamento
+    assert _device_mapping("LVA_AL11_AL11_MOLA", "MOLA", False) == "LVA_AL11_AL11"
+
+
+def test_device_mapping_nome_igual_sigla_nao_quebra():
+    assert _device_mapping("CAFL", "CAFL", False) == "CAFL"
 
 
 def test_normal_value():
@@ -550,7 +573,8 @@ def test_campos_novos_no_output(template_dnp3_path, lista_padrao_path, tmp_path)
     assert ws.cell(5, col["Remote Point Type"]).value == "Status"
     assert ws.cell(5, col["Remote Point Name"]).value == "IMA_3_3_DJ"
     assert ws.cell(5, col["Signal AOR Group"]).value == "IMA Trans"
-    assert ws.cell(5, col["Device Mapping"]).value == "IMA_3_3_DJ"
+    # spec 2026-07-15: non-protection signals (DJ is not RelayTrip) fall directly to equipment
+    assert ws.cell(5, col["Device Mapping"]).value == "IMA_3_3"
     assert ws.cell(5, col["Remote Unit"]).value == "UTR_IMA_1"
     assert ws.cell(5, col["Remote Point Custom ID"]).value == "IMA_3_3_DJ_UTR_IMA_1"
     import re as _re

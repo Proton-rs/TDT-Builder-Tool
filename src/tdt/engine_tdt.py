@@ -94,11 +94,17 @@ def _remote_unit(subestacao: str | None) -> str | None:
 
 
 def _device_mapping(nome: str, sigla: str, eh_protecao: bool) -> str:
-    if not eh_protecao:
+    """Padrão RGE (spec 2026-07-15): proteção mantém o sufixo PROT_<SIGLA>;
+    não-proteção cai direto no equipamento — o nome hierárquico SEM a sigla
+    final (sem equipamento o nome já repete o módulo, então o fallback
+    módulo-duplicado emerge sozinho)."""
+    if eh_protecao:
+        # insere PROT_ antes da sigla final (nome termina em "..._{sigla}" ou == sigla)
+        if nome.endswith(sigla):
+            return nome[: len(nome) - len(sigla)] + f"PROT_{sigla}"
         return nome
-    # insere PROT_ antes da sigla final (nome termina em "..._{sigla}" ou == sigla)
-    if nome.endswith(sigla):
-        return nome[: len(nome) - len(sigla)] + f"PROT_{sigla}"
+    if nome.endswith(f"_{sigla}"):
+        return nome[: len(nome) - len(sigla) - 1]
     return nome
 
 
