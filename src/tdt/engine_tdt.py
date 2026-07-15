@@ -24,6 +24,7 @@ from openpyxl.utils import get_column_letter
 
 from tdt.contracts import ItemRevisao, ListaHomogenea, SignalRecord
 from tdt.dados.lista_padrao import ListaPadraoADMS
+from tdt.normalizacao.normalizador import familia_do_id
 
 SHEET_DISCRETOS = "DNP3_DiscreteSignals"
 COLUNAS_ESPERADAS = 43
@@ -255,8 +256,50 @@ def _signal_type_analog(sp) -> str:
 # ponytail: cobre os 4 valores da lista padrão v2; valor novo passa reto (teste de domínio pega).
 
 
+# Grandeza (Measurement Type PT da lista padrão) -> entidade do device
+# mapping analógico, padrão RGE (spec 2026-07-15).
+_MEDIDAS_TC = frozenset({"CORRENTE", "POTÊNCIA ATIVA", "POTÊNCIA REATIVA", "POTÊNCIA APARENTE"})
+_MEDIDAS_TP = frozenset({"TENSÃO"})
+
+
+def _disjuntor_por_modulo(registros) -> "dict[str | None, str | None]":
+    """Disjuntor único de cada módulo, p/ o DM analógico. 0 ou 2+ disjuntores
+    -> None (fallback módulo-duplicado; o aviso de ambiguidade já foi emitido
+    por atribuir_id_por_registro no pipeline)."""
+    por_mod: dict[str | None, set[str]] = defaultdict(set)
+    for rec in registros:
+        ne = rec.eletrico.nome_equipamento
+        if ne and familia_do_id(ne) == "Disjuntor":
+            por_mod[rec.modulo.nome].add(ne)
+    return {m: next(iter(ids)) if len(ids) == 1 else None for m, ids in por_mod.items()}
+
+
+def _device_mapping_analog(
+    subestacao: str | None,
+    modulo_nome: str | None,
+    tipo_medicao_pt: str | None,
+    disjuntor: str | None,
+) -> str:
+    """Padrão RGE: corrente/potências -> <MOD>_TC; tensão -> <MOD>_TP;
+    demais grandezas (KMDF, frequência, FP, temperatura...) -> disjuntor do
+    módulo; sem disjuntor único -> módulo duplicado (<SUB>_<MOD>_<MOD>)."""
+    modulo_fmt = modulo_nome.replace(" ", "") if modulo_nome else None
+    partes = [p for p in (subestacao, modulo_fmt) if p]
+    t = (tipo_medicao_pt or "").strip().upper()
+    if t in _MEDIDAS_TC:
+        alvo = f"{modulo_fmt}_TC" if modulo_fmt else "TC"
+    elif t in _MEDIDAS_TP:
+        alvo = f"{modulo_fmt}_TP" if modulo_fmt else "TP"
+    else:
+        alvo = disjuntor or modulo_fmt
+    if alvo:
+        partes.append(alvo)
+    return "_".join(partes)
+
+
 def _valores_analog(rec: SignalRecord, subestacao: str | None, padrao: ListaPadraoADMS,
-                     alias_v1: "dict[str, str] | None" = None) -> dict:
+                     alias_v1: "dict[str, str] | None" = None,
+                     disjuntor: "str | None" = None) -> dict:
     sp = padrao.por_sigla(rec.sigla_sinal) if rec.sigla_sinal else None
     nome = nome_hierarquico(
         subestacao, rec.modulo.nome, rec.eletrico.nome_equipamento,
@@ -265,7 +308,6 @@ def _valores_analog(rec: SignalRecord, subestacao: str | None, padrao: ListaPadr
     indices = rec.enderecamento.indices
     coords = indices[0] if len(indices) == 1 else ";".join(str(i) for i in indices)
     alimentador = _eh_alimentador(rec.modulo.nome)
-    eh_prot = bool(sp and sp.signal_type == "RelayTrip")
     remote_unit = _remote_unit(subestacao)
     rp_custom = f"{nome}_{remote_unit}" if remote_unit else None
     return {
@@ -280,7 +322,8 @@ def _valores_analog(rec: SignalRecord, subestacao: str | None, padrao: ListaPadr
         "Remote Point Type": "Analog",
         "Remote Point Name": nome,
         "Signal AOR Group": _aor_group(subestacao, alimentador),
-        "Device Mapping": _device_mapping(nome, rec.sigla_sinal or "?", eh_prot),
+        "Device Mapping": _device_mapping_analog(
+            subestacao, rec.modulo.nome, sp.tipo_medicao if sp else None, disjuntor),
         "Remote Unit": remote_unit,
         "Remote Point Custom ID": rp_custom,
         "Remote Point Alias": _alias_hoje(),
@@ -417,6 +460,7 @@ def gerar(
                  if r.tipo_sinal.categoria == "Discrete" and id(r) not in ids_da]
     regs_ana = [r for r in lista.registros
                 if r.tipo_sinal.categoria == "Analog" and id(r) not in ids_da]
+    disj = _disjuntor_por_modulo(lista.registros)
     _escrever_sheet(
         wb[SHEET_DISCRETOS], SHEET_DISCRETOS, COLUNAS_ESPERADAS,
         regs_disc,
@@ -426,7 +470,8 @@ def gerar(
     _escrever_sheet(
         wb[SHEET_ANALOGICOS], SHEET_ANALOGICOS, COLUNAS_ESPERADAS_ANALOG,
         regs_ana,
-        lambda rec, sub, padrao: _valores_analog(rec, sub, padrao, alias_v1),
+        lambda rec, sub, padrao: _valores_analog(
+            rec, sub, padrao, alias_v1, disj.get(rec.modulo.nome)),
         lista.subestacao, lista_padrao,
     )
     if regs_da:

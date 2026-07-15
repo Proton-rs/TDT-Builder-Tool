@@ -7,6 +7,7 @@ import openpyxl
 from tdt import criador_lista_homogenea, engine_tdt
 from tdt.contracts import (
     Descricoes,
+    Eletrico,
     Enderecamento,
     ListaHomogenea,
     Modulo,
@@ -23,6 +24,8 @@ from tdt.engine_tdt import (
     _aor_group,
     _remote_unit,
     _device_mapping,
+    _device_mapping_analog,
+    _disjuntor_por_modulo,
     _normal_value,
     _alias_hoje,
     _coords_comando,
@@ -746,3 +749,47 @@ def test_particionar_endereco_duplicado_indices_saida_no_espaco_out():
     lista = criador_lista_homogenea.montar([fundido, outro_cmd], subestacao="SE1")
     lista2, rev = engine_tdt.particionar_endereco_duplicado(lista)
     assert sorted(it.registro.id for it in rev) == ["S1:1", "S1:2"]
+
+
+def test_dm_analog_corrente_e_potencias_caem_no_tc():
+    assert _device_mapping_analog("LVA", "AL 11", "Corrente", "52-11") == "LVA_AL11_AL11_TC"
+    assert _device_mapping_analog("LVA", "AL11", "Potência Ativa", None) == "LVA_AL11_AL11_TC"
+    assert _device_mapping_analog("LVA", "AL11", "POTÊNCIA REATIVA", None) == "LVA_AL11_AL11_TC"
+    assert _device_mapping_analog("LVA", "AL11", "Potência Aparente", None) == "LVA_AL11_AL11_TC"
+
+
+def test_dm_analog_tensao_cai_no_tp():
+    assert _device_mapping_analog("LVA", "AL11", "Tensão", "52-11") == "LVA_AL11_AL11_TP"
+
+
+def test_dm_analog_resto_cai_no_disjuntor():
+    # KMDF (Comprimento), frequência, FP, temperatura... -> disjuntor do módulo
+    assert _device_mapping_analog("LVA", "AL11", "Comprimento", "52-11") == "LVA_AL11_52-11"
+    assert _device_mapping_analog("LVA", "AL11", "Frequência", "52-11") == "LVA_AL11_52-11"
+    assert _device_mapping_analog("LVA", "AL11", None, "52-11") == "LVA_AL11_52-11"
+
+
+def test_dm_analog_sem_disjuntor_cai_no_modulo_duplicado():
+    assert _device_mapping_analog("LVA", "AL11", "Comprimento", None) == "LVA_AL11_AL11"
+
+
+def _rec_eq(rid, modulo, nome_eq):
+    return replace(
+        _rec(rid, "DJ", [1]),
+        modulo=Modulo(modulo, "sheet_name"),
+        eletrico=Eletrico(nome_equipamento=nome_eq),
+    )
+
+
+def test_disjuntor_por_modulo():
+    regs = [
+        _rec_eq("a:1", "AL11", "52-11"),
+        _rec_eq("a:2", "AL11", "89-1"),   # seccionadora não conta
+        _rec_eq("a:3", "AL12", "52-12"),
+        _rec_eq("a:4", "AL12", "24-1"),   # 2 disjuntores -> ambíguo
+        _rec_eq("a:5", "AL13", None),
+    ]
+    disj = _disjuntor_por_modulo(regs)
+    assert disj["AL11"] == "52-11"
+    assert disj["AL12"] is None
+    assert disj.get("AL13") is None
