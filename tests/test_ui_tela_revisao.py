@@ -306,6 +306,10 @@ def test_duplo_clique_no_header_abre_popup_excel(qtbot, monkeypatch):
         tela.tabela.horizontalHeader(), "logicalIndexAt", lambda pos: col_desc)
     tela._filtrar_coluna(QPoint(0, 0))
     assert chamado.get("criado") is True
+    # qtbot.wait(0) e' no-op no pytest-qt (MultiSignalBlocker pula o loop
+    # quando timeout == 0) -- precisa de um valor > 0 pra bombear o event
+    # loop e deixar o QTimer.singleShot(0, ...) disparar.
+    qtbot.wait(10)
     assert tela._proxy.colunas_filtradas() == {col_desc}
     assert tela._proxy.rowCount() == 1
 
@@ -358,6 +362,10 @@ def test_popup_excel_limpar_remove_filtro_da_coluna(qtbot, monkeypatch):
     monkeypatch.setattr(
         tela.tabela.horizontalHeader(), "logicalIndexAt", lambda pos: col_desc)
     tela._filtrar_coluna(QPoint(0, 0))
+    # qtbot.wait(0) e' no-op no pytest-qt (MultiSignalBlocker pula o loop
+    # quando timeout == 0) -- precisa de um valor > 0 pra bombear o event
+    # loop e deixar o QTimer.singleShot(0, ...) disparar.
+    qtbot.wait(10)
     assert tela._proxy.colunas_filtradas() == set()
     assert tela._proxy.rowCount() == 2
 
@@ -399,6 +407,10 @@ def test_popup_unificado_aplica_contem_e_valores(qtbot, monkeypatch):
     monkeypatch.setattr(
         tela.tabela.horizontalHeader(), "logicalIndexAt", lambda pos: col)
     tela._filtrar_coluna(QPoint(0, 0))
+    # qtbot.wait(0) e' no-op no pytest-qt (MultiSignalBlocker pula o loop
+    # quando timeout == 0) -- precisa de um valor > 0 pra bombear o event
+    # loop e deixar o QTimer.singleShot(0, ...) disparar.
+    qtbot.wait(10)
     assert tela._proxy.filtroColuna(col) == "DISJ"
     assert tela._proxy.rowCount() == 1
     assert tela.btn_limpar_filtros.isVisibleTo(tela)

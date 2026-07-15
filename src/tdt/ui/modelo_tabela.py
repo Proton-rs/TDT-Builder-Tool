@@ -257,6 +257,14 @@ class ModeloSinais(QAbstractTableModel):
             return rec.sigla_sinal or ""
         return self._texto(rec, col)
 
+    def valor_texto(self, row: int, col: int) -> str:
+        """Valor de exibição da célula sem construir QModelIndex — caminho
+        quente do filtro por coluna (spec 2026-07-15 §2). Deve espelhar o
+        branch DisplayRole de data()."""
+        rec = self._estado.registros[row]
+        v = self._texto(rec, col)
+        return "" if v is None else str(v)
+
     def data(self, index, role=Qt.DisplayRole):
         if not index.isValid():
             return None

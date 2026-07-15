@@ -238,3 +238,36 @@ def test_marcador_header_para_filtro_texto(qtbot):
     proxy = _proxy_com([_rec("a:1", "DJF1", "decidido")])
     proxy.setFiltroColuna(0, "DJ")
     assert "▼" in proxy.headerData(0, Qt.Horizontal, Qt.DisplayRole)
+
+
+# --- caminho quente do filtro por coluna sem QModelIndex (SP-UX-PERF Task 2) ---
+
+def _rec_filtro(rid, modulo):
+    return SignalRecord(
+        id=rid, modulo=Modulo(modulo, "sheet_name"),
+        tipo_sinal=TipoSinal("Discrete", "SingleBit", "Input"),
+        enderecamento=Enderecamento("DNP3", (1,)),
+        descricoes=Descricoes("X", "X"), status="decidido",
+    )
+
+
+def test_valor_texto_espelha_display(qtbot):
+    st = AppState()
+    st.registros = [_rec_filtro("S:1", "AL11"), _rec_filtro("S:2", "AL12")]
+    m = ModeloSinais(st)
+    col = ModeloSinais.COLUNAS.index("Módulo")
+    for row in range(2):
+        assert m.valor_texto(row, col) == str(m.data(m.index(row, col)) or "")
+
+
+def test_filtro_valores_continua_funcionando(qtbot):
+    st = AppState()
+    st.registros = [_rec_filtro("S:1", "AL11"), _rec_filtro("S:2", "AL12")]
+    m = ModeloSinais(st)
+    proxy = ProxyRevisao()
+    proxy.setSourceModel(m)
+    col = ModeloSinais.COLUNAS.index("Módulo")
+    proxy.set_filtro_coluna(col, {"AL11"})
+    assert proxy.rowCount() == 1
+    proxy.set_filtro_coluna(col, None)
+    assert proxy.rowCount() == 2

@@ -104,31 +104,25 @@ class ProxyRevisao(QSortFilterProxyModel):
         modelo = self.sourceModel()
         if modelo is None:
             return []
-        vistos = set()
-        for row in range(modelo.rowCount()):
-            idx = modelo.index(row, col)
-            vistos.add(str(modelo.data(idx) or ""))
-        return sorted(vistos)
+        return sorted({
+            modelo.valor_texto(row, col) for row in range(modelo.rowCount())
+        })
 
     def filterAcceptsRow(self, source_row, source_parent) -> bool:
-        if not super().filterAcceptsRow(source_row, source_parent):
-            return False
+        modelo = self.sourceModel()
         if self._sheet is not None:
-            rec = self.sourceModel()._estado.registros[source_row]
+            rec = modelo._estado.registros[source_row]
             if sheet_origem(rec) != self._sheet:
                 return False
         if self._status_visivel is not None:
-            idx = self.sourceModel().index(source_row, _COL_STATUS, source_parent)
-            if self.sourceModel().data(idx) != self._status_visivel:
-                return False
-        for col, termo in self._filtros_coluna.items():
-            idx = self.sourceModel().index(source_row, col, source_parent)
-            valor = str(self.sourceModel().data(idx) or "").upper()
-            if termo not in valor:
+            if modelo.valor_texto(source_row, _COL_STATUS) != self._status_visivel:
                 return False
         for col, valores in self._filtros_coluna_valores.items():
-            idx = self.sourceModel().index(source_row, col, source_parent)
-            valor = str(self.sourceModel().data(idx) or "")
-            if valor not in valores:
+            if modelo.valor_texto(source_row, col) not in valores:
                 return False
-        return True
+        for col, termo in self._filtros_coluna.items():
+            if termo not in modelo.valor_texto(source_row, col).upper():
+                return False
+        # busca global de texto (setFilterKeyColumn(-1), varre todas as
+        # colunas) por último -- é o passo mais caro
+        return super().filterAcceptsRow(source_row, source_parent)

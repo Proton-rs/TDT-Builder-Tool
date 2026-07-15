@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import uuid
 
-from PySide6.QtCore import Qt, QSettings, Signal
+from PySide6.QtCore import Qt, QSettings, QTimer, Signal
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication, QButtonGroup, QCheckBox, QDialog, QDialogButtonBox, QHBoxLayout,
@@ -444,13 +444,24 @@ class TelaRevisao(QWidget):
         if dialog.exec() != QDialog.Accepted:
             return
         novos = dialog.valores_selecionados()
-        self._proxy.set_filtro_coluna(col, novos)
-        self._proxy.setFiltroColuna(col, dialog.texto_contem())
+        texto_contem = dialog.texto_contem()
         if novos is None:
             self._selecao_filtro_coluna.pop(col, None)
         else:
             self._selecao_filtro_coluna[col] = novos
-        self._atualizar_chip_filtros()
+
+        def aplicar() -> None:
+            # roda no tick seguinte: o dialog já sumiu da tela antes do
+            # invalidateFilter pesado (spec 2026-07-15 §2)
+            QApplication.setOverrideCursor(Qt.WaitCursor)
+            try:
+                self._proxy.set_filtro_coluna(col, novos)
+                self._proxy.setFiltroColuna(col, texto_contem)
+                self._atualizar_chip_filtros()
+            finally:
+                QApplication.restoreOverrideCursor()
+
+        QTimer.singleShot(0, aplicar)
 
     def _atualizar_chip_filtros(self) -> None:
         n = self._proxy.filtros_ativos()
