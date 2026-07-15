@@ -11,11 +11,18 @@ from pathlib import Path
 
 import openpyxl
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
-    QButtonGroup, QCheckBox, QComboBox, QFileDialog, QFrame, QGroupBox,
-    QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMessageBox,
-    QProgressBar, QPushButton, QRadioButton, QTextEdit, QVBoxLayout, QWidget,
+    QAbstractItemView, QButtonGroup, QCheckBox, QComboBox, QFileDialog, QFrame,
+    QGroupBox, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMenu,
+    QMessageBox, QProgressBar, QPushButton, QRadioButton, QTextEdit, QVBoxLayout,
+    QWidget,
 )
+
+try:
+    from PySide6.QtWidgets import QApplication
+except ImportError:
+    from PySide6.QtGui import QApplication
 
 from tdt.dados.lista_padrao import ListaPadraoADMS
 from tdt.defaults import DEFAULT_LISTA, DEFAULT_OUTPUT, DEFAULT_TEMPLATE
@@ -61,6 +68,27 @@ def linha_log_html(texto: str) -> str:
             cor = c
             break
     return f'<span style="color:{cor}">{escape(texto)}</span>'
+
+
+# --- marcação em grupo (spec 2026-07-15 §1) ---
+def _itens_alvo(lista: QListWidget) -> list[QListWidgetItem]:
+    """Linhas selecionadas; sem seleção, todas (spec 2026-07-15 §1)."""
+    sel = lista.selectedItems()
+    if sel:
+        return sel
+    return [lista.item(i) for i in range(lista.count())]
+
+
+def definir_marcacao(lista: QListWidget, marcado: bool) -> None:
+    estado = Qt.Checked if marcado else Qt.Unchecked
+    for it in _itens_alvo(lista):
+        it.setCheckState(estado)
+
+
+def inverter_marcacao(lista: QListWidget) -> None:
+    for it in _itens_alvo(lista):
+        it.setCheckState(
+            Qt.Unchecked if it.checkState() == Qt.Checked else Qt.Checked)
 
 
 class CardArquivo(QFrame):
@@ -135,6 +163,17 @@ class TelaInicial(QWidget):
         self.lbl_sheets = QLabel("Sheets")
         self.lista_sheets = QListWidget()
         self.lista_sheets.itemChanged.connect(self._sheet_alterada)
+        self.lista_sheets.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        self.lista_sheets.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.lista_sheets.customContextMenuRequested.connect(self._menu_sheets)
+        self.lista_sheets.itemPressed.connect(self._sheet_pressionada)
+        self.lista_sheets.itemClicked.connect(self._sheet_clicada)
+        self.lista_sheets.itemDoubleClicked.connect(self._sheet_duplo_clique)
+        self._check_no_press = Qt.Unchecked
+        atalho_espaco = QShortcut(QKeySequence(Qt.Key_Space), self.lista_sheets)
+        atalho_espaco.setContext(Qt.WidgetShortcut)
+        atalho_espaco.activated.connect(
+            lambda: inverter_marcacao(self.lista_sheets))
         col_arq.addWidget(self.lbl_sheets)
         col_arq.addWidget(self.lista_sheets, 1)
 
@@ -302,6 +341,40 @@ class TelaInicial(QWidget):
             if self.lista_sheets.item(i).checkState() == Qt.Checked)
         self.lbl_sheets.setText(
             f"Sheets · {marcadas} de {total} marcadas" if total else "Sheets")
+
+    # --- marcação em grupo / hitbox (spec 2026-07-15 §1) ---
+    def _menu_sheets(self, pos) -> None:
+        if self.lista_sheets.count() == 0:
+            return
+        menu = QMenu(self.lista_sheets)
+        menu.addAction("Marcar selecionadas",
+                       lambda: definir_marcacao(self.lista_sheets, True))
+        menu.addAction("Desmarcar selecionadas",
+                       lambda: definir_marcacao(self.lista_sheets, False))
+        menu.addAction("Inverter marcação",
+                       lambda: inverter_marcacao(self.lista_sheets))
+        menu.exec(self.lista_sheets.viewport().mapToGlobal(pos))
+
+    def _sheet_pressionada(self, it: QListWidgetItem) -> None:
+        self._check_no_press = it.checkState()
+
+    def _sheet_clicada(self, it: QListWidgetItem) -> None:
+        """Hitbox maior: clique em qualquer ponto da linha alterna o
+        checkbox. Se o clique caiu no próprio indicador, o Qt já alternou
+        entre o press e o click (estado difere do gravado no press) — não
+        alterna de novo. Shift/Ctrl só selecionam."""
+        if QApplication.keyboardModifiers() & (Qt.ShiftModifier | Qt.ControlModifier):
+            return
+        if it.checkState() != self._check_no_press:
+            return
+        it.setCheckState(
+            Qt.Unchecked if it.checkState() == Qt.Checked else Qt.Checked)
+
+    def _sheet_duplo_clique(self, it: QListWidgetItem) -> None:
+        # o 1º clique do duplo-clique alternou via _sheet_clicada; reverte
+        # para o rename (edição inline) não mudar a marcação
+        it.setCheckState(
+            Qt.Unchecked if it.checkState() == Qt.Checked else Qt.Checked)
 
     def _sheets_selecionadas(self) -> list[str] | None:
         if self.lista_sheets.count() == 0:

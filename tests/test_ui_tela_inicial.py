@@ -97,3 +97,45 @@ def test_log_msg_info_atualiza_etapa(qtbot, tmp_path):
     tela = _tela(qtbot, tmp_path)
     tela._on_log("[INFO] pipeline: normalizando descrições…")
     assert "normalizando" in tela.lbl_etapa.text()
+
+
+# --- marcação em grupo (spec 2026-07-15 §1) ---
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QAbstractItemView, QListWidget, QListWidgetItem
+
+from tdt.ui.tela_inicial import definir_marcacao, inverter_marcacao
+
+
+def _lista_com_itens(qtbot, n=4):
+    lista = QListWidget()
+    lista.setSelectionMode(QAbstractItemView.ExtendedSelection)
+    qtbot.addWidget(lista)
+    for i in range(n):
+        it = QListWidgetItem(f"Sheet{i}")
+        it.setFlags(it.flags() | Qt.ItemIsUserCheckable)
+        it.setCheckState(Qt.Checked)
+        lista.addItem(it)
+    return lista
+
+
+def test_definir_marcacao_age_nas_selecionadas(qtbot):
+    lista = _lista_com_itens(qtbot)
+    lista.item(1).setSelected(True)
+    lista.item(2).setSelected(True)
+    definir_marcacao(lista, False)
+    estados = [lista.item(i).checkState() for i in range(4)]
+    assert estados == [Qt.Checked, Qt.Unchecked, Qt.Unchecked, Qt.Checked]
+
+
+def test_definir_marcacao_sem_selecao_age_em_todas(qtbot):
+    lista = _lista_com_itens(qtbot)
+    definir_marcacao(lista, False)
+    assert all(lista.item(i).checkState() == Qt.Unchecked for i in range(4))
+
+
+def test_inverter_marcacao(qtbot):
+    lista = _lista_com_itens(qtbot)
+    lista.item(0).setCheckState(Qt.Unchecked)
+    inverter_marcacao(lista)  # sem seleção -> todas
+    estados = [lista.item(i).checkState() for i in range(4)]
+    assert estados == [Qt.Checked, Qt.Unchecked, Qt.Unchecked, Qt.Unchecked]
