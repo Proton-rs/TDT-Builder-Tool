@@ -238,7 +238,8 @@ def test_remover_linhas_emite_sinais_de_remocao(qtbot):
 def test_flags_colunas_dominio_sao_editaveis():
     m = ModeloSinais(_state(_rec()))
     for nome in ("Sinal", "Tipo", "Fase", "Nível Tensão", "Barra",
-                 "Tipo Equip.", "Módulo", "Escala", "Endereço", "Endereço Output"):
+                 "Tipo Equip.", "Módulo", "Escala", "Endereço", "Endereço Output",
+                 "Equipamento", "Descr. bruta"):
         flags = m.flags(m.index(0, _col(nome)))
         assert flags & Qt.ItemIsEditable, nome
 
@@ -246,7 +247,8 @@ def test_flags_colunas_dominio_sao_editaveis():
 def test_flags_colunas_derivadas_nao_sao_editaveis():
     m = ModeloSinais(_state(_rec()))
     for nome in ("Status", "Motivo", "Descr. ADMS", "Score tf-idf",
-                 "Justificativa", "Equipamento"):
+                 "Justificativa", "Descr. normalizada", "Tokens", "Confiança",
+                 "Pareado", "Sheet origem"):
         flags = m.flags(m.index(0, _col(nome)))
         assert not (flags & Qt.ItemIsEditable), nome
 
@@ -338,6 +340,38 @@ def test_set_data_coluna_nao_editavel_retorna_false():
     m = ModeloSinais(st)
     ok = m.setData(m.index(0, _col("Status")), "decidido", Qt.EditRole)
     assert ok is False
+
+
+def test_equipamento_e_descr_bruta_editaveis():
+    assert "Equipamento" in _EDITAVEIS
+    assert "Descr. bruta" in _EDITAVEIS
+
+
+def test_setdata_equipamento():
+    st = _state(_rec())
+    m = ModeloSinais(st)
+    assert m.setData(m.index(0, _col("Equipamento")), "52-11", Qt.EditRole)
+    assert st.registros[0].eletrico.nome_equipamento == "52-11"
+    assert m.setData(m.index(0, _col("Equipamento")), "", Qt.EditRole)
+    assert st.registros[0].eletrico.nome_equipamento is None
+
+
+def test_setdata_descr_bruta_rejeita_vazio():
+    st = _state(_rec())
+    m = ModeloSinais(st)
+    assert not m.setData(m.index(0, _col("Descr. bruta")), "  ", Qt.EditRole)
+    assert m.setData(m.index(0, _col("Descr. bruta")), "NOVA DESC", Qt.EditRole)
+    assert st.registros[0].descricoes.bruta == "NOVA DESC"
+
+
+def test_valor_edicao_equipamento_nao_usa_sentinela_traco():
+    """EditRole não pode devolver "—" (sentinela de exibição p/ vazio) --
+    senão o round-trip abrir/fechar o editor sem mudar nada grava "—" como
+    valor literal em vez de manter None (mesmo bug já evitado p/ Fase/Barra/
+    Tipo Equip./Módulo em `_valor_edicao`)."""
+    m = ModeloSinais(_state(_rec(eletrico=Eletrico())))
+    assert m.data(m.index(0, _col("Equipamento")), Qt.DisplayRole) == "—"
+    assert m.data(m.index(0, _col("Equipamento")), Qt.EditRole) == ""
 
 
 def test_cor_faixa_novas_cores():

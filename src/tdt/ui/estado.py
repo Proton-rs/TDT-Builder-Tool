@@ -120,6 +120,15 @@ class AppState:
         self._editar_nested(indice, "eletrico", equipamento_alvo=equip,
                              equipamento_inferido=False)
 
+    def definir_equipamento(self, indice: int, nome: str | None) -> None:
+        """ID do equipamento (ex. corrigir "81-1" -> "52-11"); None limpa."""
+        self._editar_nested(indice, "eletrico", nome_equipamento=nome)
+
+    def definir_descricao_bruta(self, indice: int, texto: str) -> None:
+        """Só o texto bruto (afeta fallback de Signal Alias no export);
+        normalizada/tokens NÃO reprocessam (spec 2026-07-15 §4)."""
+        self._editar_nested(indice, "descricoes", bruta=texto)
+
     def definir_modulo(self, indice: int, nome: str | None) -> None:
         self._editar_nested(indice, "modulo", nome=nome)
 

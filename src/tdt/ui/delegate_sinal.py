@@ -100,3 +100,37 @@ class DelegateModulo(QStyledItemDelegate):
 
     def setModelData(self, editor, model, index):
         model.setData(index, editor.currentText().strip(), Qt.EditRole)
+
+
+class DelegateEquipamento(QStyledItemDelegate):
+    """Editor combo editável p/ Equipamento (ID): sugere os IDs já presentes
+    em registros do MESMO módulo, aceita texto livre; opção vazia limpa
+    (spec 2026-07-15 §4). Caso alvo: corrigir 81-1 -> 52-11 na revisão.
+    """
+
+    def __init__(self, estado: AppState, proxy, parent=None):
+        super().__init__(parent)
+        self._estado = estado
+        self._proxy = proxy
+
+    def createEditor(self, parent, option, index):
+        combo = QComboBox(parent)
+        combo.setEditable(True)
+        fonte = self._proxy.mapToSource(index)
+        modulo = None
+        if fonte.isValid():
+            rec = self._estado.registros[fonte.row()]
+            modulo = rec.modulo.nome if rec.modulo else None
+        ids = sorted({
+            r.eletrico.nome_equipamento for r in self._estado.registros
+            if r.eletrico.nome_equipamento
+            and (r.modulo.nome if r.modulo else None) == modulo
+        })
+        combo.addItems([""] + ids)
+        return combo
+
+    def setEditorData(self, editor, index):
+        _preselecionar(editor, index.data(Qt.EditRole))
+
+    def setModelData(self, editor, model, index):
+        model.setData(index, editor.currentText().strip(), Qt.EditRole)

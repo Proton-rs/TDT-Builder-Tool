@@ -22,7 +22,9 @@ from tdt.dc_pairer import fundir, separar
 from tdt.engine_tdt import nome_hierarquico
 from tdt.pareamento_polaridade import _SIGLAS_POSICAO
 from tdt.ui.busca_adms import buscar
-from tdt.ui.delegate_sinal import DelegateCombo, DelegateModulo, DelegateSinal
+from tdt.ui.delegate_sinal import (
+    DelegateCombo, DelegateEquipamento, DelegateModulo, DelegateSinal,
+)
 from tdt.ui.estado import AppState
 from tdt.ui.modelo_tabela import ModeloSinais, cor_faixa, texto_faixa
 from tdt.ui.proxy_revisao import ProxyRevisao
@@ -346,6 +348,9 @@ class TelaRevisao(QWidget):
             self.tabela.setItemDelegateForColumn(col, DelegateCombo(opcoes, self.tabela))
         col_modulo = ModeloSinais.COLUNAS.index("Módulo")
         self.tabela.setItemDelegateForColumn(col_modulo, DelegateModulo(self._estado, self.tabela))
+        self.tabela.setItemDelegateForColumn(
+            ModeloSinais.COLUNAS.index("Equipamento"),
+            DelegateEquipamento(self._estado, self._proxy, self.tabela))
         self.tabela.selectionModel().currentRowChanged.connect(self._linha_mudou)
         self.tabela.selectionModel().selectionChanged.connect(self._atualizar_selecao)
         self._modelo.dataChanged.connect(lambda *_: self._atualizar_abas_sheet())

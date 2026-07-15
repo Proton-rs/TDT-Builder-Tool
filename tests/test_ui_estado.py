@@ -168,3 +168,23 @@ def test_definir_sigla_sem_snapshot_nao_cria_historico():
     st.registros = [_rec("a:1", None, "revisao")]
     st.definir_sigla(0, "DJF1", snapshot=False)
     assert len(st._historico) == 0
+
+
+def test_definir_equipamento_e_undo():
+    st = AppState()
+    st.registros = [_rec("a:1", "DJF1", "decidido")]
+    st.definir_equipamento(0, "52-11")
+    assert st.registros[0].eletrico.nome_equipamento == "52-11"
+    st.definir_equipamento(0, None)  # vazio limpa
+    assert st.registros[0].eletrico.nome_equipamento is None
+    assert st.desfazer()
+    assert st.registros[0].eletrico.nome_equipamento == "52-11"
+
+
+def test_definir_descricao_bruta():
+    st = AppState()
+    st.registros = [_rec("a:1", "DJF1", "decidido")]
+    st.definir_descricao_bruta(0, "DISJUNTOR 52-11 MOLA")
+    assert st.registros[0].descricoes.bruta == "DISJUNTOR 52-11 MOLA"
+    # normalizada NÃO reprocessa (spec 2026-07-15 §4)
+    assert st.registros[0].descricoes.normalizada == "D"

@@ -86,6 +86,7 @@ COR_BAIXO_TEXTO = QColor("#e8ebf2")
 _EDITAVEIS = frozenset({
     "Sinal", "Tipo", "Fase", "Nível Tensão", "Barra", "Tipo Equip.",
     "Módulo", "Escala", "Endereço", "Endereço Output",
+    "Equipamento", "Descr. bruta",
 })
 
 _COLUNAS_MONO = frozenset({
@@ -249,6 +250,8 @@ class ModeloSinais(QAbstractTableModel):
             return rec.eletrico.barra or ""
         if nome == "Tipo Equip.":
             return rec.eletrico.equipamento_alvo or ""
+        if nome == "Equipamento":
+            return rec.eletrico.nome_equipamento or ""
         if nome == "Módulo":
             return (rec.modulo.nome if rec.modulo else None) or ""
         if nome == "Endereço Output":
@@ -328,6 +331,12 @@ class ModeloSinais(QAbstractTableModel):
                 return False
             campo = "indices" if nome == "Endereço" else "indices_saida"
             self._estado.definir_enderecos(linha, campo, indices)
+        elif nome == "Equipamento":
+            self._estado.definir_equipamento(linha, texto or None)
+        elif nome == "Descr. bruta":
+            if not texto:
+                return False  # descrição bruta é dado de origem, não pode esvaziar
+            self._estado.definir_descricao_bruta(linha, texto)
         else:
             return False
         self.ultima_edicao = (nome, value)
