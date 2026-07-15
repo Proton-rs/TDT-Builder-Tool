@@ -1,6 +1,7 @@
 # SP-DEVICE-MAPPING-RGE — Identidade de equipamento + Device Mapping padrão RGE
 
 **Data:** 2026-07-15
+**Status:** implementado (6 tasks, branch `feature/sp-device-mapping-rge`; gate `bench.regressao` pct 72.1%→72.3%, `comum` 954→952 — queda esperada: 5 sinais com equipamento conflitante passam a ir pra revisão em vez de gerar endereço; suite 962→985 testes, todos verdes)
 **Origem:** `docs/anot.txt` (análise da lista LVA, sheet AL11) — Frente 1 da decomposição de 15/07.
 A Frente 2 (ajustes de UX/perf da ferramenta) fica para spec própria, fora deste escopo.
 
