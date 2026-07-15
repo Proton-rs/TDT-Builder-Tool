@@ -5,6 +5,7 @@ from tdt.normalizacao.normalizador import (
     corrigir_typos,
     expandir_abreviacoes,
     extrair_contexto_estrutural,
+    familia_do_id,
     normalizar,
     normalizar_unidades,
     remover_boilerplate,
@@ -399,3 +400,43 @@ def test_parenteses_e_pontuacao_extra_virram_espaco():
     cfg = Config()
     assert normalizar("DISJUNTOR (52-1) ABERTO, FECHADO; TESTE: OK", cfg) == \
         "DISJUNTOR 52 1 ABERTO FECHADO TESTE OK"
+
+
+# --- N0: whitelist de equipamento (Task 1, SP-DEVICE-MAPPING-RGE) -----------
+
+
+def test_81_nao_e_equipamento():
+    # spec 2026-07-15: 81-1 é estágio de subfrequência, não equipamento.
+    base, ctx = extrair_contexto_estrutural("SUBFREQUENCIA 81-1 ATUADO")
+    assert ctx.nome_equipamento is None
+    assert ctx.equipamento_alvo is None
+    assert "81-1" in base  # fica no texto: discrimina estágio no matching
+
+
+def test_24_e_disjuntor():
+    _, ctx = extrair_contexto_estrutural("DISJUNTOR 24-1 FECHADO")
+    assert ctx.equipamento_alvo == "Disjuntor"
+    assert ctx.nome_equipamento == "24-1"
+
+
+def test_tr_e_transformador():
+    base, ctx = extrair_contexto_estrutural("TEMPERATURA OLEO TR1")
+    assert ctx.equipamento_alvo == "Transformador"
+    assert ctx.nome_equipamento == "TR1"
+    assert "TR1" not in base  # ID removido do remanescente, como o N-N
+
+
+def test_tr_nao_casa_dentro_de_sigla():
+    # "86TR1" não tem boundary antes do TR — não pode virar equipamento TR1
+    _, ctx = extrair_contexto_estrutural("BLOQUEIO 86TR1 ATUADO")
+    assert ctx.nome_equipamento is None
+
+
+def test_familia_do_id():
+    assert familia_do_id("52-11") == "Disjuntor"
+    assert familia_do_id("24-1") == "Disjuntor"
+    assert familia_do_id("89-2") == "Seccionadora"
+    assert familia_do_id("29-1") == "Seccionadora"
+    assert familia_do_id("TR2") == "Transformador"
+    assert familia_do_id("81-1") is None
+    assert familia_do_id(None) is None
