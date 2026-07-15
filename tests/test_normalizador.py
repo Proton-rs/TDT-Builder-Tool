@@ -255,10 +255,15 @@ def test_extrai_equipamento_seccionadora():
     assert "89" not in texto.split()
 
 
-def test_codigo_fora_da_tabela_remove_mas_nao_classifica():
+def test_codigo_fora_da_whitelist_nao_remove_nem_classifica():
+    # spec 2026-07-15: whitelist restrita a 52/24/29/89 -- "67-1" não é
+    # equipamento (nem ANSI da tabela, nem TR), então _ID_EQUIPAMENTO não
+    # casa: o ID fica intacto no texto (discriminador pro matching, como
+    # 81-1) e ctx não é preenchido.
     texto, ctx = extrair_contexto_estrutural("RELE 67-1 ATUADO")
     assert ctx.equipamento_alvo is None
-    assert "67" not in texto.split()
+    assert ctx.nome_equipamento is None
+    assert "67-1" in texto
 
 
 def test_extrai_nome_equipamento_bruto():
@@ -272,12 +277,16 @@ def test_nome_equipamento_none_sem_id():
 
 
 def test_equipamento_pela_palavra_quando_id_nao_e_ansi():
-    # "24-1" não é código ANSI (só 52/89/29), mas a palavra DISJUNTOR resolve.
+    # spec 2026-07-15: whitelist restrita a 52/24/29/89 -- "24" agora É
+    # whitelist (resolveria direto pelo ID). "67-1" fica fora da whitelist
+    # (função de proteção, não equipamento), então só a palavra DISJUNTOR
+    # resolve o equipamento_alvo; o ID não é reconhecido formalmente (fica
+    # no texto), então nome_equipamento continua None.
     # Sem isso, o forçamento DJF1 (pareamento_polaridade) não dispara.
-    _, ctx = extrair_contexto_estrutural("24-1 DISJUNTOR FECHADO")
+    _, ctx = extrair_contexto_estrutural("67-1 DISJUNTOR FECHADO")
     assert ctx.equipamento_alvo == "Disjuntor"
-    assert ctx.nome_equipamento == "24-1"
-    _, ctx2 = extrair_contexto_estrutural("DJ 24-1 ABERTO")
+    assert ctx.nome_equipamento is None
+    _, ctx2 = extrair_contexto_estrutural("DJ 67-1 ABERTO")
     assert ctx2.equipamento_alvo == "Disjuntor"
 
 
