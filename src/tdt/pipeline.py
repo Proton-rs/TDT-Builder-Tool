@@ -755,6 +755,7 @@ def executar(
         corrigidos = [_limitar_confianca(r) for r in corrigidos]
         revisao = [_limitar_confianca_item(it) for it in revisao]
         lista = criador_lista_homogenea.montar(list(corrigidos), subestacao=subestacao)
+        aud.sobrescritas("montar", corrigidos, lista.registros)
         lista, rev_dup = engine_tdt.particionar_custom_id_duplicado(lista)
         if rev_dup:
             aud.evento("engine", f"{len(rev_dup)} registros com Custom ID duplicado -> revisão", "AVISO")
