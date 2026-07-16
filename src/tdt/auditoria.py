@@ -62,6 +62,23 @@ class Auditoria:
     def contagem(self, nivel: str) -> int:
         return sum(1 for e in self.eventos if e.nivel == nivel)
 
+    def sobrescritas(self, etapa: str, antes, depois) -> int:
+        """I3 (spec fluxo-dados): emite 1 evento por mudança de identidade
+        entre dois estágios do pipeline. "sobrescrita" (valor -> outro
+        valor) é INFO — legítima, mas visível; "perda" (valor -> vazio) é
+        AVISO — nunca deve acontecer silenciosamente. Devolve o total."""
+        diffs = diff_identidade(antes, depois)
+        for d in diffs:
+            self.evento(
+                "fluxo_dados",
+                f"{etapa}: {d.campo} {d.antes!r} -> {d.depois!r}",
+                "AVISO" if d.tipo == "perda" else "INFO",
+                signal_id=d.signal_id,
+                dados={"etapa": etapa, "campo": d.campo, "antes": d.antes,
+                       "depois": d.depois, "tipo": d.tipo},
+            )
+        return len(diffs)
+
     def _linha(self, e: Evento) -> str:
         sid = f" ({e.signal_id})" if e.signal_id else ""
         extra = f" {e.dados}" if e.dados else ""
@@ -76,3 +93,44 @@ class Auditoria:
         Path(destino).write_text(
             json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
         )
+
+
+@dataclass(frozen=True)
+class Sobrescrita:
+    signal_id: str
+    campo: str
+    antes: object
+    depois: object
+    tipo: str  # "sobrescrita" (valor -> outro valor) | "perda" (valor -> vazio)
+
+
+def _identidade(rec) -> dict:
+    return {
+        "sigla_sinal": rec.sigla_sinal,
+        "modulo": rec.modulo.nome,
+        "equipamento": rec.eletrico.nome_equipamento,
+        "indices": rec.enderecamento.indices,
+    }
+
+
+def diff_identidade(antes, depois) -> "list[Sobrescrita]":
+    """Mudanças de campos de identidade entre dois estágios, por id.
+
+    Ids presentes só num dos lados ficam de fora (fusão/particionamento —
+    cobertos pelos testes de conservação por contagem); vazio -> valor é
+    enriquecimento, não mudança. Vazio = None ou tupla ().
+    """
+    por_id = {r.id: r for r in antes}
+    out: list[Sobrescrita] = []
+    for rec in depois:
+        r_antes = por_id.get(rec.id)
+        if r_antes is None:
+            continue
+        ia, id_ = _identidade(r_antes), _identidade(rec)
+        for campo, v_antes in ia.items():
+            v_depois = id_[campo]
+            if v_antes in (None, ()) or v_depois == v_antes:
+                continue
+            tipo = "perda" if v_depois in (None, ()) else "sobrescrita"
+            out.append(Sobrescrita(rec.id, campo, v_antes, v_depois, tipo))
+    return out
