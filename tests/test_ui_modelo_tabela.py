@@ -567,6 +567,33 @@ def test_remover_linhas_lote_grande_via_reset(qtbot):
     assert [r.id for r in st.registros] == [f"S:{i}" for i in range(n, n + 10)]
 
 
+def test_remover_linhas_fronteira_limiar_reset(qtbot):
+    """Exatamente LIMIAR_RESET_REMOCAO -> caminho de RANGE; +1 -> caminho de reset."""
+    st = _state_n(LIMIAR_RESET_REMOCAO + 20)
+    m = ModeloSinais(st)
+    resets = []
+    removidos = []
+    m.modelReset.connect(lambda: resets.append(1))
+    m.rowsRemoved.connect(lambda *a: removidos.append(a))
+    m.remover_linhas(list(range(LIMIAR_RESET_REMOCAO)))  # == limiar -> RANGE
+    assert len(resets) == 0
+    assert len(removidos) == 1
+    assert len(st.registros) == 20
+
+
+def test_remover_linhas_fronteira_limiar_mais_um_via_reset(qtbot):
+    st = _state_n(LIMIAR_RESET_REMOCAO + 1 + 20)
+    m = ModeloSinais(st)
+    resets = []
+    removidos = []
+    m.modelReset.connect(lambda: resets.append(1))
+    m.rowsRemoved.connect(lambda *a: removidos.append(a))
+    m.remover_linhas(list(range(LIMIAR_RESET_REMOCAO + 1)))  # limiar+1 -> RESET
+    assert len(resets) == 1
+    assert len(removidos) == 0
+    assert len(st.registros) == 20
+
+
 def test_remover_linhas_ignora_indices_invalidos(qtbot):
     st = _state_n(3)
     m = ModeloSinais(st)

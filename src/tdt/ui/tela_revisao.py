@@ -622,7 +622,8 @@ class TelaRevisao(QWidget):
             self._modelo.aplicar_valor_em_lote(ids, coluna, valor)
         finally:
             self.tabela.setUpdatesEnabled(True)
-        self.refresh()
+        self._atualizar_painel()
+        self._atualizar_abas_sheet()
 
     def _parear_sinais(self):
         indices = self._linhas_selecionadas()

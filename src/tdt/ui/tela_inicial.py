@@ -13,16 +13,11 @@ import openpyxl
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
-    QAbstractItemView, QButtonGroup, QCheckBox, QComboBox, QFileDialog, QFrame,
-    QGroupBox, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMenu,
-    QMessageBox, QProgressBar, QPushButton, QRadioButton, QTextEdit, QVBoxLayout,
-    QWidget,
+    QAbstractItemView, QApplication, QButtonGroup, QCheckBox, QComboBox,
+    QFileDialog, QFrame, QGroupBox, QHBoxLayout, QLabel, QListWidget,
+    QListWidgetItem, QMenu, QMessageBox, QProgressBar, QPushButton,
+    QRadioButton, QTextEdit, QVBoxLayout, QWidget,
 )
-
-try:
-    from PySide6.QtWidgets import QApplication
-except ImportError:
-    from PySide6.QtGui import QApplication
 
 from tdt.dados.lista_padrao import ListaPadraoADMS
 from tdt.defaults import DEFAULT_LISTA, DEFAULT_OUTPUT, DEFAULT_TEMPLATE
