@@ -28,7 +28,7 @@
 - Consumes: nada (documento).
 - Produces: tabela de referência usada pelas Tasks 3 (onde wirar) e por specs futuras (regra 2 do CLAUDE.md).
 
-- [ ] **Step 1: Criar o documento com a tabela abaixo**
+- [x] **Step 1: Criar o documento com a tabela abaixo**
 
 ```markdown
 # Fluxo de dados do pipeline — quem lê, escreve e sobrescreve identidade
@@ -61,7 +61,7 @@ Identidade = `sigla_sinal`, `modulo.nome`, `eletrico.nome_equipamento`,
   upgrade path documentado em `dc_pairer.separar`.
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add docs/fluxo_dados.md
@@ -80,7 +80,7 @@ git commit -m "docs(fluxo): mapa etapa x le/escreve/sobrescreve identidade (SP-F
 - Consumes: `SignalRecord` por duck-typing (`rec.id`, `rec.sigla_sinal`, `rec.modulo.nome`, `rec.eletrico.nome_equipamento`, `rec.enderecamento.indices`) — sem import de `contracts` em `auditoria.py`.
 - Produces: `diff_identidade(antes, depois) -> list[Sobrescrita]` com `Sobrescrita(signal_id: str, campo: str, antes, depois, tipo: str)` onde `tipo ∈ {"sobrescrita", "perda"}`; `Auditoria.sobrescritas(etapa: str, antes, depois) -> int` (eventos emitidos). Tasks 3, 4 e 6 dependem EXATAMENTE desses nomes.
 
-- [ ] **Step 1: Escrever os testes que falham** (append em `tests/test_auditoria.py`)
+- [x] **Step 1: Escrever os testes que falham** (append em `tests/test_auditoria.py`)
 
 ```python
 # --- diff_identidade / sobrescritas (SP-FLUXO-DADOS Task 2) -----------------
@@ -149,12 +149,12 @@ def test_sobrescritas_emite_eventos_com_nivel_por_tipo():
 
 Nota: `tests/test_auditoria.py` já importa `Auditoria`; adicione só os imports que faltarem.
 
-- [ ] **Step 2: Rodar e ver falhar**
+- [x] **Step 2: Rodar e ver falhar**
 
 Run: `PYTHONPATH=src python -m pytest tests/test_auditoria.py -q`
 Expected: FAIL — `ImportError: cannot import name 'diff_identidade'`
 
-- [ ] **Step 3: Implementar em `src/tdt/auditoria.py`**
+- [x] **Step 3: Implementar em `src/tdt/auditoria.py`**
 
 Método novo DENTRO da classe `Auditoria` (após `contagem`):
 
@@ -223,12 +223,12 @@ def diff_identidade(antes, depois) -> "list[Sobrescrita]":
 
 Atenção: `sobrescritas` (método) referencia `diff_identidade` definida depois no arquivo — ok em Python (resolução em runtime).
 
-- [ ] **Step 4: Rodar e ver passar**
+- [x] **Step 4: Rodar e ver passar**
 
 Run: `PYTHONPATH=src python -m pytest tests/test_auditoria.py tests/test_auditoria_callback.py -q`
 Expected: PASS (todos)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/tdt/auditoria.py tests/test_auditoria.py
@@ -247,7 +247,7 @@ git commit -m "feat(auditoria): diff_identidade + Auditoria.sobrescritas (SP-FLU
 - Consumes: `Auditoria.sobrescritas(etapa, antes, depois)` da Task 2.
 - Produces: eventos `modulo="fluxo_dados"` na auditoria de qualquer execução — consumidos pela Task 6 (relatório). Nenhuma assinatura pública muda.
 
-- [ ] **Step 1: Escrever o teste que falha** (`tests/test_fluxo_dados.py`)
+- [x] **Step 1: Escrever o teste que falha** (`tests/test_fluxo_dados.py`)
 
 ```python
 """SP-FLUXO-DADOS Task 3: o pipeline emite eventos fluxo_dados quando uma
@@ -300,12 +300,12 @@ def test_gerar_tdt_audita_sobrescrita_de_indices_na_fusao():
 
 Nota: se `Config` não aceitar `siglas_fundiveis_extra` via `replace` (campo inexistente), o teste quebra com erro claro — nesse caso use `frozenset({"DJF1"})` que já É a whitelist SwitchStatus da lista padrão v8 (DJF1 é SwitchStatus) e remova o `cfg`/`config=cfg`. O campo existe hoje (`pipeline._whitelist_posicao` lê `config.siglas_fundiveis_extra`).
 
-- [ ] **Step 2: Rodar e ver falhar**
+- [x] **Step 2: Rodar e ver falhar**
 
 Run: `PYTHONPATH=src python -m pytest tests/test_fluxo_dados.py -q`
 Expected: FAIL — `assert any(...)` (nenhum evento `fluxo_dados` ainda)
 
-- [ ] **Step 3: Wirar `gerar_tdt`** (linhas 529-535 atuais)
+- [x] **Step 3: Wirar `gerar_tdt`** (linhas 529-535 atuais)
 
 De:
 
@@ -335,7 +335,7 @@ Para:
     aud.sobrescritas("montar", corrigidos, lista.registros)
 ```
 
-- [ ] **Step 4: Wirar `executar` — cadeia final** (linhas 735-745 atuais)
+- [x] **Step 4: Wirar `executar` — cadeia final** (linhas 735-745 atuais)
 
 De:
 
@@ -357,7 +357,7 @@ Para:
         aud.sobrescritas("corrigir", pareados, corrigidos)
 ```
 
-- [ ] **Step 5: Wirar `executar` — mutações por sheet**
+- [x] **Step 5: Wirar `executar` — mutações por sheet**
 
 Em volta de `aplicar_identidade` (linha 617 atual):
 
@@ -376,7 +376,7 @@ Em volta de `subdividir_transformador_at_bt` (linha 647 atual):
         aud.sobrescritas("subdividir_at_bt", sinais_pre, sinais)
 ```
 
-- [ ] **Step 6: Rodar o teste novo e a suíte completa**
+- [x] **Step 6: Rodar o teste novo e a suíte completa**
 
 Run: `PYTHONPATH=src python -m pytest tests/test_fluxo_dados.py -q`
 Expected: PASS
@@ -384,7 +384,7 @@ Expected: PASS
 Run: `PYTHONPATH=src python -m pytest tests/ -q`
 Expected: tudo PASS (hoje: 1018 passed, 2 xfailed) — nenhuma regressão; os eventos são só aditivos.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/tdt/pipeline.py tests/test_fluxo_dados.py
@@ -402,7 +402,7 @@ git commit -m "feat(pipeline): audita sobrescritas de identidade entre etapas (S
 - Consumes: `diff_identidade` (Task 2); cadeia parcial igual à de `tests/test_conservacao_comandos.py`.
 - Produces: trava de regressão — qualquer etapa futura que zere identidade quebra este teste.
 
-- [ ] **Step 1: Escrever o teste** (deve passar de primeira — é trava, não bug conhecido; se falhar, achou violação real: investigar antes de prosseguir)
+- [x] **Step 1: Escrever o teste** (deve passar de primeira — é trava, não bug conhecido; se falhar, achou violação real: investigar antes de prosseguir)
 
 ```python
 """SP-FLUXO-DADOS Task 4: nenhum campo de identidade preenchido na entrada
@@ -464,12 +464,12 @@ def test_nenhuma_perda_de_identidade_na_cadeia_de_geracao():
     assert perdas == [], f"identidade perdida no caminho: {perdas}"
 ```
 
-- [ ] **Step 2: Rodar**
+- [x] **Step 2: Rodar**
 
 Run: `PYTHONPATH=src python -m pytest tests/test_conservacao_identidade.py tests/test_conservacao_comandos.py -q`
 Expected: PASS. Se FALHAR: é violação real de I3 — reportar ao usuário com o diff antes de qualquer "ajuste no teste".
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add tests/test_conservacao_identidade.py
@@ -487,7 +487,7 @@ git commit -m "test(conservacao): identidade por conteudo, zero perdas na cadeia
 - Consumes: `estruturar`, `MapaColunas`, `Config` (imports já existem no arquivo).
 - Produces: guardas — módulo×sigla já coberto por `test_modulo_por_linha_nao_engole_coluna_sigla`; aqui entram sigla×equipamento e módulo×equipamento.
 
-- [ ] **Step 1: Escrever os testes**
+- [x] **Step 1: Escrever os testes**
 
 ```python
 # --- independência de identidades (SP-FLUXO-DADOS Task 5, invariante I2) ---
@@ -539,12 +539,12 @@ def test_modulo_sigla_e_equipamento_simultaneos_resolvem_os_tres():
     assert [r.eletrico.nome_equipamento for r in recs] == ["52-11", "52-12"]
 ```
 
-- [ ] **Step 2: Rodar**
+- [x] **Step 2: Rodar**
 
 Run: `PYTHONPATH=src python -m pytest tests/test_estruturador.py -q`
 Expected: PASS (a varredura de linha inteira de 14a886b já cobre; se falhar, achou violação real de I2 — reportar, não contornar).
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add tests/test_estruturador.py
@@ -562,7 +562,7 @@ git commit -m "test(estruturador): independencia sigla/modulo x equipamento na l
 - Consumes: `pipeline.executar` (assinatura em `src/tdt/pipeline.py:550`), eventos `fluxo_dados` da Task 3, `criar_encoder` de `tdt.dados.encoder`.
 - Produces: relatório de terminal usado na verificação de closeout (regra 4 do CLAUDE.md). Inputs reais vivem FORA do repo (ex. `C:\Users\vinic\Documents\docs importantes\RGE\...`) — path é argumento.
 
-- [ ] **Step 1: Criar o script**
+- [x] **Step 1: Criar o script**
 
 ```python
 """Relatório de fluxo/conservação para listas reais (gate de closeout).
@@ -621,12 +621,12 @@ if __name__ == "__main__":
     sys.exit(main())
 ```
 
-- [ ] **Step 2: Verificar com a lista do repo (SAN2)**
+- [x] **Step 2: Verificar com a lista do repo (SAN2)**
 
 Run: `PYTHONPATH=src python scripts/relatorio_fluxo_real.py docs/SAN2_LISTA_PADRONIZADA_PARA_TESTE.xlsx --subestacao SND`
 Expected: relatório imprime contagens, `0 PERDAS`, exit code 0. (Demora: carrega o encoder real — é ferramenta de verificação manual, não teste de CI.)
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add scripts/relatorio_fluxo_real.py
@@ -637,7 +637,7 @@ git commit -m "feat(scripts): relatorio de fluxo/conservacao p/ listas reais (SP
 
 ## Closeout (após as 6 tasks)
 
-- [ ] Suíte completa: `PYTHONPATH=src python -m pytest tests/ -q` — tudo verde.
-- [ ] Rodar `scripts/relatorio_fluxo_real.py` nas listas reais disponíveis (LVA, CVA — paths em `C:\Users\vinic\Documents\docs importantes\RGE\`) e anexar resumo na conversa de closeout; qualquer PERDA é bug de fluxo (regra 2).
-- [ ] Ledger `docs/AGENTS.md`: linha da spec muda de "proposta" para "implementada" com hashes.
-- [ ] DOX pass: `src/tdt/AGENTS.md` (nova função pública `diff_identidade`/`sobrescritas` em auditoria) — 1 linha.
+- [x] Suíte completa: `PYTHONPATH=src python -m pytest tests/ -q` — tudo verde.
+- [x] Rodar `scripts/relatorio_fluxo_real.py` nas listas reais disponíveis (LVA, CVA — paths em `C:\Users\vinic\Documents\docs importantes\RGE\`) e anexar resumo na conversa de closeout; qualquer PERDA é bug de fluxo (regra 2).
+- [x] Ledger `docs/AGENTS.md`: linha da spec muda de "proposta" para "implementada" com hashes.
+- [x] DOX pass: `src/tdt/AGENTS.md` (nova função pública `diff_identidade`/`sobrescritas` em auditoria) — 1 linha.
