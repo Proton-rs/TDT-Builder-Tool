@@ -1,5 +1,7 @@
 # SP-UX-PERF — Ajustes de UX e performance da ferramenta
 
+**Status:** implementado (2026-07-15, commits e02b51a..08d0876 na branch `feature/sp-ux-perf-ferramenta`)
+
 **Data:** 2026-07-15
 **Origem:** `docs/anot.txt` ("Analise funcionamento da ferramenta") — Frente 2 da decomposição de 15/07.
 A Frente 1 (device mapping RGE) tem spec/plano próprios (`2026-07-15-sp-device-mapping-rge-*`).
@@ -116,6 +118,26 @@ Só UI (`src/tdt/ui/`): `tela_inicial.py`, `tela_revisao.py`, `tela_geracao.py`,
 - Fluidez (seções 2 e 5): verificação manual com lista real grande — dialog fecha
   no OK; remover ~500 sinais < 1s. Registrar o resultado no closeout.
 - Nada fora de `src/tdt/ui/` e `tests/` muda.
+
+## Resultados da verificação (closeout 15/07)
+
+- Suite completa: `python -m pytest -q tests/` — **982 passed, 5 skipped, 2 xfailed**
+  (baseline pré-SP-UX-PERF: 962 passed; +20 testes novos das 5 tasks, 0 regressão).
+- Smoke test de import/construção das 3 telas alteradas (`TelaInicial`, `TelaRevisao`,
+  `TelaGeracao`) sem `AppState` real — sem erro.
+- Critérios de performance medidos programaticamente (`ModeloSinais` +
+  `ProxyRevisao` + `QTableView` reais, 5.000 registros sintéticos, sem mock):
+  - Filtro por coluna em 5.000 linhas: **21.4ms** (critério: sem congelamento
+    perceptível, ~200ms).
+  - Remover 500 de 5.000 linhas (com view+proxy anexados): **17.7ms** (critério:
+    < 1s). Caminho sem view/proxy (só o modelo): 0.7ms.
+- **Não verificado interativamente** (ambiente sem automação de GUI desktop e sem
+  acesso à lista real grande da SE CVA/LVA, fora do repositório): a sensação
+  subjetiva de fluidez do usuário ao clicar (shift-click em sheets, popup de
+  filtro, edição de Equipamento via combo) — os números acima cobrem o
+  mecanismo (sinais Qt corretos, tempo de execução), não a experiência ao vivo.
+  Recomendado: um passe manual do usuário na próxima sessão com dado real antes
+  de considerar a UX definitivamente resolvida.
 
 ## Decisões registradas (para o ledger no closeout)
 
