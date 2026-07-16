@@ -1,8 +1,11 @@
 # SP Fluxo de Dados Transparente — Conservação de Informação no Pipeline
 
 **Data:** 2026-07-16
-**Status:** Proposto
-**Origem:** Regressão LVA AL21 — a coluna SIGLA era detectada por `analise_colunas._col_sigla()` mas o estruturador ignorava a informação quando a coluna MÓDULO também era reivindicada (`elif` tornava as duas resoluções mutuamente exclusivas; commit b9b0118). Sintoma percebido: "o programa parou de identificar a coluna das siglas". A informação existia, foi detectada e foi descartada no caminho. Corrigida pontualmente em 16/07; esta spec generaliza a proteção.
+**Status:** Aprovado (16/07) — plano em `docs/superpowers/plans/2026-07-16-sp-fluxo-dados-transparente.md`
+**Origem:** dois bugs reais do mesmo padrão, ambos corrigidos pontualmente em 16/07; esta spec generaliza a proteção:
+
+1. **Regressão LVA AL21 (87a347b)** — a coluna SIGLA era detectada por `analise_colunas._col_sigla()` mas o estruturador ignorava a informação quando a coluna MÓDULO também era reivindicada (`elif` tornava as duas resoluções mutuamente exclusivas; commit b9b0118). Sintoma percebido: "o programa parou de identificar a coluna das siglas". A informação existia, foi detectada e foi descartada no caminho.
+2. **Aprovar revertia reclassificação manual (16645f4)** — "Aprovar e ir ao próximo" (single-row e lote) pegava `candidatos[0]`/item do painel por cima da sigla já editada pelo usuário, jogando fora o trabalho de revisão. Mesma família: a edição manual do usuário é informação adquirida e a etapa seguinte a apagava.
 **Escopo:** Estabelecer invariantes de conservação de informação em todo o pipeline (estruturador → identidade → inferência → scoring → dc_pairer → normalizador_estrutural → engine_tdt) e os testes que os garantem.
 **Relacionada:** regra universal "Não-regressão e fluxo de dados" no `CLAUDE.md`; testes de conservação existentes (`test_conservacao`: invariante total TDT+revisão, cadeia até `particionar_endereco_duplicado`).
 
@@ -17,6 +20,7 @@ O pipeline adquire informação em várias etapas (coluna detectada, equipamento
 1. **Perda por exclusividade indevida** (caso LVA AL21): duas fontes de identidade independentes (módulo-por-coluna, sigla-por-coluna) resolvidas em ramos `if/elif` — reivindicar uma desligava a outra para a sheet inteira. Uma única célula divergente (81×`AL21` + 1×`AL22`) mudou o comportamento de 83 sinais.
 2. **Perda por consumo local:** valor extraído usado numa decisão intermediária e não gravado no `SignalRecord` — etapas posteriores que releiam a planilha ou o registro não encontram mais o dado (ex. citado pelo usuário: equipamento identificado numa análise e indisponível para a próxima).
 3. **Perda por sobrescrita:** etapa posterior sobrescreve campo já preenchido sem registrar em auditoria (ex. `dc_pairer` reatribui `indices` a partir de `indices_saida` — hoje mitigado capturando `endereco_bruto` no diagnóstico ANTES do pairer; o padrão deve ser regra, não exceção).
+4. **Perda de trabalho do usuário (UI):** edição manual na revisão é informação adquirida como qualquer outra — ação subsequente da UI (aprovar, lote, reprocessamento) nunca pode revertê-la sem comando explícito do usuário (caso 2 da Origem; escolha explícita = clicar candidato, teclas 1-5, editar de novo).
 
 ### Exceção reconhecida
 
@@ -45,13 +49,14 @@ Planilha → estruturador (I1, I2)
    engine_tdt (I4)  →  TDT + revisão + auditoria (nada some)
 ```
 
-### Tarefas (alto nível — detalhar em plano)
+### Tarefas (alto nível — detalhadas no plano)
 
-1. **Auditoria de fluxo:** mapear etapa a etapa quais campos cada função lê/escreve/sobrescreve (tabela em `docs/`); identificar violações de I1–I3 remanescentes (candidatos: consumo local em `inferencia_topologia`, sobrescritas em `dc_pairer`/`normalizador_estrutural`).
-2. **Teste de conservação de identidade:** estender `test_conservacao` para afirmar que campos de identidade preenchidos no estruturador chegam ao fim do pipeline (ou têm evento de auditoria justificando a mudança) — não só a contagem de sinais.
-3. **Teste de independência:** para cada par de fontes de identidade (módulo×sigla já coberto), fixture com as duas presentes deve resolver as duas (guarda contra novos `elif`).
-4. **Auditoria de sobrescrita (I3):** helper único (ex. `aud.sobrescrita(id, campo, antes, depois, motivo)`) e adoção nas etapas que alteram campos preenchidos.
-5. **Gate de closeout:** incorporar à verificação de fim de spec a comparação com listas reais (SAN2, CVA, LVA, GAU, GTD) além do `gate_tdt_real`.
+1. **Mapa de fluxo de dados:** tabela etapa × lê/escreve/sobrescreve em `docs/fluxo_dados.md`; identifica violações de I1–I3 remanescentes.
+2. **`diff_identidade` + `Auditoria.sobrescritas`:** função pura que compara dois estágios por id e classifica mudanças em `sobrescrita` (valor→valor, INFO) e `perda` (valor→vazio, AVISO); helper na `Auditoria` emite os eventos (I3).
+3. **Wiring no pipeline:** `gerar_tdt` e `executar` chamam `aud.sobrescritas()` em volta das etapas que mutam identidade (fundir_pares_posicao, dc_pairer, corrigir, montar, aplicar_identidade, subdividir AT/BT).
+4. **Teste de conservação de identidade:** cadeia parcial (mesma de `test_conservacao_comandos`) com identidades preenchidas → zero `perda` no diff entrada×saída.
+5. **Testes de independência:** pares de fontes de identidade presentes juntos resolvem juntos (módulo×sigla já coberto; adicionar sigla×equipamento-na-linha e módulo×equipamento) — guarda contra novos `elif`.
+6. **Relatório de fluxo p/ listas reais:** `scripts/relatorio_fluxo_real.py` roda o pipeline numa lista real (path por argumento — inputs vivem fora do repo) e imprime conservação + sobrescritas/perdas, para o gate de closeout de specs (regra 4 do CLAUDE.md).
 
 ### Fora de escopo
 
