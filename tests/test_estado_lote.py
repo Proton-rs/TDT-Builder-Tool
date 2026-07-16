@@ -60,6 +60,17 @@ def test_aprovar_ids_ignora_sem_candidato_e_sem_sigla():
     assert estado.registros[0].status == "revisao"
 
 
+def test_aprovar_ids_preserva_sigla_reclassificada():
+    """Bug crítico 16/07: aprovar depois de reclassificar voltava pro
+    candidato top, jogando fora a revisão manual do usuário."""
+    estado = _estado_com(1)
+    estado.definir_sigla(0, "MANUAL")  # usuário reclassificou o sinal
+    n = estado.aprovar_ids([estado.registros[0].id])
+    assert n == 1
+    assert estado.registros[0].sigla_sinal == "MANUAL"
+    assert estado.registros[0].status == "decidido"
+
+
 def test_aprovar_ids_retorna_quantidade_aprovada_parcial():
     estado = _estado_com(2)
     n = estado.aprovar_ids([estado.registros[0].id])

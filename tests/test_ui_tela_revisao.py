@@ -463,6 +463,32 @@ def test_aprovar_e_proximo_com_indice_usa_candidato_n(qtbot):
     assert tela._estado.registros[0].sigla_sinal == "DJA1"
 
 
+def test_aprovar_preserva_sigla_reclassificada_pelo_usuario(qtbot):
+    """Bug crítico 16/07: reclassificar via delegate e apertar Aprovar
+    revertia para candidatos[0] (a sigla antiga)."""
+    tela = _tela_carregada(qtbot, [
+        _rec_cand("s:1", "A", candidatos=[Candidato("DJF1", 0.9, "tfidf")]),
+        _rec_cand("s:2", "B", candidatos=[Candidato("DJA1", 0.8, "tfidf")]),
+    ])
+    tela.tabela.selectRow(0)
+    tela._modelo.definir_sigla(0, "SGF")  # mesma rota do DelegateSinal
+    tela._aprovar_e_proximo()
+    assert tela._estado.registros[0].sigla_sinal == "SGF"
+    assert tela._estado.registros[0].status == "decidido"
+
+
+def test_aprovar_sem_candidatos_com_sigla_aprova_a_sigla(qtbot):
+    # ex.: nome_sigla_inconsistente — sigla veio da coluna, sem candidatos;
+    # aprovar confirma a sigla em vez de dar beep
+    from dataclasses import replace
+    rec = replace(_rec_cand("s:1", "A", candidatos=[]), sigla_sinal="IA")
+    tela = _tela_carregada(qtbot, [rec])
+    tela.tabela.selectRow(0)
+    tela._aprovar_e_proximo()
+    assert tela._estado.registros[0].sigla_sinal == "IA"
+    assert tela._estado.registros[0].status == "decidido"
+
+
 def test_aprovar_sem_candidatos_e_noop(qtbot):
     tela = _tela_carregada(qtbot, [_rec_cand("s:1", "A", candidatos=[])])
     tela.tabela.selectRow(0)

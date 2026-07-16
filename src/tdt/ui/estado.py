@@ -67,7 +67,9 @@ class AppState:
 
     def aprovar_ids(self, ids: list[str]) -> int:
         """Aprova em lote os registros com os `ids` dados, usando a mesma
-        transição de `definir_sigla` (sigla do candidato top ou já atribuída).
+        transição de `definir_sigla`. A sigla JÁ ATRIBUÍDA tem precedência
+        sobre o candidato top — aprovar confirma o que o usuário vê/editou,
+        nunca reverte uma reclassificação manual (bug crítico 16/07).
         Um único snapshot para o lote inteiro: 1 `desfazer()` reverte tudo.
         """
         self._snapshot()
@@ -78,7 +80,7 @@ class AppState:
             if indice is None:
                 continue
             r = self.registros[indice]
-            sigla = r.candidatos[0].sigla if r.candidatos else r.sigla_sinal
+            sigla = r.sigla_sinal or (r.candidatos[0].sigla if r.candidatos else None)
             if not sigla:
                 continue
             self.definir_sigla(indice, sigla, snapshot=False)

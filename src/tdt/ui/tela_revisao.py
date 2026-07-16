@@ -728,8 +728,14 @@ class TelaRevisao(QWidget):
                 return
             sigla = r.candidatos[indice_candidato].sigla
         else:
-            item = self.lista_candidatos.currentItem()
-            sigla = item.data(Qt.UserRole) if item else None
+            # Aprovar confirma o que a coluna Sinal mostra: sigla já
+            # reclassificada pelo usuário (ou pré-preenchida pelo pipeline)
+            # tem precedência sobre o painel de candidatos — senão a
+            # aprovação revertia a revisão manual (bug crítico 16/07).
+            sigla = r.sigla_sinal
+            if not sigla:
+                item = self.lista_candidatos.currentItem()
+                sigla = item.data(Qt.UserRole) if item else None
             if not sigla and r.candidatos:
                 sigla = r.candidatos[0].sigla
         if not sigla:
