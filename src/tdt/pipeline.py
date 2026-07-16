@@ -529,10 +529,14 @@ def gerar_tdt(registros, template_path, lp, subestacao=None, aliases=None, confi
     aud = auditoria or Auditoria()
     lst = _aplicar_aliases(list(registros), aliases)
     wl_pos = _whitelist_posicao(lp, config)
-    lst = fundir_pares_posicao(lst, wl_pos)
-    pareados, _rev = dc_pairer.parear(lst, config)
+    fundidos = fundir_pares_posicao(lst, wl_pos)
+    aud.sobrescritas("fundir_pares_posicao", lst, fundidos)
+    pareados, _rev = dc_pairer.parear(fundidos, config)
+    aud.sobrescritas("dc_pairer", fundidos, pareados)
     corrigidos, _rev2 = corrigir(list(pareados), wl_pos)
+    aud.sobrescritas("corrigir", pareados, corrigidos)
     lista = criador_lista_homogenea.montar(list(corrigidos), subestacao=subestacao)
+    aud.sobrescritas("montar", corrigidos, lista.registros)
     lista, rev_dup = engine_tdt.particionar_custom_id_duplicado(lista)
     if rev_dup:
         ids = tuple(it.registro.id for it in rev_dup)
@@ -614,7 +618,9 @@ def executar(
             mapa = analisar(rows, encoder, ref_emb, siglas_set=lp.siglas, config=config)
             sinais = list(estruturar(rows, mapa, sheet_name=sn, config=config, vocab=vocab,
                                      siglas_set=lp.siglas))
+        sinais_pre = sinais
         sinais, conf_mod, avisos_mod = aplicar_identidade(sinais, sn, rows, config)
+        aud.sobrescritas("aplicar_identidade", sinais_pre, sinais)
         for msg in avisos_mod:
             aud.evento("identidade_modulo", msg, "AVISO")
         aviso_div = aviso_divergencia_sheet(sn, sinais, config)
@@ -644,7 +650,9 @@ def executar(
         # módulo (correntes/tensões do AT e do BT colidiriam na chave de
         # dedup sem isso).
         secao_por_linha = derivar_secao_por_linha(rows, sn)
+        sinais_pre = sinais
         sinais = subdividir_transformador_at_bt(sinais, config, secao_por_linha)
+        aud.sobrescritas("subdividir_at_bt", sinais_pre, sinais)
         # C2.2/C2.3 (spC2): infere equipamento_alvo pela topologia do tipo de
         # módulo p/ alimentar r_equipamento/r3_fase no scoring. Família não
         # inferida NÃO bloqueia: o sinal com sigla decidida segue para o
@@ -734,9 +742,13 @@ def executar(
 
     with _timer("dc_pairer + corrigir + montar + tdt", aud):
         wl_pos = _whitelist_posicao(lp, config)
+        decididos_pre = decididos
         decididos = fundir_pares_posicao(decididos, wl_pos)
+        aud.sobrescritas("fundir_pares_posicao", decididos_pre, decididos)
         pareados, rev_pair = dc_pairer.parear(decididos, config)
+        aud.sobrescritas("dc_pairer", decididos, pareados)
         corrigidos, rev_estrut = corrigir(list(pareados), wl_pos)
+        aud.sobrescritas("corrigir", pareados, corrigidos)
         revisao.extend(rev_pair)
         revisao.extend(rev_estrut)
 
