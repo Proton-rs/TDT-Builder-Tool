@@ -379,6 +379,55 @@ def test_coluna_modulo_ganha_da_extracao_do_nome():
     assert rec.modulo.origem_contexto == "coluna:MODULO_POR_LINHA"
 
 
+# --- independência de identidades (SP-FLUXO-DADOS Task 5, invariante I2) ---
+# Cada fonte de identidade presente na linha resolve a SUA identidade;
+# nenhuma desliga a outra (módulo×sigla coberto em
+# test_modulo_por_linha_nao_engole_coluna_sigla).
+
+
+def test_sigla_coluna_e_equipamento_na_linha_resolvem_juntos():
+    rows = [
+        ("DESCRIÇÃO", "TIPO", "EQUIPAMENTO", "SIGLA", "IDX"),
+        ("Mola carregada", "D", "52-11", "MOLA", "10"),
+    ]
+    mapa = MapaColunas(header_row=1, colunas={
+        "descricao": 0, "tipo": 1, "sigla": 3, "indice": 4})
+    recs = estruturar(rows, mapa, sheet_name="AL11", config=Config(),
+                      siglas_set=frozenset({"MOLA"}))
+    assert recs[0].sigla_sinal == "MOLA"           # coluna SIGLA
+    assert recs[0].eletrico.nome_equipamento == "52-11"  # varredura da linha
+
+
+def test_modulo_coluna_e_equipamento_na_linha_resolvem_juntos():
+    rows = [
+        ("MODULO", "DESCRIÇÃO", "TIPO", "EQUIPAMENTO", "IDX"),
+        ("AL21", "Disj. aberto", "D", "52-11", "10"),
+        ("AL22", "Disj. fechado", "D", "52-12", "11"),
+    ]
+    mapa = MapaColunas(header_row=1, colunas={
+        "modulo": 0, "descricao": 1, "tipo": 2, "indice": 4})
+    recs = estruturar(rows, mapa, sheet_name="S1", config=Config())
+    assert [r.modulo.nome for r in recs] == ["AL21", "AL22"]
+    assert [r.eletrico.nome_equipamento for r in recs] == ["52-11", "52-12"]
+
+
+def test_modulo_sigla_e_equipamento_simultaneos_resolvem_os_tres():
+    """Critério de sucesso da spec: as TRÊS identidades na mesma linha
+    (layout LVA AL11/AL21 completo) resolvem juntas."""
+    rows = [
+        ("MODULO", "DESCRIÇÃO", "TIPO", "EQUIPAMENTO", "SIGLA", "IDX"),
+        ("AL21", "Mola carregada", "D", "52-11", "MOLA", "10"),
+        ("AL22", "Mola carregada", "D", "52-12", "MOLA", "11"),
+    ]
+    mapa = MapaColunas(header_row=1, colunas={
+        "modulo": 0, "descricao": 1, "tipo": 2, "sigla": 4, "indice": 5})
+    recs = estruturar(rows, mapa, sheet_name="AL21", config=Config(),
+                      siglas_set=frozenset({"MOLA"}))
+    assert [r.modulo.nome for r in recs] == ["AL21", "AL22"]
+    assert [r.sigla_sinal for r in recs] == ["MOLA", "MOLA"]
+    assert [r.eletrico.nome_equipamento for r in recs] == ["52-11", "52-12"]
+
+
 # --- marcador tolerante a numeracao (SP-CVA2 E3.1) --------------------------
 
 
