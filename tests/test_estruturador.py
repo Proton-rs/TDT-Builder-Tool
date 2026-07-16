@@ -388,7 +388,7 @@ def test_coluna_modulo_ganha_da_extracao_do_nome():
 def test_sigla_coluna_e_equipamento_na_linha_resolvem_juntos():
     rows = [
         ("DESCRIÇÃO", "TIPO", "EQUIPAMENTO", "SIGLA", "IDX"),
-        ("Mola carregada", "D", "52-11", "MOLA", "10"),
+        ("MOLA", "D", "52-11", "MOLA", "10"),
     ]
     mapa = MapaColunas(header_row=1, colunas={
         "descricao": 0, "tipo": 1, "sigla": 3, "indice": 4})
@@ -396,6 +396,7 @@ def test_sigla_coluna_e_equipamento_na_linha_resolvem_juntos():
                       siglas_set=frozenset({"MOLA"}))
     assert recs[0].sigla_sinal == "MOLA"           # coluna SIGLA
     assert recs[0].eletrico.nome_equipamento == "52-11"  # varredura da linha
+    assert recs[0].status == "decidido"
 
 
 def test_modulo_coluna_e_equipamento_na_linha_resolvem_juntos():
@@ -416,8 +417,8 @@ def test_modulo_sigla_e_equipamento_simultaneos_resolvem_os_tres():
     (layout LVA AL11/AL21 completo) resolvem juntas."""
     rows = [
         ("MODULO", "DESCRIÇÃO", "TIPO", "EQUIPAMENTO", "SIGLA", "IDX"),
-        ("AL21", "Mola carregada", "D", "52-11", "MOLA", "10"),
-        ("AL22", "Mola carregada", "D", "52-12", "MOLA", "11"),
+        ("AL21", "MOLA", "D", "52-11", "MOLA", "10"),
+        ("AL22", "MOLA", "D", "52-12", "MOLA", "11"),
     ]
     mapa = MapaColunas(header_row=1, colunas={
         "modulo": 0, "descricao": 1, "tipo": 2, "sigla": 4, "indice": 5})
@@ -426,6 +427,7 @@ def test_modulo_sigla_e_equipamento_simultaneos_resolvem_os_tres():
     assert [r.modulo.nome for r in recs] == ["AL21", "AL22"]
     assert [r.sigla_sinal for r in recs] == ["MOLA", "MOLA"]
     assert [r.eletrico.nome_equipamento for r in recs] == ["52-11", "52-12"]
+    assert [r.status for r in recs] == ["decidido", "decidido"]
 
 
 # --- marcador tolerante a numeracao (SP-CVA2 E3.1) --------------------------
