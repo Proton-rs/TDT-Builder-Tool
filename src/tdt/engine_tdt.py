@@ -94,16 +94,24 @@ def _remote_unit(subestacao: str | None) -> str | None:
     return f"UTR_{subestacao}_1" if subestacao else None
 
 
-def _device_mapping(nome: str, sigla: str, eh_protecao: bool) -> str:
-    """Padrão RGE (spec 2026-07-15): proteção mantém o sufixo PROT_<SIGLA>;
-    não-proteção cai direto no equipamento — o nome hierárquico SEM a sigla
+def _device_mapping(
+    nome: str,
+    sigla: str,
+    eh_protecao: bool,
+    subestacao: str | None = None,
+    modulo_nome: str | None = None,
+    barra: str | None = None,
+) -> str:
+    """Padrão RGE (spec 2026-07-15, correção 16/07): proteção cai SEMPRE no
+    módulo duplicado — nunca no equipamento específico da linha, mesmo
+    quando um ID é inequívoco (`LVA_AL11_52-11_PROT_CAFL` estava errado; o
+    correto é `LVA_AL11_AL11_PROT_CAFL`). Reconstrói via `nome_hierarquico`
+    com `equipamento=None`, que já produz o padrão módulo-duplicado.
+    Não-proteção cai direto no equipamento — o nome hierárquico SEM a sigla
     final (sem equipamento o nome já repete o módulo, então o fallback
     módulo-duplicado emerge sozinho)."""
     if eh_protecao:
-        # insere PROT_ antes da sigla final (nome termina em "..._{sigla}" ou == sigla)
-        if nome.endswith(sigla):
-            return nome[: len(nome) - len(sigla)] + f"PROT_{sigla}"
-        return nome
+        return nome_hierarquico(subestacao, modulo_nome, None, barra, f"PROT_{sigla}")
     if nome.endswith(f"_{sigla}"):
         return nome[: len(nome) - len(sigla) - 1]
     return nome
@@ -200,7 +208,10 @@ def _valores(rec: SignalRecord, subestacao: str | None, padrao: ListaPadraoADMS,
         "Remote Point Name": nome,
         "Phases": _fase_saida(rec.eletrico.fase),
         "Signal AOR Group": _aor_group(subestacao, alimentador),
-        "Device Mapping": _device_mapping(nome, rec.sigla_sinal or "?", eh_prot),
+        "Device Mapping": _device_mapping(
+            nome, rec.sigla_sinal or "?", eh_prot,
+            subestacao, rec.modulo.nome, rec.eletrico.barra,
+        ),
         "Direction": _DIRECAO.get(direcao, "Read"),
         "Message Mapping": sp.mm if sp else None,
         "Input Data Type": rec.tipo_sinal.datatype,

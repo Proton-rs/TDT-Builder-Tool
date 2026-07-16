@@ -406,14 +406,25 @@ def test_remote_unit():
 
 
 def test_device_mapping():
-    assert _device_mapping("IMA_3_20T", "20T", True) == "IMA_3_PROT_20T"
+    # correção 16/07: proteção ignora o `nome` recebido e reconstrói do
+    # módulo duplicado — nunca cai no equipamento específico da linha.
+    assert _device_mapping(
+        "IMA_3_20T", "20T", True, subestacao="IMA", modulo_nome="3",
+    ) == "IMA_3_3_PROT_20T"
     # spec 2026-07-15: non-protection signals fall directly to equipment, sans sigla
     assert _device_mapping("IMA_3_DJ", "DJ", False) == "IMA_3"
+    # sem subestacao/modulo (contexto não disponível) -> só PROT_<SIGLA>
     assert _device_mapping("BATA", "BATA", True) == "PROT_BATA"
 
 
-def test_device_mapping_protecao_mantem_prot():
-    assert _device_mapping("LVA_AL11_52-11_CAFL", "CAFL", True) == "LVA_AL11_52-11_PROT_CAFL"
+def test_device_mapping_protecao_cai_no_modulo_duplicado():
+    # correção 16/07: LVA_AL11_52-11_PROT_CAFL estava errado (proteção não
+    # deve carregar o equipamento específico, mesmo quando inequívoco); o
+    # correto é o módulo duplicado, igual ao fallback de não-proteção sem
+    # equipamento.
+    assert _device_mapping(
+        "LVA_AL11_52-11_CAFL", "CAFL", True, subestacao="LVA", modulo_nome="AL11",
+    ) == "LVA_AL11_AL11_PROT_CAFL"
 
 
 def test_device_mapping_nao_protecao_cai_no_equipamento():
