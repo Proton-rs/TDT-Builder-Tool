@@ -158,6 +158,10 @@ def estruturar(
         origem_modulo = "sheet_name"
         nome_mod_final = nome_mod
 
+        # Módulo por coluna e sigla por coluna são INDEPENDENTES: uma sheet
+        # pode ter as duas (LVA AL21) e cada uma resolve a sua identidade.
+        # Um `elif` aqui já desligou a pré-classificação por sigla da sheet
+        # inteira quando a coluna MODULO era reivindicada (regressão b9b0118).
         if c_modulo is not None:
             # Gênero sheet-por-tipo: módulo numa coluna dedicada, por linha.
             # Precedência sobre extração do NOME (coluna explícita ganha).
@@ -173,19 +177,22 @@ def estruturar(
                 nome_mod_final = None
                 status = "revisao"
                 motivo_revisao = "modulo_indefinido"
-        elif tem_sigla and siglas_set is not None:
+        if tem_sigla and siglas_set is not None:
             sv = str(row[c_sigla] or "").strip().upper()
             if sv and sv in siglas_set:
                 sigla_sinal = sv
                 nome_str = str(row[c_desc]) if tem_desc else ""
                 if nome_str and not sigla_esta_no_nome(nome_str, sv):
-                    status = "revisao"
-                    motivo_revisao = "nome_sigla_inconsistente"
+                    if status == "pendente":
+                        status = "revisao"
+                        motivo_revisao = "nome_sigla_inconsistente"
                 else:
-                    status = "decidido"
+                    if status == "pendente":
+                        status = "decidido"
                     mod_extraido = extrair_modulo_do_nome(nome_str) if nome_str else None
                     if mod_extraido:
-                        nome_mod_final, origem_modulo = mod_extraido, "coluna:SIGLA"
+                        if c_modulo is None:
+                            nome_mod_final, origem_modulo = mod_extraido, "coluna:SIGLA"
                         # 3º token do NOME (equipamento/instância) -- sem isso,
                         # múltiplas instâncias do mesmo módulo+sigla (ex:
                         # "SLOTD" vs "SLOTD-2") colidem na chave de dedup de

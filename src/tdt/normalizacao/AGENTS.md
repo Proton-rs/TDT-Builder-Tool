@@ -7,7 +7,7 @@ Normalização e estruturação do dado de entrada: do texto bruto da planilha a
 - `normalizador.py`: pipeline N0..N5 de normalização de descrições (N0=contexto estrutural, N1=abreviações, N2=IDs, N3=boilerplate, N4=typos, N5=unidades). Exporta `canonizar()`, `extrair_contexto_estrutural()`, `FASES`.
 - `tokenizer.py`: rejunta siglas separadas por espaço (ex. "67 N" → "67N").
 - `vocabulario_tipo.py`: vocabulário de classificação Discreto/Analógico/Comando. Exporta `classificar()`, `CODIGOS_TIPO`.
-- `estruturador.py`: monta `SignalRecord` a partir de linhas de sheet não-homogênea (marcadores de seção, coluna Tipo). Exporta `estruturar()`, `_parse_indices()`.
+- `estruturador.py`: monta `SignalRecord` a partir de linhas de sheet não-homogênea (marcadores de seção, coluna Tipo). Exporta `estruturar()`, `_parse_indices()`. Invariante: módulo-por-coluna e sigla-por-coluna são identidades INDEPENDENTES — nunca mutuamente exclusivas (regressão LVA AL21, 16/07).
 - `estruturador_homogeneo.py`: caminho determinístico para sheets homogêneas com cabeçalho fixo. Exporta `detectar_header()`, `estruturar_homogeneo()` (retorna 4-tupla `(decididos, pendentes, revisao, avisos)`; usa `identidade_homogenea.resolver()` para nome de módulo/equipamento; tipo `A/D` → `DiscreteAnalog`/`Input`; sigla em `config.siglas_sem_ponto` (ex. COMTAP) vai pra `revisao` com motivo `comando_tap_nao_modelado` em vez de virar sinal; lint não-bloqueante compara NOME do cliente x nome calculado).
 - `identidade_homogenea.py`: resolve módulo/equipamento do caminho homogêneo pelo bloco de cabeçalho (spec 2026-07-10). Exporta `extrair_bloco()`, `resolver()`, `Identidade`.
 

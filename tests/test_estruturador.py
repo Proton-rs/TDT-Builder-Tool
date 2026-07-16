@@ -326,6 +326,59 @@ def test_estruturar_modulo_vazio_vai_para_revisao():
     assert recs[1].modulo.nome is None
 
 
+def test_modulo_por_linha_nao_engole_coluna_sigla():
+    """Regressão LVA AL21 (b9b0118): módulo por coluna e sigla por coluna são
+    independentes — sheet com as DUAS colunas precisa aplicar as duas. O
+    ``elif`` tornava a resolução mutuamente exclusiva e a sheet inteira
+    perdia a pré-classificação por sigla."""
+    rows = [
+        ("TOPOLOGIA", "DESCRIÇÃO", "TIPO", "MÓDULO", "EQUIP", "SIGLA", "IDX"),
+        ("LVA\\AL 21", "P", "A", "AL21", "TC", "P", "10"),
+        ("LVA\\AL 21", "Q", "A", "AL22", "TC", "Q", "11"),
+    ]
+    mapa = MapaColunas(header_row=1, colunas={
+        "descricao": 1, "tipo": 2, "modulo": 3, "sigla": 5, "indice": 6})
+    recs = estruturar(rows, mapa, sheet_name="AL21", config=Config(),
+                      siglas_set=frozenset({"P", "Q"}))
+    assert [r.modulo.nome for r in recs] == ["AL21", "AL22"]
+    assert all(r.modulo.origem_contexto == "coluna:MODULO_POR_LINHA" for r in recs)
+    assert [r.sigla_sinal for r in recs] == ["P", "Q"]
+    assert all(r.status == "decidido" for r in recs)
+
+
+def test_modulo_vazio_preserva_sigla_da_coluna():
+    # módulo indefinido continua mandando pra revisão, mas a sigla lida da
+    # coluna não pode ser descartada no caminho
+    rows = [
+        ("Modulo", "Descricao", "Tipo", "SIGLA", "Addr"),
+        ("", "P", "A", "P", "1"),
+    ]
+    mapa = MapaColunas(header_row=1, colunas={
+        "modulo": 0, "descricao": 1, "tipo": 2, "sigla": 3, "indice": 4})
+    recs = estruturar(rows, mapa, sheet_name="ESTADOS", config=Config(),
+                      siglas_set=frozenset({"P"}))
+    assert recs[0].status == "revisao"
+    assert recs[0].justificativa == "modulo_indefinido"
+    assert recs[0].sigla_sinal == "P"
+
+
+def test_coluna_modulo_ganha_da_extracao_do_nome():
+    # com coluna MODULO explícita, o módulo extraído do NOME não sobrescreve
+    rows = [
+        ("Modulo", "NOME", "Tipo", "SIGLA", "Addr"),
+        ("AL21", "SND_LT67SAN_LT67SAN_79", "Digital", "79", "10"),
+    ]
+    mapa = MapaColunas(header_row=1, colunas={
+        "modulo": 0, "descricao": 1, "tipo": 2, "sigla": 3, "indice": 4})
+    recs = estruturar(rows, mapa, sheet_name="S1", config=Config(),
+                      siglas_set=_SIGLAS_LP)
+    rec = recs[0]
+    assert rec.status == "decidido"
+    assert rec.sigla_sinal == "79"
+    assert rec.modulo.nome == "AL21"
+    assert rec.modulo.origem_contexto == "coluna:MODULO_POR_LINHA"
+
+
 # --- marcador tolerante a numeracao (SP-CVA2 E3.1) --------------------------
 
 
