@@ -1,6 +1,7 @@
 # SP-DEVICE-MAPPING-RGE — Identidade de equipamento + Device Mapping padrão RGE
 
 **Data:** 2026-07-15
+**Status:** implementado (6 tasks, branch `feature/sp-device-mapping-rge`; gate `bench.regressao` pct 72.1%→72.3%, `comum` 954→952 — queda esperada: 5 sinais com equipamento conflitante passam a ir pra revisão em vez de gerar endereço; suite 962→985 testes, todos verdes). Whole-branch review (opus): ready to merge, achado Important sobre precisão do invariante de Custom ID corrigido no §Não-escopo abaixo (não era regressão).
 **Origem:** `docs/anot.txt` (análise da lista LVA, sheet AL11) — Frente 1 da decomposição de 15/07.
 A Frente 2 (ajustes de UX/perf da ferramenta) fica para spec própria, fora deste escopo.
 
@@ -29,8 +30,17 @@ Análise da lista LVA (sheet AL11) revelou dois defeitos encadeados:
 
 ## Não-escopo
 
-- Remote Point Custom ID / nome hierárquico: **não mudam** (gates
-  `particionar_custom_id_duplicado`/`particionar_endereco_duplicado` intactos).
+- Remote Point Custom ID / nome hierárquico: as regras de Device Mapping (§4,
+  `_device_mapping`/`_device_mapping_analog`) **não tocam** neles — só a coluna
+  Device Mapping muda. **Precisão (achado no whole-branch review, 15/07):** a
+  identidade de equipamento em si (Tasks 1/3) pode legitimamente mudar
+  Custom ID/nome_hierárquico quando corrige um `nome_equipamento` errado
+  (81-1 deixa de ser equipamento) ou preenche um que faltava (registro por
+  módulo) — é o efeito pretendido da correção de identidade, não uma
+  violação. Verificado: no dado real GTA, o backfill da Task 3 não introduziu
+  nenhum `custom_id_duplicado` novo (374 pós-branch vs 375 baseline — caiu,
+  não subiu); os gates `particionar_custom_id_duplicado`/
+  `particionar_endereco_duplicado` continuam intactos como mecanismo.
 - DiscreteAnalog (TAP/COMTAP): inalterado — não citado na anotação.
 - Ajustes de UI/perf (Frente 2, spec própria).
 - Matching/scoring: nenhum knob de score muda; `81-1` permanecer na descrição é

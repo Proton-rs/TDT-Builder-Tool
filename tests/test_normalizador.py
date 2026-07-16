@@ -5,6 +5,7 @@ from tdt.normalizacao.normalizador import (
     corrigir_typos,
     expandir_abreviacoes,
     extrair_contexto_estrutural,
+    familia_do_id,
     normalizar,
     normalizar_unidades,
     remover_boilerplate,
@@ -254,10 +255,15 @@ def test_extrai_equipamento_seccionadora():
     assert "89" not in texto.split()
 
 
-def test_codigo_fora_da_tabela_remove_mas_nao_classifica():
+def test_codigo_fora_da_whitelist_nao_remove_nem_classifica():
+    # spec 2026-07-15: whitelist restrita a 52/24/29/89 -- "67-1" não é
+    # equipamento (nem ANSI da tabela, nem TR), então _ID_EQUIPAMENTO não
+    # casa: o ID fica intacto no texto (discriminador pro matching, como
+    # 81-1) e ctx não é preenchido.
     texto, ctx = extrair_contexto_estrutural("RELE 67-1 ATUADO")
     assert ctx.equipamento_alvo is None
-    assert "67" not in texto.split()
+    assert ctx.nome_equipamento is None
+    assert "67-1" in texto
 
 
 def test_extrai_nome_equipamento_bruto():
@@ -271,12 +277,16 @@ def test_nome_equipamento_none_sem_id():
 
 
 def test_equipamento_pela_palavra_quando_id_nao_e_ansi():
-    # "24-1" não é código ANSI (só 52/89/29), mas a palavra DISJUNTOR resolve.
+    # spec 2026-07-15: whitelist restrita a 52/24/29/89 -- "24" agora É
+    # whitelist (resolveria direto pelo ID). "67-1" fica fora da whitelist
+    # (função de proteção, não equipamento), então só a palavra DISJUNTOR
+    # resolve o equipamento_alvo; o ID não é reconhecido formalmente (fica
+    # no texto), então nome_equipamento continua None.
     # Sem isso, o forçamento DJF1 (pareamento_polaridade) não dispara.
-    _, ctx = extrair_contexto_estrutural("24-1 DISJUNTOR FECHADO")
+    _, ctx = extrair_contexto_estrutural("67-1 DISJUNTOR FECHADO")
     assert ctx.equipamento_alvo == "Disjuntor"
-    assert ctx.nome_equipamento == "24-1"
-    _, ctx2 = extrair_contexto_estrutural("DJ 24-1 ABERTO")
+    assert ctx.nome_equipamento is None
+    _, ctx2 = extrair_contexto_estrutural("DJ 67-1 ABERTO")
     assert ctx2.equipamento_alvo == "Disjuntor"
 
 
@@ -399,3 +409,43 @@ def test_parenteses_e_pontuacao_extra_virram_espaco():
     cfg = Config()
     assert normalizar("DISJUNTOR (52-1) ABERTO, FECHADO; TESTE: OK", cfg) == \
         "DISJUNTOR 52 1 ABERTO FECHADO TESTE OK"
+
+
+# --- N0: whitelist de equipamento (Task 1, SP-DEVICE-MAPPING-RGE) -----------
+
+
+def test_81_nao_e_equipamento():
+    # spec 2026-07-15: 81-1 é estágio de subfrequência, não equipamento.
+    base, ctx = extrair_contexto_estrutural("SUBFREQUENCIA 81-1 ATUADO")
+    assert ctx.nome_equipamento is None
+    assert ctx.equipamento_alvo is None
+    assert "81-1" in base  # fica no texto: discrimina estágio no matching
+
+
+def test_24_e_disjuntor():
+    _, ctx = extrair_contexto_estrutural("DISJUNTOR 24-1 FECHADO")
+    assert ctx.equipamento_alvo == "Disjuntor"
+    assert ctx.nome_equipamento == "24-1"
+
+
+def test_tr_e_transformador():
+    base, ctx = extrair_contexto_estrutural("TEMPERATURA OLEO TR1")
+    assert ctx.equipamento_alvo == "Transformador"
+    assert ctx.nome_equipamento == "TR1"
+    assert "TR1" not in base  # ID removido do remanescente, como o N-N
+
+
+def test_tr_nao_casa_dentro_de_sigla():
+    # "86TR1" não tem boundary antes do TR — não pode virar equipamento TR1
+    _, ctx = extrair_contexto_estrutural("BLOQUEIO 86TR1 ATUADO")
+    assert ctx.nome_equipamento is None
+
+
+def test_familia_do_id():
+    assert familia_do_id("52-11") == "Disjuntor"
+    assert familia_do_id("24-1") == "Disjuntor"
+    assert familia_do_id("89-2") == "Seccionadora"
+    assert familia_do_id("29-1") == "Seccionadora"
+    assert familia_do_id("TR2") == "Transformador"
+    assert familia_do_id("81-1") is None
+    assert familia_do_id(None) is None

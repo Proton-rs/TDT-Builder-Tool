@@ -39,7 +39,8 @@ from tdt.normalizacao.estruturador_homogeneo import detectar_header, estruturar_
 from tdt.identidade_modulo import aplicar_identidade, aviso_divergencia_sheet, particionar_por_confianca
 from tdt.analise.identificador import classificar, ler_rows
 from tdt.inferencia_topologia import (
-    derivar_secao_por_linha, inferir_equipamento, subdividir_transformador_at_bt,
+    atribuir_id_por_registro, derivar_secao_por_linha, inferir_equipamento,
+    subdividir_transformador_at_bt,
 )
 from tdt.matchers.fuzzy_match import FuzzyMatcher
 from tdt.normalizacao.normalizador import canonizar, normalizar
@@ -650,6 +651,14 @@ def executar(
         # dc_pairer, que arbitra sem-comando -> TDT / comando ambíguo ->
         # pareamento_ambiguo (Spec C, supersede o gate equipamento_ambiguo).
         sinais = inferir_equipamento(sinais, config)
+        # Task 3 (SP-DEVICE-MAPPING-RGE): backfill do ID do equipamento a
+        # partir do que já foi REALMENTE encontrado na sheet (Tasks 1/2) —
+        # só quando é inequívoco (1 candidato da família no módulo); 2+
+        # candidatos -> aviso de auditoria, sem atribuir (fallback do device
+        # mapping resolve mais adiante).
+        sinais, avisos_reg = atribuir_id_por_registro(sinais)
+        for msg in avisos_reg:
+            aud.evento("registro_equipamentos", msg, "AVISO")
         # Endereço bruto, capturado ANTES do dc_pairer (que reatribui
         # `indices` a partir de `indices_saida` ao fundir pares D+C -- ver
         # `dc_pairer.py:69`) -- p/ a auditoria mostrar o endereço como lido,

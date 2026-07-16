@@ -377,3 +377,39 @@ def test_marcador_de_secao_define_direcao_e_nao_vira_registro():
     assert por_id["CVA11:3"].tipo_sinal.direcao == "Output"
     assert por_id["CVA11:3"].tipo_sinal.categoria == "Discrete"
     assert por_id["CVA11:5"].tipo_sinal.direcao == "Input"
+
+
+def test_equipamento_vem_de_outra_coluna_da_linha():
+    # spec 2026-07-15: busca de equipamento varre a linha inteira, não só a
+    # descrição (AL11 tem coluna própria de equipamento).
+    rows = [
+        ("Equipamento", "Descrição", "Endereço"),
+        ("52-11", "MOLA CARREGADA", "10"),
+    ]
+    mapa = MapaColunas(header_row=1, colunas={"descricao": 1, "indice": 2})
+    recs = estruturar(rows, mapa, sheet_name="AL11", config=Config())
+    assert recs[0].eletrico.nome_equipamento == "52-11"
+    assert recs[0].eletrico.equipamento_alvo == "Disjuntor"
+    assert recs[0].status != "revisao"
+
+
+def test_dois_equipamentos_distintos_na_linha_vao_pra_revisao():
+    rows = [
+        ("Equipamento", "Descrição", "Endereço"),
+        ("89-1", "DISJUNTOR 52-11 FECHADO", "10"),
+    ]
+    mapa = MapaColunas(header_row=1, colunas={"descricao": 1, "indice": 2})
+    recs = estruturar(rows, mapa, sheet_name="AL11", config=Config())
+    assert recs[0].status == "revisao"
+    assert recs[0].justificativa == "equipamento_conflitante"
+
+
+def test_mesmo_equipamento_repetido_na_linha_nao_conflita():
+    rows = [
+        ("Equipamento", "Descrição", "Endereço"),
+        ("52-11", "DISJUNTOR 52-11 FECHADO", "10"),
+    ]
+    mapa = MapaColunas(header_row=1, colunas={"descricao": 1, "indice": 2})
+    recs = estruturar(rows, mapa, sheet_name="AL11", config=Config())
+    assert recs[0].status != "revisao"
+    assert recs[0].eletrico.nome_equipamento == "52-11"

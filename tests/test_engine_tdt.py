@@ -7,6 +7,7 @@ import openpyxl
 from tdt import criador_lista_homogenea, engine_tdt
 from tdt.contracts import (
     Descricoes,
+    Eletrico,
     Enderecamento,
     ListaHomogenea,
     Modulo,
@@ -23,6 +24,8 @@ from tdt.engine_tdt import (
     _aor_group,
     _remote_unit,
     _device_mapping,
+    _device_mapping_analog,
+    _disjuntor_por_modulo,
     _normal_value,
     _alias_hoje,
     _coords_comando,
@@ -404,8 +407,31 @@ def test_remote_unit():
 
 def test_device_mapping():
     assert _device_mapping("IMA_3_20T", "20T", True) == "IMA_3_PROT_20T"
-    assert _device_mapping("IMA_3_DJ", "DJ", False) == "IMA_3_DJ"
+    # spec 2026-07-15: non-protection signals fall directly to equipment, sans sigla
+    assert _device_mapping("IMA_3_DJ", "DJ", False) == "IMA_3"
     assert _device_mapping("BATA", "BATA", True) == "PROT_BATA"
+
+
+def test_device_mapping_protecao_mantem_prot():
+    assert _device_mapping("LVA_AL11_52-11_CAFL", "CAFL", True) == "LVA_AL11_52-11_PROT_CAFL"
+
+
+def test_device_mapping_nao_protecao_cai_no_equipamento():
+    # spec 2026-07-15: não-proteção cai direto no equipamento, sem sigla.
+    assert _device_mapping("LVA_AL11_52-11_CAFL", "CAFL", False) == "LVA_AL11_52-11"
+
+
+def test_device_mapping_nao_protecao_seccionadora():
+    assert _device_mapping("LVA_AL11_89-1_SECC", "SECC", False) == "LVA_AL11_89-1"
+
+
+def test_device_mapping_nao_protecao_sem_equipamento_cai_no_modulo():
+    # nome_hierarquico repete o módulo quando não há equipamento
+    assert _device_mapping("LVA_AL11_AL11_MOLA", "MOLA", False) == "LVA_AL11_AL11"
+
+
+def test_device_mapping_nome_igual_sigla_nao_quebra():
+    assert _device_mapping("CAFL", "CAFL", False) == "CAFL"
 
 
 def test_normal_value():
@@ -550,7 +576,8 @@ def test_campos_novos_no_output(template_dnp3_path, lista_padrao_path, tmp_path)
     assert ws.cell(5, col["Remote Point Type"]).value == "Status"
     assert ws.cell(5, col["Remote Point Name"]).value == "IMA_3_3_DJ"
     assert ws.cell(5, col["Signal AOR Group"]).value == "IMA Trans"
-    assert ws.cell(5, col["Device Mapping"]).value == "IMA_3_3_DJ"
+    # spec 2026-07-15: non-protection signals (DJ is not RelayTrip) fall directly to equipment
+    assert ws.cell(5, col["Device Mapping"]).value == "IMA_3_3"
     assert ws.cell(5, col["Remote Unit"]).value == "UTR_IMA_1"
     assert ws.cell(5, col["Remote Point Custom ID"]).value == "IMA_3_3_DJ_UTR_IMA_1"
     import re as _re
@@ -722,3 +749,47 @@ def test_particionar_endereco_duplicado_indices_saida_no_espaco_out():
     lista = criador_lista_homogenea.montar([fundido, outro_cmd], subestacao="SE1")
     lista2, rev = engine_tdt.particionar_endereco_duplicado(lista)
     assert sorted(it.registro.id for it in rev) == ["S1:1", "S1:2"]
+
+
+def test_dm_analog_corrente_e_potencias_caem_no_tc():
+    assert _device_mapping_analog("LVA", "AL 11", "Corrente", "52-11") == "LVA_AL11_AL11_TC"
+    assert _device_mapping_analog("LVA", "AL11", "Potência Ativa", None) == "LVA_AL11_AL11_TC"
+    assert _device_mapping_analog("LVA", "AL11", "POTÊNCIA REATIVA", None) == "LVA_AL11_AL11_TC"
+    assert _device_mapping_analog("LVA", "AL11", "Potência Aparente", None) == "LVA_AL11_AL11_TC"
+
+
+def test_dm_analog_tensao_cai_no_tp():
+    assert _device_mapping_analog("LVA", "AL11", "Tensão", "52-11") == "LVA_AL11_AL11_TP"
+
+
+def test_dm_analog_resto_cai_no_disjuntor():
+    # KMDF (Comprimento), frequência, FP, temperatura... -> disjuntor do módulo
+    assert _device_mapping_analog("LVA", "AL11", "Comprimento", "52-11") == "LVA_AL11_52-11"
+    assert _device_mapping_analog("LVA", "AL11", "Frequência", "52-11") == "LVA_AL11_52-11"
+    assert _device_mapping_analog("LVA", "AL11", None, "52-11") == "LVA_AL11_52-11"
+
+
+def test_dm_analog_sem_disjuntor_cai_no_modulo_duplicado():
+    assert _device_mapping_analog("LVA", "AL11", "Comprimento", None) == "LVA_AL11_AL11"
+
+
+def _rec_eq(rid, modulo, nome_eq):
+    return replace(
+        _rec(rid, "DJ", [1]),
+        modulo=Modulo(modulo, "sheet_name"),
+        eletrico=Eletrico(nome_equipamento=nome_eq),
+    )
+
+
+def test_disjuntor_por_modulo():
+    regs = [
+        _rec_eq("a:1", "AL11", "52-11"),
+        _rec_eq("a:2", "AL11", "89-1"),   # seccionadora não conta
+        _rec_eq("a:3", "AL12", "52-12"),
+        _rec_eq("a:4", "AL12", "24-1"),   # 2 disjuntores -> ambíguo
+        _rec_eq("a:5", "AL13", None),
+    ]
+    disj = _disjuntor_por_modulo(regs)
+    assert disj["AL11"] == "52-11"
+    assert disj["AL12"] is None
+    assert disj.get("AL13") is None

@@ -12,7 +12,9 @@ from tdt.config import Config
 from tdt.contracts import (
     Descricoes, Enderecamento, Eletrico, Modulo, SignalRecord, Topologia, TipoSinal,
 )
-from tdt.inferencia_topologia import inferir_equipamento, subdividir_transformador_at_bt
+from tdt.inferencia_topologia import (
+    atribuir_id_por_registro, inferir_equipamento, subdividir_transformador_at_bt,
+)
 
 
 def _rec(
@@ -189,3 +191,67 @@ def test_trafo_faixa_de_endereco_contigua_decide_quando_sem_outra_pista():
     # não há como saber QUAL bloco é AT e qual é BT sem outra pista.
     assert nomes_bloco_at == {"TR1"}
     assert nomes_bloco_bt == {"TR1"}
+
+
+# --- registro de equipamentos por módulo (SP-DEVICE-MAPPING-RGE, task 3) ----
+
+
+def _rec_reg(rid, modulo, alvo=None, nome_eq=None):
+    return SignalRecord(
+        id=rid,
+        modulo=Modulo(modulo, "sheet_name"),
+        tipo_sinal=TipoSinal("Discrete", "SingleBit", "Input"),
+        enderecamento=Enderecamento("DNP3", (1,)),
+        descricoes=Descricoes("X", "X"),
+        eletrico=Eletrico(equipamento_alvo=alvo, nome_equipamento=nome_eq),
+    )
+
+
+def test_registro_atribui_id_unico_da_familia():
+    # AL11 tem 1 disjuntor (52-11); sinal de disjuntor sem ID ganha o ID.
+    recs = [
+        _rec_reg("s:1", "AL11", alvo="Disjuntor", nome_eq="52-11"),
+        _rec_reg("s:2", "AL11", alvo="Disjuntor"),
+    ]
+    saida, avisos = atribuir_id_por_registro(recs)
+    assert saida[1].eletrico.nome_equipamento == "52-11"
+    assert avisos == []
+
+
+def test_registro_dois_disjuntores_avisa_e_nao_atribui():
+    recs = [
+        _rec_reg("s:1", "AL11", alvo="Disjuntor", nome_eq="52-11"),
+        _rec_reg("s:2", "AL11", alvo="Disjuntor", nome_eq="52-12"),
+        _rec_reg("s:3", "AL11", alvo="Disjuntor"),
+    ]
+    saida, avisos = atribuir_id_por_registro(recs)
+    assert saida[2].eletrico.nome_equipamento is None
+    assert len(avisos) == 1
+    assert "AL11" in avisos[0] and "52-11" in avisos[0] and "52-12" in avisos[0]
+
+
+def test_registro_nao_sobrescreve_id_existente():
+    recs = [
+        _rec_reg("s:1", "AL11", alvo="Seccionadora", nome_eq="89-1"),
+        _rec_reg("s:2", "AL11", alvo="Seccionadora", nome_eq="89-2"),
+    ]
+    saida, avisos = atribuir_id_por_registro(recs)
+    assert saida[0].eletrico.nome_equipamento == "89-1"
+    assert saida[1].eletrico.nome_equipamento == "89-2"
+    assert avisos == []  # ninguém precisou de atribuição -> sem aviso
+
+
+def test_registro_familia_sem_ocorrencia_fica_sem_id():
+    recs = [_rec_reg("s:1", "AL11", alvo="Transformador")]
+    saida, avisos = atribuir_id_por_registro(recs)
+    assert saida[0].eletrico.nome_equipamento is None
+    assert avisos == []
+
+
+def test_registro_modulos_nao_se_misturam():
+    recs = [
+        _rec_reg("s:1", "AL11", alvo="Disjuntor", nome_eq="52-11"),
+        _rec_reg("s:2", "AL12", alvo="Disjuntor"),
+    ]
+    saida, _ = atribuir_id_por_registro(recs)
+    assert saida[1].eletrico.nome_equipamento is None

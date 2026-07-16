@@ -53,20 +53,49 @@ def preservar_siglas_especiais(texto: str) -> str:
 
 
 # N0 — extração estrutural (texto bruto, antes do colapso de separadores).
+# Whitelist RGE (spec 2026-07-15): só 52/24/29/89 são IDs N-N de equipamento;
+# qualquer outro N-N (ex. 81-1 = estágio de subfrequência) fica no texto.
 _EQUIPAMENTO_ANSI: dict[str, str] = {
     "52": "Disjuntor",
+    "24": "Disjuntor",     # convenção RGE (decisão do usuário 15/07)
     "89": "Seccionadora",
     "29": "Seccionadora",  # seccionadora de aterramento
 }
-_ID_EQUIPAMENTO = re.compile(r"\b(\d+)-(\d+)\b")
-# Equipamento pela PALAVRA (whole-token), quando o código ANSI (52/89/29) não
-# aparece. Listas reais usam IDs fora do padrão ANSI (ex: "24-1 DISJUNTOR"),
-# então só o código não basta pra setar equipamento_alvo. "SEC" sozinho é
-# ambíguo (SECUNDARIO) e fica de fora de propósito.
+_ID_EQUIPAMENTO = re.compile(r"\b(52|24|29|89)-(\d+)\b")
+_ID_TRANSFORMADOR = re.compile(r"\bTR(\d+)\b")
+# Equipamento pela PALAVRA (whole-token), quando nenhum ID da whitelist
+# aparece. "SEC" sozinho é ambíguo (SECUNDARIO) e fica de fora de propósito.
 _EQUIPAMENTO_PALAVRA: dict[str, str] = {
     "DISJUNTOR": "Disjuntor", "DISJ": "Disjuntor", "DJ": "Disjuntor",
     "SECCIONADORA": "Seccionadora", "SECCION": "Seccionadora", "SECC": "Seccionadora",
 }
+
+
+def familia_do_id(nome: str | None) -> str | None:
+    """Família de equipamento a partir do ID: "52-11"→Disjuntor, "TR1"→
+    Transformador, fora da whitelist→None. Consumido por
+    inferencia_topologia (registro por módulo) e engine_tdt (DM analógico)."""
+    if not nome:
+        return None
+    if _ID_TRANSFORMADOR.fullmatch(nome):
+        return "Transformador"
+    return _EQUIPAMENTO_ANSI.get(nome.split("-", 1)[0])
+
+
+def equipamentos_no_texto(texto: str) -> list[tuple[str | None, str]]:
+    """Todos os IDs de equipamento no texto: [(família, id), ...]. Usado pela
+    varredura de linha inteira do estruturador (spec 2026-07-15)."""
+    if not texto:
+        return []
+    base = _sem_acentos(str(texto)).upper()
+    achados = [
+        (_EQUIPAMENTO_ANSI.get(m.group(1)), f"{m.group(1)}-{m.group(2)}")
+        for m in _ID_EQUIPAMENTO.finditer(base)
+    ]
+    achados += [("Transformador", m.group(0)) for m in _ID_TRANSFORMADOR.finditer(base)]
+    return achados
+
+
 _BARRA: dict[str, str] = {"P": "Principal", "A": "Auxiliar"}
 _MARCADOR_BARRA = re.compile(r"\bBARRA\s+([A-Z])\b")
 FASES: tuple[str, ...] = ("ABC", "AB", "BC", "CA", "A", "B", "C", "N")
@@ -146,6 +175,14 @@ def extrair_contexto_estrutural(texto: str) -> tuple[str, ContextoEstrutural]:
         nome_equipamento = f"{m.group(1)}-{m.group(2)}"
         base = (base[: m.start()] + " " + base[m.end() :]).strip()
         base = " ".join(base.split())
+
+    if nome_equipamento is None:
+        m_tr = _ID_TRANSFORMADOR.search(base)
+        if m_tr:
+            equipamento_alvo = "Transformador"
+            nome_equipamento = m_tr.group(0)
+            base = (base[: m_tr.start()] + " " + base[m_tr.end():]).strip()
+            base = " ".join(base.split())
 
     if equipamento_alvo is None:
         for tok in base.split():
