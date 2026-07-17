@@ -3,12 +3,12 @@ from tdt.contracts import Descricoes, Enderecamento, Modulo, TipoSinal, SignalRe
 from tdt.ui.reparear import elegivel, reparear
 
 
-def _rec(id_, sigla, direcao="Input", indices=(), saida=()):
+def _rec(id_, sigla, direcao="Input", indices=(), saida=(), desc="D"):
     return SignalRecord(
         id=id_, modulo=Modulo("M", "sheet_name"),
         tipo_sinal=TipoSinal("Discrete", "SingleBit", direcao),
         enderecamento=Enderecamento("DNP3", indices, saida),
-        descricoes=Descricoes("d", "D"), sigla_sinal=sigla, status="decidido",
+        descricoes=Descricoes("d", desc), sigla_sinal=sigla, status="decidido",
     )
 
 
@@ -28,9 +28,15 @@ def test_reparear_nao_toca_inputoutput_existente():
 
 
 def test_reparear_nxm_vira_ambiguo_sem_perder_registro():
-    recs = [_rec(f"s:{i}", "SECF", direcao="Input", indices=(i,)) for i in (1, 2)]
-    recs += [_rec("c:9", "SECF", direcao="Output", indices=(9,))]
+    descs_input = ("ZZZ MODULO ALFA BETA", "QQQ MODULO GAMA DELTA")
+    recs = [
+        _rec(f"s:{i}", "SECF", direcao="Input", indices=(i,), desc=d)
+        for i, d in zip((1, 2), descs_input)
+    ]
+    recs += [_rec("c:9", "SECF", direcao="Output", indices=(9,),
+                   desc="XPTO COMANDO GERAL SISTEMA REDE")]
     res = reparear(recs, frozenset(), Config())
     total_indices = sum(len(r.enderecamento.indices) + len(r.enderecamento.indices_saida)
                         for r in res.resultantes)
     assert total_indices == 3
+    assert res.n_ambiguos >= 1
