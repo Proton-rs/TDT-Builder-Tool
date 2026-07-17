@@ -32,7 +32,7 @@ from tdt.cache_scorers import carregar_ou_construir
 from tdt.config import Config
 from tdt.contracts import Diagnostico, ItemRevisao, ResultadoPipeline, SignalRecord
 from tdt.dados.indice_vetorial import IndiceVetorial
-from tdt.dados.lista_padrao import ListaPadraoADMS, descricoes_por_sigla
+from tdt.dados.lista_padrao import ListaPadraoADMS, descricoes_por_sigla, validar_mm
 from tdt.defaults import DEFAULT_LISTA_ALIAS
 from tdt.normalizacao.estruturador import estruturar
 from tdt.normalizacao.estruturador_homogeneo import detectar_header, estruturar_homogeneo
@@ -569,6 +569,8 @@ def executar(
 ) -> tuple[ResultadoPipeline, openpyxl.Workbook]:
     aud = auditoria or Auditoria()
     lp = ListaPadraoADMS.carregar(lista_padrao_path)
+    for msg in validar_mm(lp):
+        aud.evento("lista_padrao", msg, "AVISO")
     cfg_analog = replace(
         config,
         peso_tfidf=config.peso_tfidf_analog,

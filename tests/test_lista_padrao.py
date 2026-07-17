@@ -3,6 +3,7 @@ from pathlib import Path
 from tdt.defaults import DEFAULT_LISTA
 from tdt.dados.lista_padrao import ListaPadraoADMS
 from tdt.dados.lista_padrao import descricoes_por_sigla
+from tdt.dados.lista_padrao import validar_mm
 
 
 def test_default_lista_aponta_para_v8_com_djf1_enriquecido():
@@ -158,6 +159,60 @@ def test_carregar_sem_sheet_de_para(tmp_path):
     wb.save(p)
     lp = ListaPadraoADMS.carregar(p)
     assert lp.de_para == {}
+
+
+def test_carregar_le_sheet_message_mapping(tmp_path):
+    wb = _wb_minimo()
+    ws = wb.create_sheet("Message Mapping")
+    ws.append(["Name"])
+    ws.append(["MM_A"])
+    ws.append(["MM_B"])
+    p = tmp_path / "lp.xlsx"
+    wb.save(p)
+    lp = ListaPadraoADMS.carregar(p)
+    assert lp.catalogo_mm == frozenset({"MM_A", "MM_B"})
+
+
+def test_carregar_sem_sheet_message_mapping(tmp_path):
+    wb = _wb_minimo()
+    p = tmp_path / "lp.xlsx"
+    wb.save(p)
+    lp = ListaPadraoADMS.carregar(p)
+    assert lp.catalogo_mm == frozenset()
+
+
+def test_validar_mm_com_sigla_mm_ausente_do_catalogo(tmp_path):
+    import openpyxl
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "DiscreteSignals"
+    ws.append(["SINAL", "MM"])
+    ws.append(["CMDE", "MM_X"])
+    wb.create_sheet("AnalogSignals").append(["SINAL"])
+    ws_mm = wb.create_sheet("Message Mapping")
+    ws_mm.append(["Name"])
+    ws_mm.append(["MM_A"])
+    ws_mm.append(["MM_B"])
+    p = tmp_path / "lp.xlsx"
+    wb.save(p)
+    lp = ListaPadraoADMS.carregar(p)
+    avisos = validar_mm(lp)
+    assert avisos == ["MM MM_X da sigla CMDE ausente do catálogo"]
+
+
+def test_validar_mm_com_catalogo_vazio_nao_gera_avisos(tmp_path):
+    import openpyxl
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "DiscreteSignals"
+    ws.append(["SINAL", "MM"])
+    ws.append(["CMDE", "MM_X"])
+    wb.create_sheet("AnalogSignals").append(["SINAL"])
+    p = tmp_path / "lp.xlsx"
+    wb.save(p)
+    lp = ListaPadraoADMS.carregar(p)
+    assert lp.catalogo_mm == frozenset()
+    assert validar_mm(lp) == []
 
 
 def test_le_severidade_dos_discretos(tmp_path):

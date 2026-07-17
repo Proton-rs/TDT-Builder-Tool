@@ -133,6 +133,7 @@ class ListaPadraoADMS:
     analogicos: tuple[SinalPadrao, ...]
     discrete_analog: tuple[SinalPadrao, ...] = ()
     de_para: dict[str, str] = field(default_factory=dict)
+    catalogo_mm: frozenset[str] = frozenset()
 
     @classmethod
     def carregar(cls, path: str | Path) -> "ListaPadraoADMS":
@@ -183,9 +184,22 @@ class ListaPadraoADMS:
                             if r and len(r) > 1 and r[1] is not None else "")
                     if de and para:
                         de_para[de] = para
+            catalogo_mm: frozenset[str] = frozenset()
+            if "Message Mapping" in wb.sheetnames:
+                ws_mm = wb["Message Mapping"]
+                linhas_mm = ws_mm.iter_rows(values_only=True)
+                header_mm = next(linhas_mm, None)
+                idx_nome = _coluna(header_mm, "Name") if header_mm is not None else None
+                if idx_nome is not None:
+                    nomes = set()
+                    for r in linhas_mm:
+                        nome = _val(r[idx_nome]) if idx_nome < len(r) else None
+                        if nome:
+                            nomes.add(nome)
+                    catalogo_mm = frozenset(nomes)
         finally:
             wb.close()
-        return cls(tuple(disc), tuple(ana), tuple(da), de_para)
+        return cls(tuple(disc), tuple(ana), tuple(da), de_para, catalogo_mm)
 
     def _todos(self) -> tuple[SinalPadrao, ...]:
         return (*self.discretos, *self.analogicos, *self.discrete_analog)
@@ -202,6 +216,19 @@ class ListaPadraoADMS:
         """Todas as siglas (discretos + analógicos + discrete_analog), normalizadas
         maiúsculas — usado pela detecção de coluna de sigla em listas não-homogêneas."""
         return frozenset(s.sigla.upper() for s in self._todos())
+
+
+def validar_mm(lp: ListaPadraoADMS) -> list[str]:
+    """Confere ``sp.mm`` de cada sinal (discretos + discrete_analog) contra
+    ``lp.catalogo_mm``. Não-scoring, só aviso informativo -- catálogo vazio
+    (sheet ``Message Mapping`` ausente) devolve lista vazia (retrocompat)."""
+    if not lp.catalogo_mm:
+        return []
+    avisos: list[str] = []
+    for s in (*lp.discretos, *lp.discrete_analog):
+        if s.mm and s.mm not in lp.catalogo_mm:
+            avisos.append(f"MM {s.mm} da sigla {s.sigla} ausente do catálogo")
+    return avisos
 
 
 @lru_cache(maxsize=4)
