@@ -205,6 +205,9 @@ class TelaRevisao(QWidget):
         self.btn_formar_par = QPushButton("Formar par de posição")
         self.btn_formar_par.setEnabled(False)
         self.btn_formar_par.clicked.connect(self._formar_par_posicao)
+        self.btn_separar_par = QPushButton("Separar par de posição")
+        self.btn_separar_par.setEnabled(False)
+        self.btn_separar_par.clicked.connect(self._separar_par_posicao)
         self.btn_aprovar = QPushButton("Aprovar e ir ao próximo (Enter)")
         self.btn_aprovar.setProperty("acao", "principal")
         self.btn_aprovar.clicked.connect(lambda: self._aprovar_e_proximo())
@@ -218,6 +221,7 @@ class TelaRevisao(QWidget):
         topo.addWidget(btn_parear)
         topo.addWidget(self.btn_reparear)
         topo.addWidget(self.btn_formar_par)
+        topo.addWidget(self.btn_separar_par)
         topo.addWidget(self.btn_aprovar)
 
         # --- painel de detalhe ---
@@ -387,6 +391,7 @@ class TelaRevisao(QWidget):
         n = len(self.tabela.selectionModel().selectedRows())
         self.lbl_selecao.setText(f"{n} selecionado" + ("" if n == 1 else "s"))
         self.btn_formar_par.setEnabled(n == 2)
+        self.btn_separar_par.setEnabled(n == 1)
 
     def _linha_mudou(self, atual, _anterior):
         fonte = self._proxy.mapToSource(atual)
@@ -670,6 +675,26 @@ class TelaRevisao(QWidget):
         erro = self._estado.formar_par_posicao(ids[0], ids[1], sigla)
         if erro is not None:
             QMessageBox.warning(self, "Formar par de posição", erro)
+            return
+        self.refresh()
+
+    def _separar_par_posicao(self):
+        """Inverso de _formar_par_posicao: reconstrói 2 sinais de 1 endereço
+        a partir de um par de posição já fundido, mandando as metades para
+        revisão."""
+        indices = self._linhas_selecionadas()
+        if len(indices) != 1:
+            return
+        rec = self._estado.registros[indices[0]]
+        ends = ";".join(str(x) for x in rec.enderecamento.indices)
+        if QMessageBox.question(
+                self, "Separar par de posição",
+                f"Separar {rec.sigla_sinal or rec.id} (end. {ends}) em 2 sinais "
+                f"de 1 endereço? As metades vão para revisão.") != QMessageBox.Yes:
+            return
+        erro = self._estado.separar_par_posicao(rec.id)
+        if erro is not None:
+            QMessageBox.warning(self, "Separar par de posição", erro)
             return
         self.refresh()
 

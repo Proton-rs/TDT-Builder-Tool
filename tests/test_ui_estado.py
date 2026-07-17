@@ -98,6 +98,41 @@ def test_definir_fase_atualiza_eletrico():
     assert st.registros[0].eletrico.fase == "B"
 
 
+def test_separar_par_posicao_reconstroi_duas_metades():
+    st = AppState()
+    st.registros = [_rec("a:1", "DJF1", "decidido")]
+    st.registros[0] = replace(
+        st.registros[0],
+        tipo_sinal=TipoSinal("Discrete", "MultiCoord", "Input"),
+        enderecamento=Enderecamento("DNP3", (900, 901)),
+    )
+    assert st.separar_par_posicao("a:1") is None
+    assert len(st.registros) == 2
+    a, b = st.registros
+    assert a.enderecamento.indices == (900,) and b.enderecamento.indices == (901,)
+    assert a.sigla_sinal is None and a.status == "revisao"
+    assert a.tipo_sinal.datatype == "SingleBit"
+    assert a.id != b.id
+    assert st.desfazer() and len(st.registros) == 1
+
+
+def test_separar_rejeita_nao_multicoord_sem_mutar():
+    st = AppState()
+    st.registros = [_rec("a:1", "DJF1", "decidido")]     # SingleBit, 1 índice
+    assert st.separar_par_posicao("a:1") is not None
+    assert len(st._historico) == 0                        # sem snapshot em erro
+
+
+def test_separar_rejeita_inputoutput():
+    st = AppState()
+    st.registros = [replace(
+        _rec("a:1", "DJF1", "decidido"),
+        tipo_sinal=TipoSinal("Discrete", "MultiCoord", "InputOutput"),
+        enderecamento=Enderecamento("DNP3", (900, 901), (950,)),
+    )]
+    assert "desvincule" in st.separar_par_posicao("a:1").lower()
+
+
 def test_definir_nivel_tensao_atualiza_eletrico():
     st = AppState()
     st.registros = [_rec("a:1", "DJF1", "decidido")]

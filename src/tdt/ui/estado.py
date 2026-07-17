@@ -6,6 +6,7 @@ importarem entre si.
 
 from __future__ import annotations
 
+import uuid
 from dataclasses import dataclass, field, replace
 
 from tdt.config import Config
@@ -219,3 +220,38 @@ class AppState:
             r, sigla_sinal=nova_sigla, status="decidido",
             justificativa="sigla de par trocada manualmente",
         )
+
+    def separar_par_posicao(self, id_: str) -> str | None:
+        """Inverso de formar_par_posicao (P3b). RECONSTRÓI (a descrição do
+        registro absorvido não existe mais — limitação documentada na spec):
+        2 Inputs de 1 índice, sigla limpa, revisão `posicao_ambigua`."""
+        indice_por_id = {r.id: i for i, r in enumerate(self.registros)}
+        i = indice_por_id.get(id_)
+        if i is None:
+            return "Registro não encontrado."
+        r = self.registros[i]
+        if r.tipo_sinal.direcao == "InputOutput":
+            return "O par tem comando pareado: desvincule (Parear D+C) antes de separar."
+        if (r.tipo_sinal.direcao != "Input"
+                or r.tipo_sinal.datatype != "MultiCoord"
+                or len(r.enderecamento.indices) != 2):
+            return "Selecione um par de posição (Input MultiCoord com 2 endereços)."
+        if (r.sigla_sinal or "").upper() not in _SIGLAS_POSICAO:
+            return "A sigla do registro não é de posição."
+        self._snapshot()
+        base = replace(
+            r,
+            tipo_sinal=replace(r.tipo_sinal, datatype="SingleBit"),
+            sigla_sinal=None, status="revisao",
+            justificativa="posicao_ambigua",   # par separado manualmente — redecidir
+        )
+        met_a = replace(base, enderecamento=Enderecamento(
+            r.enderecamento.protocolo, (r.enderecamento.indices[0],)))
+        met_b = replace(base, id=f"{r.id}_pos_{uuid.uuid4().hex[:6]}",
+                        enderecamento=Enderecamento(
+                            r.enderecamento.protocolo, (r.enderecamento.indices[1],)))
+        novos = list(self.registros)
+        novos[i] = met_a
+        novos.insert(i + 1, met_b)
+        self.registros = novos
+        return None
