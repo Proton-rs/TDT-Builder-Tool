@@ -1,7 +1,7 @@
 # SP-OBS-17JUL — Observações de revisão, configuração e classificação (anot.txt 17/07)
 
 **Status:** spec aguardando revisão do usuário
-**Origem:** `docs/anot.txt` (5 pontos, 17/07/2026)
+**Origem:** `docs/anot.txt` (5 pontos, 17/07/2026) + adendo do usuário 17/07 (P3b: separar par de posição)
 **Método:** investigação de código (2 scouts cavecrew, 17/07) + medição real da lista padrão v8 + ledger `docs/AGENTS.md` + `docs/fluxo_dados.md`.
 
 ---
@@ -176,8 +176,22 @@ def reparear(registros: Sequence[SignalRecord], config) -> ResultadoReparear
 - **UI**: botão/ação "Reparear sheet" na tela de revisão (ao lado do "Parear D+C" manual): escopo = aba de sheet atual; com 2+ linhas selecionadas, oferecer "só a seleção" (menu do botão ou diálogo). Fluxo: calcular `ResultadoReparear` → diálogo de confirmação com o resumo ("N pares formados, M ambíguos, K sem par") → aplicar com 1 `_snapshot()` (desfazer restaura tudo) → `refresh()` + status bar com o resumo.
 - **Perda de vista do sinal** (observações item 10): ao aplicar, selecionar/scrollar até o primeiro registro fundido — barato e resolve a queixa correlata.
 
+### P3b — Separar par de posição (adendo do usuário, 17/07)
+
+**Problema:** existe `formar_par_posicao` (`estado.py:143-179`) e `trocar_sigla_par` (`estado.py:181-197`), mas nenhuma operação inversa. Um par de posição mal formado (pela fusão automática `fundir_pares_posicao` ou por engano manual) só é reversível via desfazer imediato; descoberto depois, não há caminho — o par D+C tem `desvincular` (`dc_pairer.separar`, exposto em `_parear_sinais`), o par de posição não. Raro, mas sem saída hoje.
+
+**Limitação de dado (documentar, não esconder):** a fusão mantém apenas o registro `primeiro` — descrição bruta, id e diagnóstico do `segundo` são absorvidos (`estado.py:166-175`, `normalizador_estrutural.py:41-49`). É a mesma lacuna já registrada para o id do comando na fusão D+C (`fluxo_dados.md` §Lacunas). A separação portanto **reconstrói**, não restaura.
+
+**Design (espelho do formar + padrão do desvincular D+C):**
+- `AppState.separar_par_posicao(id_) -> str | None` (mesmo contrato do formar: valida sem mutar, erro como string, 1 `_snapshot()` no sucesso).
+- **Elegibilidade:** registro com direção `Input`, `datatype == "MultiCoord"`, exatamente 2 `indices` e sigla no catálogo de posição (`_SIGLAS_POSICAO` — mesmos guards do `trocar_sigla_par`). Par que virou `InputOutput` (ganhou comando no dc_pairer) primeiro passa pelo desvincular D+C existente; a separação de posição só opera em Input puro — um passo por vez, cada um com seu undo.
+- **Resultado:** 2 registros `Input` de 1 índice cada (datatype de coordenada única restaurado), mesmo módulo/equipamento; o segundo ganha id sintético com sufixo aleatório (mesmo padrão anti-colisão do desvincular, `tela_revisao.py:647-651`). Ambos ficam com a descrição bruta do registro fundido (a do absorvido não existe mais — ver limitação), `sigla_sinal` limpa e status de revisão com motivo **`posicao_ambigua`** reutilizado (é exatamente o significado: posição a decidir; label/tooltip já existem), justificativa "par de posição separado manualmente". Não chutar polaridade: par mal formado ⇒ as siglas de cada metade são justamente o que o usuário quer redecidir.
+- **UI:** ação "Separar par de posição" ao lado de "Formar par…" (menu/botão), habilitada com exatamente 1 linha elegível selecionada; confirmação mostrando os 2 endereços resultantes; após aplicar, selecionar as 2 linhas novas (não perder de vista, observações item 10).
+- **Follow-up registrado (não implementar aqui):** preservar `descricao bruta`/id do registro absorvido no momento da fusão (campo opcional no contrato, serviria também à lacuna do D+C) para que separações futuras restaurem em vez de reconstruir — melhoria de fluxo de dados (CLAUDE.md regra 2), decisão aberta §9.
+
 ### Testes / aceite
 
+- P3b: separar par recém-formado devolve 2 Inputs de 1 índice em revisão `posicao_ambigua`; ids não colidem em ciclos formar→separar→formar; guards (não-MultiCoord, 1 índice, InputOutput, sigla fora do catálogo) retornam erro sem mutar; desfazer restaura o par; conservação (2 saem onde 1 entrou, nada some).
 - Núcleo: par formado após reclassificação (2 registros que não pareavam por sigla divergente passam a parear depois de `sigla_sinal` corrigida); `InputOutput` existente intocado; edição de usuário preservada; N×M ambíguo vira motivo, não fusão; conservação (nenhum registro some: fundidos absorvem id do comando, mesma contabilidade do pipeline).
 - UI (smoke): 1 clique → 1 snapshot; desfazer restaura o estado exato pré-repareamento.
 - Aceite (cenário do anot.txt): na sheet AL11, reclassificar vários D+C e reparear todos com um clique, sem parear um a um.
@@ -257,7 +271,7 @@ Duas consequências:
 |---|---|---|---|
 | 1 | P4 (config delta-only + migração + UI) | Baixo (não toca scoring; muda o *efetivo* da UI p/ calibrado — mudança de comportamento DESEJADA e visível) | 1 rodada p/ registrar novo comportamento via UI |
 | 1 | P1 (colunas de endereço na UI) | Zero (display/edição) | suíte |
-| 2 | P3 (reparear em lote) | Baixo (reusa pipeline puro; só UI/estado) | suíte + smoke UI |
+| 2 | P3 (reparear em lote) + P3b (separar par de posição) | Baixo (reusa pipeline puro; só UI/estado) | suíte + smoke UI |
 | 3 | P2-2A (DE->PARA), depois 2D (severidade), 2C-uso1 (integridade MM) | Baixo/médio | gate individual p/ 2A |
 | 4 | P5 Fase 0 (diagnóstico) → C1/C2 conforme confirmação | Médio (mexe em roteador/decisão) | gate individual por correção |
 | 5 | P2-2B (FASES analógicos), 2C-uso2 (estados MM no D2), 2E (MANUT, condicionada a diagnóstico), 2F (coluna EQUIPAMENTO), 2G (DMS Signal Explanation → Measurement Type) | Médio | gate individual cada (2G: suíte + lista real, sem gate) |
@@ -283,6 +297,7 @@ Duas consequências:
 3. **P5-C1:** quando os discriminadores não resolvem a variante, preferir decidir a variante-pai exata da âncora (recomendado) ou sempre `variante_ambigua` para revisão? Trade-off: taxa de decisão × risco de variante errada (o gate arbitra, mas a preferência de produto é sua).
 4. **P2-2F:** em divergência de estados entre a coluna FUNÇÃO da aba e o catálogo `Message Mapping`, qual fonte prevalece? (proposta: FUNÇÃO da aba, com aviso).
 5. **Prioridade:** a ordem do §8 (P4/P1 primeiro) atende? Se o incômodo maior for o P3 (produtividade na revisão), ele pode subir para a Fase 1 sem custo técnico.
+6. **P3b:** preservar descrição/id do registro absorvido no momento da fusão (campo opcional no contrato, serve posição E D+C) já nesta SP, ou registrar como follow-up e separar por reconstrução? (recomendo follow-up: o caso é raro e a reconstrução manda as metades pra revisão de qualquer jeito — o operador redecide na hora).
 
 ## 10. Referências
 
