@@ -1,7 +1,7 @@
 # SP-OBS-17JUL — Observações de revisão, configuração e classificação (anot.txt 17/07)
 
 **Status:** spec aguardando revisão do usuário
-**Origem:** `docs/anot.txt` (5 pontos, 17/07/2026) + adendo do usuário 17/07 (P3b: separar par de posição)
+**Origem:** `docs/anot.txt` (5 pontos, 17/07/2026) + adendos do usuário 17/07 (P3b: separar par de posição; P5-C4: caso 81U1/GTA — discriminador por par de estados do MM)
 **Método:** investigação de código (2 scouts cavecrew, 17/07) + medição real da lista padrão v8 + ledger `docs/AGENTS.md` + `docs/fluxo_dados.md`.
 
 ---
@@ -118,6 +118,7 @@ O workbook tem 10 sheets; o loader lê 3 (`DiscreteSignals`, `AnalogSignals`, `D
 - Uso 1 (barato): validação de integridade na carga — MM referenciado pelas 3 abas e ausente do catálogo → aviso (hoje isso só existe como teste offline).
 - Uso 2 (gated): `filtro_semantica_estados` (D2) passa a poder usar os estados do catálogo MM quando a coluna FUNÇÃO da aba estiver vazia/divergente. Uma coisa por vez: uso 1 entra sem gate (não toca scoring), uso 2 é rodada própria.
 - `Commanding message` por MM fica REGISTRADO como insumo futuro para a decisão bloqueada de direção (Fase 8 do SP-Unificado) — não implementar aqui.
+- O consumidor mais importante dos estados por MM é o **P5-C4** (discriminador positivo de variante, caso 81U1) — mas C4 funciona já com o campo `mm` da aba via `classe_do_mm`; o catálogo MM completo do 2C só o torna mais robusto (MM ausente/divergente na aba). Sem dependência dura entre os dois.
 
 **2D — `SEVERIDADE` como metadado de saída/revisão (não-scoring).**
 - Campo `severidade` no `SinalPadrao` (aba DiscreteSignals, coluna direta; já vem resolvida com `data_only`).
@@ -243,21 +244,34 @@ Duas consequências:
 - **H2: desconto do delta de regras no piso.** `confianca_top1` subtrai `regras_delta`; âncora + regras podem deixar `score - delta < 0.20` mesmo com top-1 óbvio.
 - **H3: âncora não sobrevive à mescla/calibração** em algum caminho (ordem de calibração vs injeção). Menos provável (injeção é pós-mescla), mas o diagnóstico fecha a questão.
 
+### Caso de estudo real — 81U1 (lista GTA, adendo do usuário 17/07)
+
+Entrada GTA: descrição "81 SUB-FREQUÊNCIA E1 HABILITADA" → sem scoring alto, sem decisão. A família 81 na LP tem ~21 variantes e o **texto** não separa (`81E1`, `81IE1`, `81O1`… todas "TRIP SUB/SOBRE FREQUENCIA E1"). Mas o **par de estados do MM** separa: só a classe `81U*` tem `DESATIVADO@ATIVADO` (`81U1: null@ATIVAR___DESATIVADO@ATIVADO___Custom_S_TC_SS`) — a única compatível com "habilitada/desabilitada"; as demais são `NORMAL@ATUADO` (trip/evento).
+
+O que o código de hoje já tem e por que não resolveu:
+- `semantica_estados._LEXICO` já classifica HABILITA/DESABILITA/ATIVA/DESATIVA como classe `ATIVACAO` (`semantica_estados.py:39-40`) e `classe_do_mm` extrai a classe do par do MM (`semantica_estados.py:86`). Ou seja: **a evidência dos dois lados já é computável** — v8 inclusive corrigiu os MMs de `81U1`-`81U5` (ledger 10jul).
+- Mas o consumo é só **negativo**: `filtrar_por_estado` (D2, `pipeline.py:286-288`) remove candidato contraditório; não resgata variante compatível que nem chegou ao top-N. "AJUSTE PARA 81 E1" pontua mal contra "81 SUB-FREQUÊNCIA E1 HABILITADA" → `81U1` provavelmente nunca entra na lista de candidatos, e nenhum filtro adiciona. Consistente com o follow-up registrado na memória SP-I (81U1/87BL = limitação de scorer/expansão de família, não de filtro/pairer).
+
 ### Fase 0 obrigatória — diagnóstico instrumentado (padrão Fase 8 do SP-Unificado)
 
-- `bench/diag_ancora_revisao.py`: varrer as listas reais (GTD, CVA, LVA, GAU, SMF, GPR…), listar todo registro com âncora detectada que terminou em revisão: motivo, top-3 candidatos com scores, gap, delta de regras, família da âncora, variante esperada (quando o gate real tiver o endereço).
+- `bench/diag_ancora_revisao.py`: varrer as listas reais (GTD, GTA, CVA, LVA, GAU, SMF, GPR…), listar todo registro com âncora detectada que terminou em revisão OU sem decisão: motivo, top-3 candidatos com scores, gap, delta de regras, família da âncora, variante esperada (quando o gate real tiver o endereço).
 - Saída classificada por hipótese (H1/H2/H3/outra) em `docs/superpowers/specs/2026-07-17-diag-ancora-revisao.md`. **As correções abaixo só se aplicam às hipóteses confirmadas com contagem.**
+- **Generalização do caso 81U1 (pedido explícito do usuário):** o mesmo script mede, dos dois lados:
+  - *Lado LP:* para cada família (agrupamento por raiz de sigla), a partição das variantes por classe de estados do MM (`classe_do_mm`) — em quantas famílias a classe de estados isola exatamente 1 variante (ou 1 sub-classe que os discriminadores de estágio/fase resolvem)? Ex. esperado: família 81 → `ATIVACAO` isola `81U*`; estágio E1 fecha `81U1`.
+  - *Lado entrada:* nos registros reais sem decisão/em revisão com família ancorada, quantos têm classe de estado detectável (`detectar_estado`) que casaria com exatamente 1 variante? Cada caso vira linha do relatório com a variante que o discriminador escolheria — conferida contra a TDT real onde houver endereço.
+  - *Falso-positivo do léxico:* rodar `detectar_estado` no corpus real e contar colisões de prefixo (bug conhecido tipo "LOCALIZADOR"→LOCAL_REMOTO, documentado em `especificidade_qualificador.py:71-90`) — o C4 não pode herdar o bug silenciosamente.
 
 ### Correções propostas (cada uma gated, condicionada ao diagnóstico)
 
 - **C1 (para H1): desambiguação de variante ancorada.** Quando o top-1 é da família ancorada e a revisão seria por gap/percentual entre variantes da MESMA família: aplicar os discriminadores existentes (fase, estágio, qualificador — `especificidade_qualificador`, discriminador de fase D2) como tie-break; se seguem inconclusivos, decidir pela **variante-pai exata da âncora** (o texto diz "79" → decidir `79`, não `79OK`) com flag de diagnóstico; se a âncora não corresponde a nenhuma variante-pai (só filhos), revisão continua, mas com motivo novo **`variante_ambigua`** (label na UI: "família decidida pela sigla; escolher variante") — muito mais acionável que "score baixo".
 - **C2 (para H2): piso não desconta âncora.** Se H2 confirmada: candidato top com `fonte="ancora_sigla"` usa o score sem desconto de `regras_delta` no piso (o piso existe para proteger contra top-1 textual fraco — 51F→FC87; âncora exata não é top-1 fraco). `piso_decisao` continua intacto para candidatos não ancorados.
 - **C3 (para H3): correção de ordem/escala** conforme o achado (sem design antecipado — depende do que aparecer).
+- **C4 (caso 81U1): seleção positiva por par de estados do MM dentro da família ancorada.** Quando há âncora de família e a decisão de variante está aberta (empate H1 OU a variante compatível nem chegou ao top-N): expandir as variantes da família ancorada (mecanismo `expansao_candidatos` já existe), cruzar `detectar_estado(texto)` × `classe_do_mm(candidato)` e, se **exatamente uma** variante (após compor com os discriminadores de estágio/fase/qualificador existentes) for compatível, decidí-la — mesmo que a descrição da LP dela pontue mal no texto ("AJUSTE PARA 81 E1" nunca vencerá por texto; o par de estados é a evidência dominante, como o usuário demonstrou). Se 2+ variantes seguem compatíveis → `variante_ambigua` com as compatíveis como sugestão (nunca chutar). É o complemento positivo do D2 (que segue só removendo — a tabela de papéis `src/tdt/AGENTS.md` mantém: gates removem, C4 decide via roteador, não mexe em score de matching). Só com o diagnóstico confirmando generalização (≥ N famílias/casos reais) e gate individual.
 - **Salvaguarda comum:** âncoras por *junção de tokens* (mais arriscadas que match exato) NÃO ganham os privilégios C1/C2 na primeira rodada — só âncora exata. Ampliar depois se o diagnóstico mostrar que junção é confiável.
 
 ### Testes / aceite
 
-- Corpus: casos reais do diagnóstico viram testes (padrão `casos_travados.csv`/corpus adversarial): descrição com sigla explícita → decide ou cai em `variante_ambigua`, nunca `score_baixo`.
+- Corpus: casos reais do diagnóstico viram testes (padrão `casos_travados.csv`/corpus adversarial): descrição com sigla explícita → decide ou cai em `variante_ambigua`, nunca `score_baixo`. Caso 81U1/GTA vira teste nominal do C4: "81 SUB-FREQUÊNCIA E1 HABILITADA" → `81U1`.
 - Gate individual por correção; `pct >= baseline` obrigatório.
 - Aceite (métrica do diagnóstico): nº de registros "âncora exata → revisão score_baixo" nas listas reais cai a ~0, sem regressão de gate e sem crescer falso-positivo no corpus adversarial.
 
@@ -273,7 +287,7 @@ Duas consequências:
 | 1 | P1 (colunas de endereço na UI) | Zero (display/edição) | suíte |
 | 2 | P3 (reparear em lote) + P3b (separar par de posição) | Baixo (reusa pipeline puro; só UI/estado) | suíte + smoke UI |
 | 3 | P2-2A (DE->PARA), depois 2D (severidade), 2C-uso1 (integridade MM) | Baixo/médio | gate individual p/ 2A |
-| 4 | P5 Fase 0 (diagnóstico) → C1/C2 conforme confirmação | Médio (mexe em roteador/decisão) | gate individual por correção |
+| 4 | P5 Fase 0 (diagnóstico, inclui generalização 81U1) → C1/C2/C4 conforme confirmação | Médio (mexe em roteador/decisão) | gate individual por correção |
 | 5 | P2-2B (FASES analógicos), 2C-uso2 (estados MM no D2), 2E (MANUT, condicionada a diagnóstico), 2F (coluna EQUIPAMENTO), 2G (DMS Signal Explanation → Measurement Type) | Médio | gate individual cada (2G: suíte + lista real, sem gate) |
 
 **Riscos transversais:**
