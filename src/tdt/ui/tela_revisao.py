@@ -33,7 +33,7 @@ _METODOS = (("emb", "vetorial"), ("tfidf", "tfidf"), ("fuzzy", "fuzzy"))
 
 _COLUNAS_PADRAO = frozenset({
     "Sinal", "Confiança", "Status", "Motivo", "Descr. bruta",
-    "Descr. ADMS", "Módulo", "Endereço", "Pareado", "Sheet origem",
+    "Descr. ADMS", "Módulo", "Endereço Input", "Pareado", "Sheet origem",
 })
 
 _OPCOES_COMBO = {
@@ -479,8 +479,8 @@ class TelaRevisao(QWidget):
         self._atualizar_chip_filtros()
 
     def filtrar_endereco(self, texto: str) -> None:
-        """Filtro "contém" na coluna Endereço (usado pela tela de Geração)."""
-        col = ModeloSinais.COLUNAS.index("Endereço")
+        """Filtro "contém" na coluna Endereço Input (usado pela tela de Geração)."""
+        col = ModeloSinais.COLUNAS.index("Endereço Input")
         self._proxy.setFiltroColuna(col, texto)
         self._atualizar_chip_filtros()
 

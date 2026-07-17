@@ -13,7 +13,7 @@ from tdt.ui.estado import AppState
 
 COLUNAS = [
     "Sinal", "Confiança", "Status", "Motivo", "Descr. ADMS", "Descr. bruta",
-    "Descr. normalizada", "Tokens", "Tipo", "Escala", "Fase", "Endereço",
+    "Descr. normalizada", "Tokens", "Tipo", "Escala", "Fase", "Endereço Input",
     "Endereço Output",
     "Score embedding", "Score tf-idf", "Score fuzzy", "Justificativa",
     "Módulo", "Equipamento", "Tipo Equip.", "Barra", "Nível Tensão",
@@ -87,12 +87,12 @@ COR_BAIXO_TEXTO = QColor("#e8ebf2")
 
 _EDITAVEIS = frozenset({
     "Sinal", "Tipo", "Fase", "Nível Tensão", "Barra", "Tipo Equip.",
-    "Módulo", "Escala", "Endereço", "Endereço Output",
+    "Módulo", "Escala", "Endereço Input", "Endereço Output",
     "Equipamento", "Descr. bruta",
 })
 
 _COLUNAS_MONO = frozenset({
-    "Sinal", "Endereço", "Endereço Output", "Tokens",
+    "Sinal", "Endereço Input", "Endereço Output", "Tokens",
     "Score embedding", "Score tf-idf", "Score fuzzy",
 })
 
@@ -118,6 +118,16 @@ def sheet_origem(rec: SignalRecord) -> str:
     essa informação (contrato existente), sem precisar propagar campo novo.
     """
     return rec.id.rsplit(":", 1)[0] if ":" in rec.id else ""
+
+
+def enderecos_exibicao(rec) -> tuple[str, str]:
+    """(célula Endereço Input, célula Endereço Output) conforme a direção —
+    espelha engine_tdt._valores: Output puro tem endereço PRÓPRIO de escrita."""
+    ins = ";".join(str(i) for i in rec.enderecamento.indices)
+    outs = ";".join(str(i) for i in rec.enderecamento.indices_saida)
+    if rec.tipo_sinal.direcao == "Output":
+        return "—", ins or "—"
+    return ins, outs or "—"
 
 
 def cor_faixa(score) -> QColor | None:
@@ -218,10 +228,10 @@ class ModeloSinais(QAbstractTableModel):
             return "" if e is None else str(e)
         if nome == "Fase":
             return rec.eletrico.fase or "—"
-        if nome == "Endereço":
-            return ";".join(str(i) for i in rec.enderecamento.indices)
+        if nome == "Endereço Input":
+            return enderecos_exibicao(rec)[0]
         if nome == "Endereço Output":
-            return ";".join(str(i) for i in rec.enderecamento.indices_saida) or "—"
+            return enderecos_exibicao(rec)[1]
         if nome == "Score embedding":
             return _score(rec, sigla, "vetorial")
         if nome == "Score tf-idf":
@@ -339,14 +349,20 @@ class ModeloSinais(QAbstractTableModel):
             except ValueError:
                 return False
             self._estado.definir_escala(linha, valor)
-        elif nome in ("Endereço", "Endereço Output"):
+        elif nome in ("Endereço Input", "Endereço Output"):
             try:
                 indices = tuple(int(p) for p in texto.split(";")) if texto else ()
             except ValueError:
                 return False
             if not all(0 <= v <= 65535 for v in indices):
                 return False
-            campo = "indices" if nome == "Endereço" else "indices_saida"
+            rec = self._estado.registros[linha]
+            if rec.tipo_sinal.direcao == "Output":
+                if nome == "Endereço Input":
+                    return False        # célula "—": Output não tem endereço de leitura
+                campo = "indices"       # endereço próprio (de escrita) do comando
+            else:
+                campo = "indices" if nome == "Endereço Input" else "indices_saida"
             self._estado.definir_enderecos(linha, campo, indices)
         elif nome == "Equipamento":
             self._estado.definir_equipamento(linha, texto or None)

@@ -236,10 +236,40 @@ def test_remover_linhas_emite_sinais_de_remocao(qtbot):
         m.remover_linhas([0])
 
 
+def _rec_output():
+    return replace(_rec(), tipo_sinal=TipoSinal("Discrete", "SingleBit", "Output"),
+                   enderecamento=Enderecamento("DNP3", (700,)))
+
+
+def test_output_mostra_endereco_na_coluna_output(qtbot):
+    m = ModeloSinais(_state(_rec_output()))
+    assert m.valor_texto(0, _col("Endereço Input")) == "—"
+    assert m.valor_texto(0, _col("Endereço Output")) == "700"
+
+
+def test_input_mantem_colunas_atuais(qtbot):
+    m = ModeloSinais(_state(_rec()))          # _rec: Input, indices=(1,)... na verdade (10,)
+    assert m.valor_texto(0, _col("Endereço Input")) == "10"
+    assert m.valor_texto(0, _col("Endereço Output")) == "—"
+
+
+def test_editar_endereco_output_de_output_escreve_em_indices(qtbot):
+    st = _state(_rec_output())
+    m = ModeloSinais(st)
+    assert m.setData(m.index(0, _col("Endereço Output")), "710", Qt.EditRole)
+    assert st.registros[0].enderecamento.indices == (710,)
+    assert st.registros[0].enderecamento.indices_saida == ()
+
+
+def test_editar_endereco_input_de_output_rejeitado(qtbot):
+    m = ModeloSinais(_state(_rec_output()))
+    assert m.setData(m.index(0, _col("Endereço Input")), "9", Qt.EditRole) is False
+
+
 def test_flags_colunas_dominio_sao_editaveis():
     m = ModeloSinais(_state(_rec()))
     for nome in ("Sinal", "Tipo", "Fase", "Nível Tensão", "Barra",
-                 "Tipo Equip.", "Módulo", "Escala", "Endereço", "Endereço Output",
+                 "Tipo Equip.", "Módulo", "Escala", "Endereço Input", "Endereço Output",
                  "Equipamento", "Descr. bruta"):
         flags = m.flags(m.index(0, _col(nome)))
         assert flags & Qt.ItemIsEditable, nome
@@ -311,7 +341,7 @@ def test_set_data_escala_invalida_retorna_false_sem_mutar():
 def test_set_data_endereco_grava_indices():
     st = _state(_rec())
     m = ModeloSinais(st)
-    ok = m.setData(m.index(0, _col("Endereço")), "900;901", Qt.EditRole)
+    ok = m.setData(m.index(0, _col("Endereço Input")), "900;901", Qt.EditRole)
     assert ok is True
     assert st.registros[0].enderecamento.indices == (900, 901)
 
@@ -328,10 +358,10 @@ def test_set_data_endereco_invalido_retorna_false_sem_mutar():
     st = _state(_rec())
     m = ModeloSinais(st)
     antes = st.registros[0].enderecamento.indices
-    ok = m.setData(m.index(0, _col("Endereço")), "abc", Qt.EditRole)
+    ok = m.setData(m.index(0, _col("Endereço Input")), "abc", Qt.EditRole)
     assert ok is False
     assert st.registros[0].enderecamento.indices == antes
-    ok = m.setData(m.index(0, _col("Endereço")), "70000", Qt.EditRole)
+    ok = m.setData(m.index(0, _col("Endereço Input")), "70000", Qt.EditRole)
     assert ok is False
     assert st.registros[0].enderecamento.indices == antes
 
@@ -519,7 +549,7 @@ def test_pareado_comando_sem_par_e_endereco_visiveis(qtbot):
     )
     m = ModeloSinais(_state(rec))
     assert m.data(m.index(0, _col("Pareado"))) == "Comando (sem par)"
-    assert m.data(m.index(0, _col("Endereço"))) == "90"
+    assert m.data(m.index(0, _col("Endereço Output"))) == "90"
 
 
 def test_pareado_orfao_continua_para_output_sem_endereco(qtbot):
