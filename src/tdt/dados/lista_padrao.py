@@ -7,7 +7,7 @@ vazia / ``#N/A``) são ignoradas.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 
@@ -130,6 +130,7 @@ class ListaPadraoADMS:
     discretos: tuple[SinalPadrao, ...]
     analogicos: tuple[SinalPadrao, ...]
     discrete_analog: tuple[SinalPadrao, ...] = ()
+    de_para: dict[str, str] = field(default_factory=dict)
 
     @classmethod
     def carregar(cls, path: str | Path) -> "ListaPadraoADMS":
@@ -170,9 +171,17 @@ class ListaPadraoADMS:
             da: list[SinalPadrao] = []
             if "DiscreteAnalog" in wb.sheetnames:
                 da = _ler_sheet_discrete_analog(wb["DiscreteAnalog"])
+            de_para: dict[str, str] = {}
+            if "DE->PARA" in wb.sheetnames:
+                for r in wb["DE->PARA"].iter_rows(min_row=2, values_only=True):
+                    de = str(r[0]).strip().upper() if r and r[0] is not None else ""
+                    para = (str(r[1]).strip().upper()
+                            if r and len(r) > 1 and r[1] is not None else "")
+                    if de and para:
+                        de_para[de] = para
         finally:
             wb.close()
-        return cls(tuple(disc), tuple(ana), tuple(da))
+        return cls(tuple(disc), tuple(ana), tuple(da), de_para)
 
     def _todos(self) -> tuple[SinalPadrao, ...]:
         return (*self.discretos, *self.analogicos, *self.discrete_analog)

@@ -127,3 +127,34 @@ def test_lista_v2_sem_aba_nova_carrega_vazio(lista_padrao_path):
     lp = ListaPadraoADMS.carregar(lista_padrao_path)
     assert lp.discrete_analog == ()
     assert lp.por_sigla("TAP") is None
+
+
+def _wb_minimo():
+    import openpyxl
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "DiscreteSignals"
+    ws.append(["SINAL"])
+    ws.append(["CMDE"])
+    wb.create_sheet("AnalogSignals").append(["SINAL"])
+    return wb
+
+
+def test_carregar_le_sheet_de_para(tmp_path):
+    wb = _wb_minimo()
+    ws = wb.create_sheet("DE->PARA")
+    ws.append(["SINAL", "DESCRIÇÃO NOVA"])
+    ws.append(["90", "R90"])
+    ws.append(["21_1", "21Z1"])
+    p = tmp_path / "lp.xlsx"
+    wb.save(p)
+    lp = ListaPadraoADMS.carregar(p)
+    assert lp.de_para == {"90": "R90", "21_1": "21Z1"}
+
+
+def test_carregar_sem_sheet_de_para(tmp_path):
+    wb = _wb_minimo()
+    p = tmp_path / "lp.xlsx"
+    wb.save(p)
+    lp = ListaPadraoADMS.carregar(p)
+    assert lp.de_para == {}
