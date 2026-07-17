@@ -43,6 +43,7 @@ _MOTIVO_LABEL = {
     "descartado_indefinido": "Descartado (indefinido)",
     "descartado_redundante": "Descartado (redundante)",
     "posicao_divergente": "Posição diverge do status",
+    "variante_ambigua": "Família decidida pela sigla; escolher variante",
 }
 
 _MOTIVO_TOOLTIP = {

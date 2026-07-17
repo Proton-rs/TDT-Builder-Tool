@@ -45,6 +45,7 @@ def _familia(sigla: str) -> str:
 class Ancora:
     sigla: str  # sigla original da lista padrão (case-preservado)
     confianca: str = "alta"  # "alta" = âncora exata ou por junção
+    exata: bool = True  # True = token exato na descrição; False = junção de tokens
 
 
 _INDICE_CACHE: dict[tuple, dict[str, str]] = {}
@@ -92,7 +93,7 @@ def detectar(
         if i + 1 < len(tokens):
             juncao = tok + tokens[i + 1]
             if juncao in idx and juncao not in ja_vistas:
-                encontradas.append(Ancora(sigla=idx[juncao]))
+                encontradas.append(Ancora(sigla=idx[juncao], exata=False))
                 ja_vistas.add(juncao)
 
     return encontradas
@@ -138,6 +139,47 @@ def filtrar_subarvore(
         # else: contradiz o ramo explícito (ex.: 67P2 quando âncora é 67N) — remove
 
     return resultado if resultado else candidatos
+
+
+def desambiguar_variante(
+    rec: "SignalRecord",
+    ancoras: list[Ancora],
+    config,
+) -> "SignalRecord | None":
+    """Decide entre variantes-irmãs de uma família exatamente ancorada (C1).
+
+    Quando o roteador manda ``rec`` para revisão (score_baixo) porque os
+    candidatos do topo (top-3) são todos irmãos de uma mesma família ANSI
+    ancorada por sigla exata no texto (ex.: "79") e um deles é a própria
+    sigla âncora, o gap≈0 entre variantes é falso empate: a âncora exata É
+    a evidência textual mais forte, decide por ela (spec §9.3).
+
+    Só considera âncoras ``exata=True`` — âncora por junção de tokens é
+    inferência mais fraca e não decide sozinha (salvaguarda da spec).
+    Devolve ``None`` quando não se aplica (sem âncora exata, top-3 sai da
+    família ancorada, ou nenhum candidato bate a sigla da âncora).
+    """
+    ancoras_exatas = [a for a in ancoras if a.exata]
+    if not ancoras_exatas:
+        return None
+
+    familias_ancoradas = {_familia(a.sigla) for a in ancoras_exatas}
+    candidatos_finais = rec.candidatos[:3]
+    if not candidatos_finais:
+        return None
+    if not all(_familia(c.sigla) in familias_ancoradas for c in candidatos_finais):
+        return None
+
+    siglas_ancora = {a.sigla.upper(): a.sigla for a in ancoras_exatas}
+    for c in candidatos_finais:
+        if c.sigla.upper() in siglas_ancora:
+            return replace(
+                rec,
+                sigla_sinal=siglas_ancora[c.sigla.upper()],
+                status="decidido",
+                justificativa="variante-pai exata da âncora (C1)",
+            )
+    return None
 
 
 def ancorar(

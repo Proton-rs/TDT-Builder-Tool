@@ -450,7 +450,15 @@ def _classificar_roteado(rec, disc: "_Scorers", ana: "_Scorers", diagnostico: bo
             return None, ItemRevisao(
                 d, motivo=d.justificativa, candidatos_sugeridos=d.candidatos[:3]
             )
-        motivo_conf = "sigla_multipla" if _multiplas else "score_baixo"
+        if d.status == "revisao" and _ancoras and not _multiplas:
+            resolvido = ancoragem_sigla.desambiguar_variante(d, _ancoras, _cfg)
+            if resolvido is not None and resolvido.status == "decidido":
+                return resolvido, None
+            if resolvido is not None:
+                d = resolvido      # C4 (Task 14) pode devolver revisão com candidatos estreitados
+            motivo_conf = "variante_ambigua"
+        else:
+            motivo_conf = "sigla_multipla" if _multiplas else "score_baixo"
         return None, ItemRevisao(d, motivo=motivo_conf, candidatos_sugeridos=d.candidatos[:3])
 
     _ancoras_disc = (

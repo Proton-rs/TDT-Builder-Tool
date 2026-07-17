@@ -5,7 +5,8 @@ import pytest
 
 import tdt.ancoragem_sigla as _mod
 from tdt.ancoragem_sigla import (
-    Ancora, ancorar, detectar, filtrar_subarvore, tem_multiplas_familias,
+    Ancora, ancorar, desambiguar_variante, detectar, filtrar_subarvore,
+    tem_multiplas_familias,
 )
 
 
@@ -135,6 +136,23 @@ def test_detectar_descricao_vazia_retorna_lista_vazia():
     rec = _rec("")
     ancoras = detectar(rec, lp, "Discrete")
     assert ancoras == []
+
+
+def test_detectar_ancora_exata_marca_exata_true():
+    lp = _lp("67N", "67N1")
+    rec = _rec("PROTECAO 67N TEMPORIZADO ATUADO")
+    ancoras = detectar(rec, lp, "Discrete")
+    assert len(ancoras) == 1
+    assert ancoras[0].sigla == "67N"
+    assert ancoras[0].exata is True
+
+
+def test_detectar_ancora_por_juncao_marca_exata_false():
+    lp = _lp("67N", "67N1")
+    rec = _rec("PROTECAO 67 N TEMPORIZADO ATUADO")
+    ancoras = detectar(rec, lp, "Discrete")
+    ancora_67n = next(a for a in ancoras if a.sigla == "67N")
+    assert ancora_67n.exata is False
 
 
 # ---------------------------------------------------------------------------
@@ -329,6 +347,65 @@ def test_ancora_injeta_e_pipeline_decide_sigla_familia(lista_padrao_path):
         assert familia_ok, (
             f"família 50N ausente dos candidatos sugeridos: {item.candidatos_sugeridos}"
         )
+
+
+# ---------------------------------------------------------------------------
+# desambiguar_variante (C1)
+# ---------------------------------------------------------------------------
+
+def test_variante_pai_exata_decide_quando_discriminadores_inconclusivos():
+    """Âncora exata "79"; top-3 são só irmãos da família 79, gap≈0 entre
+    79 e 79OK -> decide "79" (variante-pai exata, spec §9.3)."""
+    rec = replace(
+        _rec("RELIGAMENTO 79 BLOQUEADO"),
+        candidatos=(_cand("79", 0.85), _cand("79OK", 0.83), _cand("79LO", 0.40)),
+        status="revisao",
+        justificativa="ambíguo (%=0.85, gap=0.02)",
+    )
+    ancoras = [Ancora("79", exata=True)]
+    resolvido = desambiguar_variante(rec, ancoras, config=None)
+    assert resolvido is not None
+    assert resolvido.sigla_sinal == "79"
+    assert resolvido.status == "decidido"
+    assert resolvido.justificativa == "variante-pai exata da âncora (C1)"
+
+
+def test_sem_variante_pai_vira_variante_ambigua():
+    """Âncora exata "79" mas top-3 não inclui a própria sigla "79" -> None
+    (pipeline decide o motivo "variante_ambigua")."""
+    rec = replace(
+        _rec("RELIGAMENTO 79 BLOQUEADO"),
+        candidatos=(_cand("79OK", 0.85), _cand("79LO", 0.83)),
+        status="revisao",
+        justificativa="ambíguo (%=0.85, gap=0.02)",
+    )
+    ancoras = [Ancora("79", exata=True)]
+    resolvido = desambiguar_variante(rec, ancoras, config=None)
+    assert resolvido is None
+
+
+def test_desambiguar_variante_ignora_ancora_por_juncao():
+    """Salvaguarda: âncora exata=False (por junção) não decide sozinha."""
+    rec = replace(
+        _rec("PROTECAO 67 N TEMPORIZADO"),
+        candidatos=(_cand("67N", 0.85), _cand("67N1", 0.83)),
+        status="revisao",
+    )
+    ancoras = [Ancora("67N", exata=False)]
+    resolvido = desambiguar_variante(rec, ancoras, config=None)
+    assert resolvido is None
+
+
+def test_desambiguar_variante_top3_com_familia_estranha_nao_decide():
+    """Top-3 tem candidato de família não ancorada -> não confia no gap≈0."""
+    rec = replace(
+        _rec("RELIGAMENTO 79 BLOQUEADO"),
+        candidatos=(_cand("79", 0.85), _cand("50BF", 0.84), _cand("79OK", 0.83)),
+        status="revisao",
+    )
+    ancoras = [Ancora("79", exata=True)]
+    resolvido = desambiguar_variante(rec, ancoras, config=None)
+    assert resolvido is None
 
 
 def test_ancora_desativada_nao_injeta(lista_padrao_path):

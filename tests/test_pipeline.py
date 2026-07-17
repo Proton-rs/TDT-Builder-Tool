@@ -547,6 +547,68 @@ def test_dual_pass_discreteanalog_so_um_decide_aceita(lista_padrao_path):
     assert decidido.status == "decidido"
 
 
+def _fake_enc_zeros(textos):
+    import numpy as np
+    return np.zeros((len(textos), 5), dtype="float32")
+
+
+def _rec_ancorado(texto: str) -> SignalRecord:
+    return SignalRecord(
+        id="t:1",
+        modulo=Modulo("M", "sheet"),
+        tipo_sinal=TipoSinal("Discrete", "SingleBit", "Input", categoria_confiavel=True),
+        enderecamento=Enderecamento("DNP3", (1,)),
+        descricoes=Descricoes(texto, texto),
+    )
+
+
+def test_classificar_roteado_ancora_exata_decide_variante_pai_c1(lista_padrao_path):
+    """Caso real H1 (diag SP-OBS-17JUL P5-Fase0): âncora exata "51N" no texto,
+    top-3 são só irmãos da família 51N (51N, 51N1, 51N2) e a própria sigla
+    âncora sobrevive no top -- C1 decide "51N" em vez de mandar p/ revisão."""
+    lp = ListaPadraoADMS.carregar(lista_padrao_path)
+    cfg = Config(
+        peso_tfidf=1.0, peso_vetorial=0.0, peso_fuzzy=0.0,
+        threshold_pct=0.01, threshold_gap=5.0,
+        ancora_sigla_ativa=True, ancora_sigla_score=0.85,
+    )
+    disc = _construir_scorers(lp, cfg, _fake_enc_zeros, "Discrete", cfg)
+    cfg_analog = _replace(cfg, threshold_pct=5.0, threshold_gap=5.0)
+    ana = _construir_scorers(lp, cfg, _fake_enc_zeros, "Analog", cfg_analog)
+
+    rec = _rec_ancorado("PROTECAO 51N SOBRECORRENTE TEMPORIZADA NEUTRO")
+    decidido, item = _classificar_roteado(rec, disc, ana, diagnostico=False, lista_padrao=lp)
+
+    assert item is None
+    assert decidido is not None
+    assert decidido.status == "decidido"
+    assert decidido.sigla_sinal == "51N"
+    assert decidido.justificativa == "variante-pai exata da âncora (C1)"
+
+
+def test_classificar_roteado_ancora_exata_sem_variante_pai_no_top3_vira_variante_ambigua(lista_padrao_path):
+    """Mesma família 51N ancorada, mas a própria sigla "51N" não sobrevive no
+    top-3 (H3) -- C1 não tem o que decidir; motivo vira "variante_ambigua"."""
+    lp = ListaPadraoADMS.carregar(lista_padrao_path)
+    cfg = Config(
+        peso_tfidf=1.0, peso_vetorial=0.0, peso_fuzzy=0.0,
+        threshold_pct=0.01, threshold_gap=5.0,
+        ancora_sigla_ativa=True, ancora_sigla_score=0.85,
+    )
+    disc = _construir_scorers(lp, cfg, _fake_enc_zeros, "Discrete", cfg)
+    cfg_analog = _replace(cfg, threshold_pct=5.0, threshold_gap=5.0)
+    ana = _construir_scorers(lp, cfg, _fake_enc_zeros, "Analog", cfg_analog)
+
+    rec = _rec_ancorado("SOBRECORRENTE TEMPORIZADA NEUTRO 51N ATUADO")
+    decidido, item = _classificar_roteado(rec, disc, ana, diagnostico=False, lista_padrao=lp)
+
+    assert decidido is None
+    assert item is not None
+    assert item.motivo == "variante_ambigua"
+    siglas_sugeridas = {c.sigla for c in item.candidatos_sugeridos}
+    assert "51N" not in siglas_sugeridas
+
+
 def test_classificar_roteado_categoria_incerta_nenhum_decide_score_baixo(lista_padrao_path):
     # thresholds travados nos dois bundles -> nenhum decide -> revisão por score baixo.
     cfg = Config(
