@@ -10,7 +10,7 @@ from pathlib import Path
 
 from PySide6.QtWidgets import (
     QComboBox, QDoubleSpinBox, QFileDialog, QFormLayout, QGroupBox, QHBoxLayout,
-    QLabel, QPushButton, QSpinBox, QVBoxLayout, QWidget,
+    QLabel, QMessageBox, QPushButton, QSpinBox, QVBoxLayout, QWidget,
 )
 from PySide6.QtCore import Signal
 
@@ -70,6 +70,13 @@ def _spin(maximo=1.0, passo=0.01):
     s.setDecimals(3)
     s.setFixedWidth(120)
     return s
+
+
+_KNOBS_UI = (
+    ("threshold_pct", "spin_pct"), ("threshold_gap", "spin_gap"),
+    ("top_n_pct", "spin_topn"), ("peso_tfidf", "spin_tfidf"),
+    ("peso_vetorial", "spin_vet"), ("peso_fuzzy", "spin_fuzzy"),
+)
 
 
 def _linha_caminho(rotulo: str, valor: str, seletor: str, is_pasta: bool = False) -> tuple:
@@ -138,6 +145,12 @@ class TelaConfig(QWidget):
         for spin in (self.spin_tfidf, self.spin_vet, self.spin_fuzzy):
             spin.valueChanged.connect(self._atualizar_aviso_pesos)
         layout.addWidget(group_pesos)
+
+        self.lbl_overrides = QLabel("")
+        self.lbl_overrides.setProperty("nivel", "aviso")
+        layout.addWidget(self.lbl_overrides)
+        for _campo, _nome_spin in _KNOBS_UI:
+            getattr(self, _nome_spin).valueChanged.connect(self._atualizar_overrides)
 
         # Grupo 4: Modelo semântico
         group_modelo = QGroupBox("Modelo semântico")
@@ -238,6 +251,7 @@ class TelaConfig(QWidget):
         self.combo_modelo.setCurrentIndex(i if i >= 0 else 0)
         self.spin_k.setValue(c.k_vizinhos)
         self._atualizar_aviso_pesos()
+        self._atualizar_overrides()
 
     def _atualizar_aviso_pesos(self, *_args) -> None:
         soma = (self.spin_tfidf.value() + self.spin_vet.value()
@@ -247,6 +261,17 @@ class TelaConfig(QWidget):
             self.lbl_aviso_pesos.setText(
                 f"Os pesos somam {soma:.3f} — o esperado é 1.0")
         self.lbl_aviso_pesos.setVisible(divergente)
+
+    def _atualizar_overrides(self, *_args) -> None:
+        default = Config()
+        difs = [
+            f"{campo} ({getattr(self, spin).value():g} ≠ padrão {getattr(default, campo):g})"
+            for campo, spin in _KNOBS_UI
+            if abs(getattr(self, spin).value() - getattr(default, campo)) > 1e-9
+        ]
+        self.lbl_overrides.setText(
+            "Valores diferentes do padrão calibrado: " + "; ".join(difs) if difs else "")
+        self.lbl_overrides.setVisible(bool(difs))
 
     def _restaurar_padroes(self) -> None:
         c = Config()
@@ -261,6 +286,11 @@ class TelaConfig(QWidget):
         self.spin_k.setValue(c.k_vizinhos)
 
     def aplicar(self) -> None:
+        soma = self.spin_tfidf.value() + self.spin_vet.value() + self.spin_fuzzy.value()
+        if abs(soma - 1.0) > 0.001:
+            QMessageBox.warning(self, "Pesos do ensemble",
+                                 f"Os pesos somam {soma:.3f} — ajuste para 1.0 antes de salvar.")
+            return
         self._estado.config = replace(
             self._estado.config,
             threshold_pct=self.spin_pct.value(),
