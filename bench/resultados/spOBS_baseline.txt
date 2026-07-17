@@ -1,0 +1,3 @@
+baseline spOBS — 2026-07-17
+pct=72.3
+commit=46cd915
