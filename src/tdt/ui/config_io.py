@@ -23,6 +23,9 @@ from tdt.config import Config
 
 _PATHS_VAZIO = {"input": "", "output": "", "template": "", "lista_padrao": ""}
 
+# trio stale (snapshot pré-calibração BM25 de 03/07) — migração one-time
+_PESOS_STALE = {"peso_tfidf": 0.34, "peso_vetorial": 0.33, "peso_fuzzy": 0.33}
+
 # campos escalares da Config que a UI edita
 _ESCALARES = (
     "peso_tfidf", "peso_vetorial", "peso_fuzzy",
@@ -84,6 +87,10 @@ def carregar_config(path: str | Path) -> tuple[Config, dict]:
     base = _base_paths()
     paths = {k: _para_absoluto(v, base) for k, v in paths_brutos.items()}
     knobs = {k: v for k, v in dados.get("config", {}).items() if k in _ESCALARES}
+    if all(knobs.get(k) == v for k, v in _PESOS_STALE.items()):
+        # snapshot pré-calibração BM25 (03/07) — descartar o trio, defaults valem
+        for k in _PESOS_STALE:
+            knobs.pop(k)
     pesos_regras = dados.get("pesos_regras")
     cfg = replace(Config(), **knobs)
     if isinstance(pesos_regras, dict):
@@ -96,9 +103,18 @@ def salvar_config(path: str | Path, config: Config, paths: dict) -> None:
     paths_relativos = {
         k: _para_relativo(v, base) for k, v in {**_PATHS_VAZIO, **paths}.items()
     }
-    doc = {
-        "paths": paths_relativos,
-        "config": {k: getattr(config, k) for k in _ESCALARES},
-        "pesos_regras": dict(config.pesos_regras),
+    default = Config()
+    escalares = {
+        k: getattr(config, k) for k in _ESCALARES
+        if getattr(config, k) != getattr(default, k)
     }
+    pesos = {
+        k: v for k, v in config.pesos_regras.items()
+        if default.pesos_regras.get(k) != v
+    }
+    doc: dict = {"paths": paths_relativos}
+    if escalares:
+        doc["config"] = escalares
+    if pesos:
+        doc["pesos_regras"] = pesos
     Path(path).write_text(tomli_w.dumps(doc), encoding="utf-8")
