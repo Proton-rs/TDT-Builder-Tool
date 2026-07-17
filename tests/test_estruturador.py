@@ -263,6 +263,34 @@ def test_sigla_invalida_recai_no_scoring():
     assert rec.sigla_sinal is None
 
 
+def test_sigla_de_entrada_normalizada_por_de_para():
+    rows = [
+        ("SIGLA", "NOME", "TIPO", "IDX"),
+        ("90", "SND_LT67SAN_LT67SAN_R90", "Digital", "10"),
+    ]
+    mapa = MapaColunas(header_row=1, colunas={"sigla": 0, "descricao": 1, "tipo": 2, "indice": 3})
+    recs = estruturar(rows, mapa, sheet_name="LT67SAN", config=Config(),
+                       siglas_set=frozenset({"R90"}), de_para={"90": "R90"})
+    assert len(recs) == 1
+    rec = recs[0]
+    assert rec.sigla_sinal == "R90"
+    assert rec.status == "decidido"
+
+
+def test_sigla_fora_do_de_para_comportamento_inalterado():
+    rows = [
+        ("SIGLA", "NOME", "TIPO", "IDX"),
+        ("79", "SND_LT67SAN_LT67SAN_79", "Digital", "10"),
+    ]
+    mapa = MapaColunas(header_row=1, colunas={"sigla": 0, "descricao": 1, "tipo": 2, "indice": 3})
+    recs = estruturar(rows, mapa, sheet_name="LT67SAN", config=Config(),
+                       siglas_set=_SIGLAS_LP, de_para={"90": "R90"})
+    assert len(recs) == 1
+    rec = recs[0]
+    assert rec.sigla_sinal == "79"
+    assert rec.status == "decidido"
+
+
 # --- datatype (DoubleBit nativo) + comando_duplo (SP-E / Task 3) -----------
 
 

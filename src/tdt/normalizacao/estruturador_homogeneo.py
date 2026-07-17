@@ -98,7 +98,18 @@ def estruturar_homogeneo(
         modulo_col = _normaliza_celula(row[idx["modulo"]]) if idx["modulo"] is not None else ""
         equip_cod = _normaliza_celula(row[idx["equipamento"]]) if idx["equipamento"] is not None else ""
         ident = resolver(bloco, sheet_name, modulo_col, equip_cod)
-        sigla = str(row[idx["sigla"]] or "").strip() if idx["sigla"] is not None else ""
+        sigla_bruta = str(row[idx["sigla"]] or "").strip() if idx["sigla"] is not None else ""
+        # DE->PARA só entra quando a sigla bruta NÃO já resolve na lista
+        # padrão -- precedência do match direto evita que um mapeamento
+        # legado desfaça uma sigla já correta (regressão bench SAN2).
+        if sigla_bruta and lp.por_sigla(sigla_bruta) is None:
+            sigla = lp.de_para.get(sigla_bruta.upper(), sigla_bruta)
+        else:
+            sigla = sigla_bruta
+        if sigla != sigla_bruta:
+            avisos.append(
+                f"{sheet_name}:{i}: sigla '{sigla_bruta}' normalizada p/ '{sigla}' (DE->PARA)"
+            )
         indices = _parse_indices(row[idx["index"]]) if idx["index"] is not None and idx["index"] < len(row) else ()
         datatype = (
             "DoubleBit"

@@ -89,6 +89,7 @@ def estruturar(
     modulo: str | None = None,
     vocab: set[str] | frozenset[str] | None = None,
     siglas_set: frozenset[str] | None = None,
+    de_para: dict[str, str] | None = None,
 ) -> list[SignalRecord]:
     cols = mapa.colunas
     c_desc = cols.get("descricao")
@@ -179,6 +180,12 @@ def estruturar(
                 motivo_revisao = "modulo_indefinido"
         if tem_sigla and siglas_set is not None:
             sv = str(row[c_sigla] or "").strip().upper()
+            # DE->PARA só entra quando a sigla bruta NÃO já é válida --
+            # precedência do match direto evita que um mapeamento legado
+            # (ex.: LDF->MANUT, real na SE SAN2) desfaça uma sigla já
+            # correta na lista padrão (regressão bench SAN2).
+            if de_para is not None and sv not in siglas_set:
+                sv = de_para.get(sv, sv)
             if sv and sv in siglas_set:
                 sigla_sinal = sv
                 nome_str = str(row[c_desc]) if tem_desc else ""

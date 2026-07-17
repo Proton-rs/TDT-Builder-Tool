@@ -8,7 +8,7 @@ Identidade = `sigla_sinal`, `modulo.nome`, `eletrico.nome_equipamento`,
 |---|---|---|---|---|
 | normalização N0–N5 (`normalizador.canonizar`) | descrição bruta | `descricoes.normalizada`, `eletrico.*` (N0) | descarta ruído do texto (EXCEÇÃO da regra) | `descricoes.bruta` sempre preservada |
 | `analise_colunas.analisar` | rows | `MapaColunas` | — | — |
-| `estruturador.estruturar` | rows + mapa | `SignalRecord` completo (sigla, módulo, equipamento, endereços, tipo) | — | I2: módulo/sigla/equipamento em ramos INDEPENDENTES (regressão LVA AL21) |
+| `estruturador.estruturar` | rows + mapa | `SignalRecord` completo (sigla, módulo, equipamento, endereços, tipo) | — | I2: módulo/sigla/equipamento em ramos INDEPENDENTES (regressão LVA AL21); canoniza sigla via DE->PARA quando a bruta ainda não é válida na lista padrão (aviso no homogêneo, 2A) |
 | `identidade_modulo.aplicar_identidade` | sinais + rows | `modulo.nome`, confiança | saneia módulo fora do padrão p/ dominante da sheet | aviso `identidade_modulo` + `aud.sobrescritas()` (Task 3) |
 | `inferencia_topologia.subdividir_transformador_at_bt` | sinais | `modulo.nome` (+sufixo AT/BT) | renomeia módulo | `aud.sobrescritas()` (Task 3) |
 | `inferencia_topologia.inferir_equipamento` | sinais | `eletrico.equipamento_alvo` | — | flag `equipamento_inferido` |

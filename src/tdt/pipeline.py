@@ -617,7 +617,7 @@ def executar(
         else:
             mapa = analisar(rows, encoder, ref_emb, siglas_set=lp.siglas, config=config)
             sinais = list(estruturar(rows, mapa, sheet_name=sn, config=config, vocab=vocab,
-                                     siglas_set=lp.siglas))
+                                     siglas_set=lp.siglas, de_para=lp.de_para))
         sinais_pre = sinais
         sinais, conf_mod, avisos_mod = aplicar_identidade(sinais, sn, rows, config)
         aud.sobrescritas("aplicar_identidade", sinais_pre, sinais)

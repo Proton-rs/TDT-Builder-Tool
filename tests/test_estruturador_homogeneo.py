@@ -24,8 +24,9 @@ def test_detectar_header_devolve_none_sem_formato_fixo():
 
 
 class _ListaPadraoFake:
-    def __init__(self, siglas: dict[str, SinalPadrao]):
+    def __init__(self, siglas: dict[str, SinalPadrao], de_para: dict[str, str] | None = None):
         self._siglas = siglas
+        self.de_para = de_para or {}
 
     def por_sigla(self, sigla):
         return self._siglas.get(sigla.strip().upper())
@@ -74,6 +75,18 @@ def test_sigla_inexistente_na_lista_padrao_vai_pra_pendentes():
     lp = _ListaPadraoFake({})
     decididos, pendentes, _, _ = estruturar_homogeneo(rows, 0, "AL 11", lp, Config())
     assert decididos == [] and len(pendentes) == 1
+
+
+def test_sigla_de_entrada_normalizada_por_de_para_emite_aviso():
+    rows = [_HEADER, ("SIM", "IMA", "AL", "TC", "A", "CORRENTE FASE A", "90",
+                       "IMA_AL_AL_R90", "-", "-", "-", "1", "-", "70")]
+    lp = _ListaPadraoFake({"R90": _sinal_padrao("R90")}, de_para={"90": "R90"})
+    decididos, pendentes, _, avisos = estruturar_homogeneo(rows, 0, "AL 11", lp, Config())
+    assert pendentes == []
+    assert len(decididos) == 1
+    assert decididos[0].sigla_sinal == "R90"
+    assert len(avisos) == 1
+    assert "90" in avisos[0] and "R90" in avisos[0]
 
 
 def test_equipamento_disjuntor_mapeado_por_modulo_dj():
