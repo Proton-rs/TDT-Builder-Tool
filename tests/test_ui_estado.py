@@ -1,5 +1,6 @@
 from dataclasses import replace
 
+from tdt.config import Config
 from tdt.contracts import (
     Candidato, Descricoes, Eletrico, Enderecamento, ItemRevisao, ListaHomogenea,
     Modulo, ResultadoPipeline, SignalRecord, TipoSinal,
@@ -13,6 +14,15 @@ def _rec(id_, sigla, status):
         tipo_sinal=TipoSinal("Discrete", "SingleBit", "Input"),
         enderecamento=Enderecamento("DNP3", (1,)),
         descricoes=Descricoes("d", "D"), sigla_sinal=sigla, status=status,
+    )
+
+
+def _rec_dir(id_, sigla, direcao, indices, saida=()):
+    return SignalRecord(
+        id=id_, modulo=Modulo("M", "sheet_name"),
+        tipo_sinal=TipoSinal("Discrete", "SingleBit", direcao),
+        enderecamento=Enderecamento("DNP3", indices, saida),
+        descricoes=Descricoes("d", "D"), sigla_sinal=sigla, status="decidido",
     )
 
 
@@ -188,3 +198,17 @@ def test_definir_descricao_bruta():
     assert st.registros[0].descricoes.bruta == "DISJUNTOR 52-11 MOLA"
     # normalizada NÃO reprocessa (spec 2026-07-15 §4)
     assert st.registros[0].descricoes.normalizada == "D"
+
+
+def test_aplicar_reparear_preserva_ordem_e_um_undo():
+    st = AppState()
+    st.registros = [
+        _rec("x:0", None, "revisao"),                       # não elegível (sem sigla)
+        _rec_dir("s:1", "SECF", "Input", (100,)),
+        _rec_dir("c:1", "SECF", "Output", (400,)),
+    ]
+    res = st.aplicar_reparear([r.id for r in st.registros], frozenset(), Config())
+    assert res.n_fundidos == 1
+    assert st.registros[0].id == "x:0"                      # intocado, na posição
+    assert len(st.registros) == 2                           # comando absorvido
+    assert st.desfazer() and len(st.registros) == 3         # 1 undo restaura tudo

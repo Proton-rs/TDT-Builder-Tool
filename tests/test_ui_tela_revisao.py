@@ -1,5 +1,5 @@
 from PySide6.QtCore import QItemSelectionModel, QPoint, QSettings, Qt
-from PySide6.QtWidgets import QDialog
+from PySide6.QtWidgets import QDialog, QMessageBox
 
 import pytest
 
@@ -208,6 +208,30 @@ def test_parear_sinais_desvincular_confirmado_separa_em_dois(qtbot, monkeypatch)
     assert comando_rec.enderecamento.indices == (0,)
     assert comando_rec.id.startswith("1_saida_")
     assert comando_rec.id != status_rec.id
+
+
+# --- _reparear_sheet ---
+
+def _rec_dir_sigla(id_, sigla, direcao, indices):
+    return SignalRecord(
+        id=id_, modulo=Modulo("SE1", "sheet_name"),
+        tipo_sinal=TipoSinal("Discrete", "SingleBit", direcao),
+        enderecamento=Enderecamento("DNP3", indices, ()),
+        descricoes=Descricoes("d", "D"), sigla_sinal=sigla, status="decidido",
+    )
+
+
+def test_reparear_sheet_funde_par_e_atualiza_tabela(qtbot, monkeypatch):
+    tela = _tela_carregada(qtbot, [
+        _rec_dir_sigla("s:1", "SECF", "Input", (100,)),
+        _rec_dir_sigla("c:1", "SECF", "Output", (400,)),
+    ])
+    monkeypatch.setattr(QMessageBox, "information", lambda *a, **k: None)
+    tela._reparear_sheet()
+    assert len(tela._estado._historico) == 1
+    assert len(tela._estado.registros) == 1
+    assert tela._estado.registros[0].tipo_sinal.direcao == "InputOutput"
+    assert tela._modelo.rowCount() == 1
 
 
 def test_carregar_registra_delegate_combo_nas_colunas_de_dominio(qtbot):

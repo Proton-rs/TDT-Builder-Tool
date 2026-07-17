@@ -207,7 +207,7 @@ class ModeloSinais(QAbstractTableModel):
         if nome == "Status":
             return rec.status
         if nome == "Motivo":
-            motivo = self._estado.motivo_por_id().get(rec.id)
+            motivo = self._estado.motivo_por_id().get(rec.id) or rec.justificativa
             return _MOTIVO_LABEL.get(motivo, motivo) if motivo else "—"
         # ponytail: motivo_por_id() reconstroi o dict a cada chamada de _texto
         # -- ok pro tamanho de lista atual (centenas de linhas); cachear no
@@ -322,7 +322,7 @@ class ModeloSinais(QAbstractTableModel):
         if role == Qt.ToolTipRole and nome in ("Sinal", "Descr. ADMS"):
             return self._adms(rec) or None
         if role == Qt.ToolTipRole and nome == "Motivo":
-            motivo = self._estado.motivo_por_id().get(rec.id)
+            motivo = self._estado.motivo_por_id().get(rec.id) or rec.justificativa
             return _MOTIVO_TOOLTIP.get(motivo, "") if motivo else None
         if role == Qt.FontRole and nome in _COLUNAS_MONO:
             return QFont("Consolas")

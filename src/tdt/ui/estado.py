@@ -178,6 +178,30 @@ class AppState:
         self.registros = novos
         return None
 
+    def aplicar_reparear(self, ids, whitelist_posicao, config) -> "ResultadoReparear":
+        """Reparea os registros elegíveis dentre `ids` (P3). 1 snapshot: 1
+        desfazer reverte o lote. Ordem preservada; comando absorvido pela
+        fusão sai da lista (endereço vive no par — conservação auditada)."""
+        from tdt.ui.reparear import ResultadoReparear, elegivel, reparear
+        alvo = set(ids)
+        elegiveis = [r for r in self.registros if r.id in alvo and elegivel(r)]
+        if not elegiveis:
+            return ResultadoReparear((), 0, 0, 0)
+        self._snapshot()
+        res = reparear(elegiveis, whitelist_posicao, config)
+        ids_eleg = {r.id for r in elegiveis}
+        novos_por_id = {r.id: r for r in res.resultantes}
+        saida = []
+        for r in self.registros:
+            if r.id in ids_eleg:
+                novo = novos_por_id.get(r.id)
+                if novo is not None:
+                    saida.append(novo)
+            else:
+                saida.append(r)
+        self.registros = saida
+        return res
+
     def trocar_sigla_par(self, id_: str, nova_sigla: str) -> None:
         """Troca a sigla de um par de posição já fundido (ex. DJA1 <-> DJF1),
         preservando `enderecamento`/`tipo_sinal` intactos. No-op se

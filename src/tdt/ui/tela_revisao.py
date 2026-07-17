@@ -200,6 +200,8 @@ class TelaRevisao(QWidget):
         btn_remover = QPushButton("Remover Sinal"); btn_remover.clicked.connect(self._remover_sinais)
         btn_adicionar = QPushButton("Adicionar Sinal"); btn_adicionar.clicked.connect(self._adicionar_sinal)
         btn_parear = QPushButton("Parear D+C"); btn_parear.clicked.connect(self._parear_sinais)
+        self.btn_reparear = QPushButton("Reparear sheet")
+        self.btn_reparear.clicked.connect(self._reparear_sheet)
         self.btn_formar_par = QPushButton("Formar par de posição")
         self.btn_formar_par.setEnabled(False)
         self.btn_formar_par.clicked.connect(self._formar_par_posicao)
@@ -214,6 +216,7 @@ class TelaRevisao(QWidget):
         topo.addWidget(btn_remover)
         topo.addWidget(btn_adicionar)
         topo.addWidget(btn_parear)
+        topo.addWidget(self.btn_reparear)
         topo.addWidget(self.btn_formar_par)
         topo.addWidget(self.btn_aprovar)
 
@@ -669,6 +672,47 @@ class TelaRevisao(QWidget):
             QMessageBox.warning(self, "Formar par de posição", erro)
             return
         self.refresh()
+
+    def _reparear_sheet(self):
+        # import tardio: tdt.pipeline puxa cache_scorers/bm25 (sklearn) --
+        # boot da UI não pode importar libs pesadas (test_boot_sem_transformers)
+        from tdt.pipeline import _whitelist_posicao
+        indice_aba = self.abas_sheet.currentIndex()
+        sheet = None if indice_aba <= 0 else self.abas_sheet.tabData(indice_aba)
+        selecao = self._linhas_selecionadas()
+        if len(selecao) >= 2:
+            usar_selecao = QMessageBox.question(
+                self, "Reparear", "Reparear só as linhas selecionadas?\n(Não = sheet inteira)",
+            ) == QMessageBox.Yes
+        else:
+            usar_selecao = False
+        if usar_selecao:
+            ids = [self._estado.registros[i].id for i in selecao]
+        else:
+            ids = [r.id for r in self._estado.registros
+                   if sheet is None or r.modulo.sheet_name == sheet]
+        lp = self._estado.lista_padrao
+        wl = _whitelist_posicao(lp, self._estado.config) if lp is not None else frozenset()
+        res = self._estado.aplicar_reparear(ids, wl, self._estado.config)
+        self.refresh()
+        if res.n_fundidos:
+            self._selecionar_primeiro_fundido(res)
+        QMessageBox.information(
+            self, "Reparear",
+            f"{res.n_fundidos} pares formados, {res.n_ambiguos} ambíguos, "
+            f"{res.n_sem_par} sem par.")
+
+    def _selecionar_primeiro_fundido(self, res) -> None:
+        for r in res.resultantes:
+            if r.tipo_sinal.direcao == "InputOutput":
+                for linha, reg in enumerate(self._estado.registros):
+                    if reg.id == r.id:
+                        idx_proxy = self._proxy.mapFromSource(self._modelo.index(linha, 0))
+                        if idx_proxy.isValid():
+                            self.tabela.selectRow(idx_proxy.row())
+                            self.tabela.scrollTo(idx_proxy)
+                        return
+                return
 
     def _descricao_confirmacao(self, acao: str, dados) -> str:
         if acao == "parear":
