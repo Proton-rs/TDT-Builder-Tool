@@ -29,7 +29,8 @@ def _state(rec):
     st = AppState()
     st.registros = [rec]
     st.lista_padrao = ListaPadraoADMS(
-        (SinalPadrao("DJF1", "Disjuntor falha função 1", "BISI", None, None, "Discrete"),), ())
+        (SinalPadrao("DJF1", "Disjuntor falha função 1", "BISI", None, None, "Discrete",
+                     severidade="Severidade 4"),), ())
     return st
 
 
@@ -644,6 +645,25 @@ def test_remover_linhas_ignora_indices_invalidos(qtbot):
     m = ModeloSinais(st)
     m.remover_linhas([-1, 1, 99])
     assert [r.id for r in st.registros] == ["S:0", "S:2"]
+
+
+def test_coluna_severidade_mostra_valor_da_lista_padrao():
+    m = ModeloSinais(_state(_rec()))
+    assert m.data(m.index(0, _col("Severidade")), Qt.DisplayRole) == "Severidade 4"
+
+
+def test_coluna_severidade_vazia_sem_sigla():
+    m = ModeloSinais(_state(_rec(sigla=None)))
+    assert m.data(m.index(0, _col("Severidade")), Qt.DisplayRole) == ""
+
+
+def test_coluna_severidade_vazia_sem_match_na_lista_padrao():
+    m = ModeloSinais(_state(_rec(sigla="DESCONHECIDO")))
+    assert m.data(m.index(0, _col("Severidade")), Qt.DisplayRole) == ""
+
+
+def test_coluna_severidade_nao_editavel():
+    assert "Severidade" not in _EDITAVEIS
 
 
 def test_lote_emite_um_datachanged_agregado(qtbot):

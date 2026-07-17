@@ -17,7 +17,7 @@ COLUNAS = [
     "Endereço Output",
     "Score embedding", "Score tf-idf", "Score fuzzy", "Justificativa",
     "Módulo", "Equipamento", "Tipo Equip.", "Barra", "Nível Tensão",
-    "Pareado", "Sheet origem",
+    "Pareado", "Sheet origem", "Severidade",
 ]
 
 _MOTIVO_LABEL = {
@@ -261,6 +261,12 @@ class ModeloSinais(QAbstractTableModel):
             return "—"
         if nome == "Sheet origem":
             return sheet_origem(rec)
+        if nome == "Severidade":
+            lp = self._estado.lista_padrao
+            if lp is None or not rec.sigla_sinal:
+                return ""
+            sp = lp.por_sigla(rec.sigla_sinal)
+            return (sp.severidade if sp is not None else None) or ""
         return ""
 
     def _valor_edicao(self, rec, col):

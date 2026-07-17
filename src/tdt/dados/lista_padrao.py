@@ -34,6 +34,7 @@ class SinalPadrao:
     output_data_type: str | None = None
     device_mapping_ref: str | None = None
     aplicabilidade: str | None = None
+    severidade: str | None = None  # display-only (LP), nunca em corpus/score
 
 
 def _val(v) -> str | None:
@@ -90,6 +91,7 @@ def _ler_sheet(ws, categoria: str, mapa: dict[str, str]) -> list[SinalPadrao]:
                 tipo_medicao=get("tipo_medicao"),
                 unidade_exibicao=get("unidade_exibicao"),
                 type_severidade=get("type_severidade"),
+                severidade=get("severidade"),
             )
         )
     return sinais
@@ -150,6 +152,7 @@ class ListaPadraoADMS:
                     "tipo_medicao": None,
                     "unidade_exibicao": None,
                     "type_severidade": "TYPE SEVERIDADE",
+                    "severidade": "SEVERIDADE",
                 },
             )
             ana = _ler_sheet(
@@ -166,6 +169,7 @@ class ListaPadraoADMS:
                     "tipo_medicao": "TIPO DE MEDIÇÃO",
                     "unidade_exibicao": "UNIDADE DE EXIBIÇÃO",
                     "type_severidade": None,
+                    "severidade": None,
                 },
             )
             da: list[SinalPadrao] = []

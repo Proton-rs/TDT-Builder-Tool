@@ -158,3 +158,19 @@ def test_carregar_sem_sheet_de_para(tmp_path):
     wb.save(p)
     lp = ListaPadraoADMS.carregar(p)
     assert lp.de_para == {}
+
+
+def test_le_severidade_dos_discretos(tmp_path):
+    import openpyxl
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "DiscreteSignals"
+    ws.append(["SINAL", "SEVERIDADE"])
+    ws.append(["CMDE", "Severidade 4"])
+    ws.append(["DJF1", None])
+    wb.create_sheet("AnalogSignals").append(["SINAL"])
+    p = tmp_path / "lp.xlsx"
+    wb.save(p)
+    lp = ListaPadraoADMS.carregar(p)
+    assert lp.por_sigla("CMDE").severidade == "Severidade 4"
+    assert lp.por_sigla("DJF1").severidade is None
