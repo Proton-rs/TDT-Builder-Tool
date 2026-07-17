@@ -226,7 +226,7 @@ class TelaConfig(QWidget):
         if caminho:
             self._estado.paths[chave] = caminho
             self._atualizar_label(chave)
-            self.aplicar()  # persiste imediatamente
+            salvar_config(self._config_path, self._estado.config, self._estado.paths)  # persiste path, sem revalidar pesos
 
     def _atualizar_label(self, chave):
         v = self._estado.paths.get(chave, "")

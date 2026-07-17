@@ -62,3 +62,21 @@ def test_aplicar_bloqueia_soma_invalida(qtbot, tmp_path, monkeypatch):
     tela.aplicar()
     assert st.config.peso_tfidf == Config().peso_tfidf   # não aplicou
     assert not (tmp_path / "c.toml").exists()
+
+
+def test_escolher_persiste_path_mesmo_com_pesos_invalidos(qtbot, tmp_path, monkeypatch):
+    cfg_path = tmp_path / "c.toml"
+    st = AppState()
+    tela = TelaConfig(st, config_path=cfg_path)
+    qtbot.addWidget(tela)
+    tela.spin_tfidf.setValue(0.9)
+    tela.spin_vet.setValue(0.9)
+    tela.spin_fuzzy.setValue(0.9)
+    novo_caminho = str(tmp_path / "input.xlsx")
+    monkeypatch.setattr(
+        "tdt.ui.tela_config.QFileDialog.getOpenFileName",
+        lambda *a, **k: (novo_caminho, ""),
+    )
+    tela._escolher("template", False)
+    assert tela._estado.paths["template"] == novo_caminho
+    assert cfg_path.exists()   # path persistido apesar da soma de pesos invalida
