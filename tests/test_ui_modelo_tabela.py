@@ -266,6 +266,21 @@ def test_editar_endereco_input_de_output_rejeitado(qtbot):
     assert m.setData(m.index(0, _col("Endereço Input")), "9", Qt.EditRole) is False
 
 
+def test_valor_edicao_endereco_input_de_output_nao_usa_sentinela_traco(qtbot):
+    m = ModeloSinais(_state(_rec_output()))
+    assert m.data(m.index(0, _col("Endereço Input")), Qt.EditRole) == ""
+
+
+def test_valor_edicao_endereco_output_de_output_traz_indices_crus(qtbot):
+    m = ModeloSinais(_state(_rec_output()))
+    assert m.data(m.index(0, _col("Endereço Output")), Qt.EditRole) == "700"
+
+
+def test_valor_edicao_endereco_input_de_registro_input_inalterado(qtbot):
+    m = ModeloSinais(_state(_rec()))
+    assert m.data(m.index(0, _col("Endereço Input")), Qt.EditRole) == "10"
+
+
 def test_flags_colunas_dominio_sao_editaveis():
     m = ModeloSinais(_state(_rec()))
     for nome in ("Sinal", "Tipo", "Fase", "Nível Tensão", "Barra",

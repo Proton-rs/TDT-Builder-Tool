@@ -281,7 +281,13 @@ class ModeloSinais(QAbstractTableModel):
             return rec.eletrico.nome_equipamento or ""
         if nome == "Módulo":
             return (rec.modulo.nome if rec.modulo else None) or ""
+        if nome == "Endereço Input":
+            if rec.tipo_sinal.direcao == "Output":
+                return ""
+            return ";".join(str(i) for i in rec.enderecamento.indices)
         if nome == "Endereço Output":
+            if rec.tipo_sinal.direcao == "Output":
+                return ";".join(str(i) for i in rec.enderecamento.indices)
             return ";".join(str(i) for i in rec.enderecamento.indices_saida)
         if nome == "Sinal":
             return rec.sigla_sinal or ""

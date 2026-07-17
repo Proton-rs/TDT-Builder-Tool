@@ -26,7 +26,7 @@ from tdt.ui.delegate_sinal import (
     DelegateCombo, DelegateEquipamento, DelegateModulo, DelegateSinal,
 )
 from tdt.ui.estado import AppState
-from tdt.ui.modelo_tabela import ModeloSinais, cor_faixa, texto_faixa
+from tdt.ui.modelo_tabela import ModeloSinais, cor_faixa, enderecos_exibicao, texto_faixa
 from tdt.ui.proxy_revisao import ProxyRevisao
 
 _METODOS = (("emb", "vetorial"), ("tfidf", "tfidf"), ("fuzzy", "fuzzy"))
@@ -499,8 +499,7 @@ class TelaRevisao(QWidget):
             conf = "1.00 (regra)"
         else:
             conf = "—"
-        end_in = ";".join(str(i) for i in r.enderecamento.indices) or "—"
-        end_out = ";".join(str(i) for i in r.enderecamento.indices_saida) or "—"
+        end_in, end_out = enderecos_exibicao(r)
         nome_tdt = nome_hierarquico(
             self._estado.subestacao, r.modulo.nome if r.modulo else None,
             r.eletrico.nome_equipamento, r.eletrico.barra, r.sigla_sinal or "?")
