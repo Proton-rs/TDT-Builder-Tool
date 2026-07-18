@@ -85,7 +85,29 @@ def _exata_ou_juncao(rec, sigla_upper: str) -> str:
 _MOTIVOS_FUNIL = {
     "score_baixo", "sigla_multipla", "categoria_ambigua", "categoria_incompativel",
     "estado_sem_candidato", "fora_whitelist_equipamento", "qualificador_ambiguo",
+    "variante_ambigua",
 }
+
+
+def _resolucao_c1c4(motivo: str) -> str:
+    """Refresh pós-C1/C4 (2026-07-18): classifica o caso residual pelo que a
+    máquina C1 (variante-pai exata)/C4 (classe de estados do MM) já tentou,
+    ver ``pipeline._classificar_roteado`` linhas 447-464 e
+    ``ancoragem_sigla.desambiguar_variante``.
+
+    - "variante_ambigua": C1 e C4 RODARAM (ancora exata, família única) e
+      NENHUM dos dois resolveu sozinho -- genuinamente ainda ambíguo.
+    - "sigla_multipla": C1/C4 nem tentaram -- gate `not _multiplas` os pula
+      de propósito (dual-família, fora do escopo de C1/C4 por design).
+    - demais motivos do funil (score_baixo e outros): fora do alcance de
+      C1/C4 (sem âncora exata, ou vieram do braço categoria incerta que não
+      chama `desambiguar_variante`).
+    """
+    if motivo == "variante_ambigua":
+        return "c1_c4_tentado_ainda_ambiguo"
+    if motivo == "sigla_multipla":
+        return "c1_pulado_multiplas_familias"
+    return "fora_escopo_c1_c4"
 
 
 def _classificar_caso(rec, ancoras: list[ancoragem_sigla.Ancora], top: list, motivo: str) -> list[str]:
@@ -100,13 +122,21 @@ def _classificar_caso(rec, ancoras: list[ancoragem_sigla.Ancora], top: list, mot
 
     siglas_top = {c.sigla.upper() for c in top}
     ancora_siglas = {a.sigla.upper() for a in ancoras}
-    if not (ancora_siglas & siglas_top):
-        tags.append("H3")
-
     familias_ancora = {ancoragem_sigla._familia(s) for s in ancora_siglas}
     siglas_familia_no_top = {
         c.sigla.upper() for c in top if ancoragem_sigla._familia(c.sigla) in familias_ancora
     }
+    if not (ancora_siglas & siglas_top):
+        tags.append("H3")
+        # Refresh pós-C1/C4: distingue "família inteira sumiu do top-3"
+        # (candidate generation/ranking derrubou a família toda -- alvo real
+        # do C3) de "1 irmão sobrou, mas não a âncora" (visibilidade
+        # parcial -- falha diferente, não é ausência de candidato).
+        if len(siglas_familia_no_top) == 0:
+            tags.append("H3-familia-ausente")
+        elif len(siglas_familia_no_top) == 1:
+            tags.append("H3-familia-parcial")
+
     if len(siglas_familia_no_top) >= 2:
         tags.append("H1")
 
@@ -155,6 +185,7 @@ def analisar_casos(lp: ListaPadraoADMS) -> list[dict]:
                 "top3": [(c.sigla, round(c.score, 3), c.fonte) for c in top],
                 "gap": round(top[0].score - top[1].score, 3) if len(top) >= 2 else None,
                 "motivo": item.motivo,
+                "resolucao_c1c4": _resolucao_c1c4(item.motivo),
                 "justificativa": rec.justificativa,
                 "tags": tags,
             })
@@ -232,9 +263,12 @@ def main() -> None:
         for t in c["tags"]:
             contagem_tags[t] += 1
     linhas.append(f"contagem por hipotese (nao mutuamente exclusivas): {dict(contagem_tags)}\n")
+    contagem_resolucao: Counter[str] = Counter(c["resolucao_c1c4"] for c in casos)
+    linhas.append(f"contagem por resolucao_c1c4: {dict(contagem_resolucao)}\n")
     for c in casos:
         linhas.append(
-            f"[{c['lista']}] id={c['id']} tags={c['tags']} motivo={c['motivo']}\n"
+            f"[{c['lista']}] id={c['id']} tags={c['tags']} motivo={c['motivo']} "
+            f"resolucao_c1c4={c['resolucao_c1c4']}\n"
             f"  desc={c['descricao']!r}\n"
             f"  ancoras={c['ancoras']} familia={c['familia']}\n"
             f"  top3={c['top3']} gap={c['gap']}\n"
