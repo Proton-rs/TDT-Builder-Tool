@@ -3,7 +3,7 @@ from tdt.dados.lista_padrao import ListaPadraoADMS, SinalPadrao
 from tdt.semantica_estados import (
     ATIVACAO, EVENTO, FUNCAO, INDEFINIDO, LOCAL_REMOTO, POSICAO,
     classe_do_mm, compatibilidade_texto, compativel, detectar_estado,
-    filtrar_por_estado,
+    divergencias_funcao_mm, filtrar_por_estado,
 )
 
 
@@ -156,3 +156,35 @@ def test_filtro_neutro_sem_estado_detectado():
     cands = [Candidato("SGF", 0.9, "mesclado")]
     mantidos, zerou = filtrar_por_estado(_rec("TRIP FASE A"), cands, _lp_stub())
     assert mantidos == cands and zerou is False
+
+
+# --- Task 16 (2C-uso2): catálogo MM como fallback do D2 ---------------------
+
+def _lp_stub_funcao_diverge():
+    return ListaPadraoADMS(
+        discretos=(
+            # MM diz FUNCAO (INCLUIDO@EXCLUIDO), mas a coluna FUNÇÃO da aba
+            # (estados_brutos) diz EVENTO (NORMAL;ATUADO) -- FUNÇÃO prevalece.
+            SinalPadrao("SGF", "FUNCAO SGF", "Enabled", "Read",
+                        "INCLUIR@EXCLUIR___INCLUIDO@EXCLUIDO___Enabled_S_TS_SS", "Discrete",
+                        estados_brutos="NORMAL;ATUADO"),
+            SinalPadrao("SGFT", "TRIP SGF", "RelayTrip", "Read",
+                        "null@null___NORMAL@ATUADO___RelayTrip_S_TS_SA", "Discrete"),
+        ),
+        analogicos=(),
+    )
+
+
+def test_filtro_funcao_prevalece_sobre_mm_divergente():
+    cands = [Candidato("SGF", 0.9, "mesclado"), Candidato("SGFT", 0.7, "mesclado")]
+    mantidos, zerou = filtrar_por_estado(
+        _rec("PROTECAO SGF ATUADO"), cands, _lp_stub_funcao_diverge()
+    )
+    assert {c.sigla for c in mantidos} == {"SGF", "SGFT"}
+    assert zerou is False
+
+
+def test_divergencia_funcao_mm_gera_aviso():
+    avisos = divergencias_funcao_mm(_lp_stub_funcao_diverge())
+    assert any("SGF" in a for a in avisos)
+    assert not any("SGFT" in a for a in avisos)

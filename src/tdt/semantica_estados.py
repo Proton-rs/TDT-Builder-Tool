@@ -123,6 +123,48 @@ def compatibilidade_texto(a: str | None, b: str | None) -> bool:
     return ea.classe == eb.classe
 
 
+def classe_da_funcao(estados_brutos: str | None) -> str | None:
+    """Classe do par de estados a partir da coluna FUNÇÃO da aba (``sp.estados_brutos``,
+    formato ``"EST0;EST1;..."``). Task 16 (2C-uso2): fonte PRIMÁRIA do candidato
+    no filtro D2 — o catálogo MM (``classe_do_mm``) só entra como fallback quando
+    esta é None/vazia ou não classifica."""
+    if not estados_brutos:
+        return None
+    classes: set[str] = set()
+    for est in estados_brutos.split(";"):
+        r = _classificar_token(est.strip().upper())
+        if r:
+            classes.add(r[0])
+    return classes.pop() if len(classes) == 1 else None
+
+
+def _classe_estado_candidato(sp) -> str | None:
+    """Classe do par de estados de um ``SinalPadrao``: FUNÇÃO da aba
+    (``sp.estados_brutos``) SEMPRE prevalece (spec §9.4); catálogo MM
+    (``sp.mm``, Task 10) é fallback só quando FUNÇÃO está silenciosa/ausente."""
+    if sp is None:
+        return None
+    classe_funcao = classe_da_funcao(getattr(sp, "estados_brutos", None))
+    if classe_funcao is not None:
+        return classe_funcao
+    return classe_do_mm(sp.mm)
+
+
+def divergencias_funcao_mm(lp) -> list[str]:
+    """Sinais cuja classe de FUNÇÃO (``estados_brutos``) diverge da classe do
+    MM do catálogo (Task 10). Não-scoring, só aviso -- FUNÇÃO sempre prevalece
+    no filtro D2 (``filtrar_por_estado``); isto só reporta a divergência."""
+    avisos: list[str] = []
+    for sp in (*lp.discretos, *lp.discrete_analog):
+        cf = classe_da_funcao(sp.estados_brutos)
+        cm = classe_do_mm(sp.mm)
+        if cf is not None and cm is not None and cf != cm:
+            avisos.append(
+                f"sigla {sp.sigla}: FUNÇÃO={cf} diverge de MM={cm} (FUNÇÃO prevalece)"
+            )
+    return avisos
+
+
 def filtrar_por_estado(rec, candidatos, lp):
     """(mantidos, zerou). zerou=True: havia candidatos e o filtro eliminou
     todos — o chamador manda para revisão com os ORIGINAIS como sugestão."""
@@ -132,7 +174,7 @@ def filtrar_por_estado(rec, candidatos, lp):
     mantidos = []
     for c in candidatos:
         sp = lp.por_sigla(c.sigla)
-        if compativel(est, classe_do_mm(sp.mm if sp else None)):
+        if compativel(est, _classe_estado_candidato(sp)):
             mantidos.append(c)
     if not mantidos:
         return candidatos, True
