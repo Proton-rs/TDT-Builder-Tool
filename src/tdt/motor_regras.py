@@ -433,7 +433,7 @@ def r10_fase_lp(
         return _ZERO
     peso = cfg.pesos_regras["fase"]
     lp_fases = _fases_da_lp(sp.fases)
-    if ctx.eletrico.fase in lp_fases or lp_fases == "ABC":
+    if set(ctx.eletrico.fase) <= set(lp_fases) or lp_fases == "ABC":
         return AjusteRegra(peso, f"fase LP: {sp.fases} compatível com {ctx.eletrico.fase}")
     return AjusteRegra(-peso, f"fase LP: {sp.fases} diverge de {ctx.eletrico.fase}")
 

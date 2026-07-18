@@ -334,6 +334,12 @@ def _lp_fases():
                         None, "Analog", fases="L1 L2 L3"),
             SinalPadrao("IX", "CORRENTE SEM FASE", "Valor Medido", None,
                         None, "Analog"),
+            SinalPadrao("IAB", "CORRENTE FASE AB", "Valor Medido", None,
+                        None, "Analog", fases="L1 L2"),
+            SinalPadrao("IBC", "CORRENTE FASE BC", "Valor Medido", None,
+                        None, "Analog", fases="L2 L3"),
+            SinalPadrao("IAC", "CORRENTE FASE AC", "Valor Medido", None,
+                        None, "Analog", fases="L1 L3"),
         ),
     )
 
@@ -362,3 +368,24 @@ def test_r10_fase_lp_sem_fases_e_zero():
     rec = _rec("Corrente sem fase", eletrico=Eletrico(fase="A"))
     ajuste = r10_fase_lp(rec, Candidato("IX", 0.7, "mesclado"), Contexto.de(rec, _lp_fases()), _CFG)
     assert ajuste.delta == 0.0
+
+
+def test_r10_fase_lp_par_ab_compativel_pontua():
+    rec = _rec("Corrente Fase AB", eletrico=Eletrico(fase="AB"))
+    ajuste = r10_fase_lp(rec, Candidato("IAB", 0.7, "mesclado"), Contexto.de(rec, _lp_fases()), _CFG)
+    assert ajuste.delta > 0
+
+
+def test_r10_fase_lp_par_bc_compativel_pontua():
+    rec = _rec("Corrente Fase BC", eletrico=Eletrico(fase="BC"))
+    ajuste = r10_fase_lp(rec, Candidato("IBC", 0.7, "mesclado"), Contexto.de(rec, _lp_fases()), _CFG)
+    assert ajuste.delta > 0
+
+
+def test_r10_fase_lp_par_ca_vs_lp_ac_compativel_pontua():
+    # LP "L1 L3" canoniza para "AC" (_fases_da_lp ordena alfabeticamente),
+    # mas o texto extrai "CA" (normalizador._PAR_FASE_ALFABETICO). Comparação
+    # deve ser independente de ordem — regressão real (fix 2026-07-18).
+    rec = _rec("Corrente Fase CA", eletrico=Eletrico(fase="CA"))
+    ajuste = r10_fase_lp(rec, Candidato("IAC", 0.7, "mesclado"), Contexto.de(rec, _lp_fases()), _CFG)
+    assert ajuste.delta > 0
