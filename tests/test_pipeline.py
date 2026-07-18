@@ -609,6 +609,32 @@ def test_classificar_roteado_ancora_exata_sem_variante_pai_no_top3_vira_variante
     assert "51N" not in siglas_sugeridas
 
 
+def test_classificar_roteado_ancora_numerica_resgatada_apos_filtro_f_r5(lista_padrao_path):
+    """C3 (SP-OBS-17JUL, caso H3): "CMD BLOQ 87B" -- âncora exata "87B" é
+    removida por f_r5 (não tem marcador de comando CMD/_CMD/_C), zerando a
+    família 87 inteira. O resgate pós-filtro (ancoragem_sigla.
+    resgatar_familia_ausente) reinjeta "87B" -- a família 87 chega viva ao
+    roteador, decidida ou pelo menos sugerida (não mais 100% ausente)."""
+    lp = ListaPadraoADMS.carregar(lista_padrao_path)
+    cfg = Config(
+        peso_tfidf=1.0, peso_vetorial=0.0, peso_fuzzy=0.0,
+        threshold_pct=0.01, threshold_gap=0.0,
+        ancora_sigla_ativa=True, ancora_sigla_score=0.85,
+    )
+    disc = _construir_scorers(lp, cfg, _fake_enc_zeros, "Discrete", cfg)
+    cfg_analog = _replace(cfg, threshold_pct=5.0, threshold_gap=5.0)
+    ana = _construir_scorers(lp, cfg, _fake_enc_zeros, "Analog", cfg_analog)
+
+    rec = _rec_ancorado("CMD BLOQ 87B")
+    decidido, item = _classificar_roteado(rec, disc, ana, diagnostico=False, lista_padrao=lp)
+
+    if decidido is not None:
+        assert decidido.sigla_sinal.upper().startswith("87")
+    else:
+        assert item is not None
+        assert any(c.sigla.upper().startswith("87") for c in item.candidatos_sugeridos)
+
+
 def test_classificar_roteado_categoria_incerta_nenhum_decide_score_baixo(lista_padrao_path):
     # thresholds travados nos dois bundles -> nenhum decide -> revisão por score baixo.
     cfg = Config(

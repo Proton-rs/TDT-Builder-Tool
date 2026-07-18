@@ -6,7 +6,7 @@ import pytest
 import tdt.ancoragem_sigla as _mod
 from tdt.ancoragem_sigla import (
     Ancora, ancorar, desambiguar_variante, detectar, filtrar_subarvore,
-    tem_multiplas_familias,
+    resgatar_familia_ausente, tem_multiplas_familias,
 )
 
 
@@ -478,6 +478,79 @@ def test_c4_sem_lista_padrao_nao_quebra_c1():
     assert resolvido is not None
     assert resolvido.sigla_sinal == "79"
     assert resolvido.justificativa == "variante-pai exata da âncora (C1)"
+
+
+# ---------------------------------------------------------------------------
+# resgatar_familia_ausente (C3)
+# ---------------------------------------------------------------------------
+
+def test_resgatar_familia_ausente_reinjeta_ancora_numerica_zerada():
+    """Referência: "CMD BLOQ 87B" -> âncora exata "87B" removida por f_r5
+    (família 87 numérica zerada) -> resgate reinjeta "87B"."""
+    fundidos = [_cand("PRTF", 0.40)]  # sobrevivente de outra família
+    ancoras = [Ancora("87B", exata=True)]
+    resultado = resgatar_familia_ausente(fundidos, ancoras, lp=None, score_ancora=0.85)
+    siglas = {c.sigla for c in resultado}
+    assert "87B" in siglas
+    injetado = next(c for c in resultado if c.sigla == "87B")
+    assert injetado.score == 0.85
+    assert injetado.fonte == "ancora_sigla"
+
+
+def test_resgatar_familia_ausente_nao_mexe_se_familia_ja_presente():
+    fundidos = [_cand("87BT", 0.60)]  # já cobre a família 87
+    ancoras = [Ancora("87B", exata=True)]
+    resultado = resgatar_familia_ausente(fundidos, ancoras, lp=None, score_ancora=0.85)
+    assert resultado == fundidos
+
+
+def test_resgatar_familia_ausente_ignora_ancora_por_juncao():
+    fundidos = [_cand("PRTF", 0.40)]
+    ancoras = [Ancora("87B", exata=False)]
+    resultado = resgatar_familia_ausente(fundidos, ancoras, lp=None, score_ancora=0.85)
+    assert resultado == fundidos
+
+
+def test_resgatar_familia_ausente_nao_resgata_familia_nao_numerica():
+    """Não-regressão: âncora "SF6" (família não-numérica) fica fora do
+    resgate -- "SF6B" (irmão mais específico) já presente continua vencendo
+    sozinho, "SF6" bruto não é resgatado."""
+    fundidos = [_cand("SF6B", 0.55)]
+    ancoras = [Ancora("SF6", exata=True)]
+    resultado = resgatar_familia_ausente(fundidos, ancoras, lp=None, score_ancora=0.85)
+    siglas = {c.sigla for c in resultado}
+    assert siglas == {"SF6B"}
+    assert "SF6" not in siglas
+
+
+def test_resgatar_familia_ausente_respeita_redirecionamento_f79lo():
+    """f_79lo remove 86*/86BF quando o texto tem "religamento" -- redireciona
+    para 79LO de propósito. Mesmo com "86BF" ancorado exato e família 86
+    zerada, o resgate NÃO deve reinjetar (guard explícito)."""
+    fundidos = [_cand("79LO", 0.50)]
+    ancoras = [Ancora("86BF", exata=True)]
+    resultado = resgatar_familia_ausente(fundidos, ancoras, lp=None, score_ancora=0.85)
+    siglas = {c.sigla for c in resultado}
+    assert siglas == {"79LO"}
+    assert "86BF" not in siglas
+
+
+def test_resgatar_familia_ausente_respeita_redirecionamento_f50bf():
+    """f_50bf remove BF*/62BF quando o texto é só "falha disjuntor" (sem
+    "bloqueio") -- redireciona para 50BF. Âncora exata "62BF" (família
+    numérica "62", zerada) não deve ser resgatada -- é exatamente o caso
+    listado em _BF_BLOQUEIO que o guard explícito protege."""
+    fundidos = [_cand("50BF", 0.50)]
+    ancoras = [Ancora("62BF", exata=True)]
+    resultado = resgatar_familia_ausente(fundidos, ancoras, lp=None, score_ancora=0.85)
+    siglas = {c.sigla for c in resultado}
+    assert siglas == {"50BF"}
+    assert "62BF" not in siglas
+
+
+def test_resgatar_familia_ausente_sem_ancoras_retorna_original():
+    fundidos = [_cand("PRTF", 0.40)]
+    assert resgatar_familia_ausente(fundidos, [], lp=None, score_ancora=0.85) == fundidos
 
 
 def test_c4_classe_sem_evidencia_cai_no_fallback_c1():

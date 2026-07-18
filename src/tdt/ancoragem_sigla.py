@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING
 
 from tdt.contracts import Candidato
 from tdt.expansao_candidatos import _indice_prefixo
+from tdt.filtro_preciso import _BF_BLOQUEIO, _BLOQUEIO_GERAL
 from tdt.motor_regras import _numero_lider, estagio_da_sigla, estagio_texto
 from tdt.semantica_estados import INDEFINIDO, classe_do_mm, detectar_estado
 
@@ -250,6 +251,74 @@ def desambiguar_variante(
                 justificativa="variante-pai exata da âncora (C1)",
             )
     return None
+
+
+_FAMILIAS_REDIRECIONAMENTO_INTENCIONAL = frozenset(_BLOQUEIO_GERAL) | frozenset(_BF_BLOQUEIO)
+"""Siglas que ``filtro_preciso.f_79lo``/``f_50bf`` removem por
+redirecionamento semântico intencional (RELIGAMENTO -> 79LO em vez de
+86*; FALHA DISJUNTOR isolado -> 50BF em vez de BF*/62BF) -- mesmo quando a
+própria sigla foi ancorada exatamente no texto, o filtro está corrigindo a
+intenção do usuário para a variante mais específica, não descartando por
+engano. ``resgatar_familia_ausente`` nunca reinjeta essas siglas: resgatar
+reabriria a ambiguidade que esses filtros existem para fechar (C3, spec
+SP-OBS-17JUL adendo)."""
+
+
+def resgatar_familia_ausente(
+    fundidos: list[Candidato],
+    ancoras: list[Ancora],
+    lp: "ListaPadraoADMS",
+    score_ancora: float,
+) -> list[Candidato]:
+    """Reinjeta âncora exata cuja família numérica foi zerada pelos filtros.
+
+    Um filtro semântico (f_r5, entre outros) pode remover, por razão válida
+    em outros casos, o único candidato sobrevivente de uma família ANSI
+    numérica (2 dígitos) explicitamente ancorada por sigla exata no texto
+    (ex.: "CMD BLOQ 87B" -> âncora "87B" removida por f_r5 por não ter
+    marcador de comando) -- deixando zero candidatos daquela família para
+    C1/C4 escolherem. Reinjeta a própria sigla âncora (mesmo mecanismo de
+    ``ancorar``) só quando:
+
+    - a âncora é exata (não junção de tokens) -- inferência mais fraca não
+      resgata sozinha, mesma salvaguarda de ``desambiguar_variante``;
+    - a família é numérica (2 dígitos) -- famílias não-numéricas (ex.: SF6,
+      VF*) usam a sigla inteira como família e um filtro que remove a raiz
+      nesse caso normalmente está corrigindo para um irmão mais específico
+      já presente (ex.: SF6B), que deve continuar vencendo;
+    - a sigla não está em ``_FAMILIAS_REDIRECIONAMENTO_INTENCIONAL`` (ver
+      docstring da constante);
+    - nenhum candidato sobrevivente pertence àquela família -- resgate só
+      contra zeragem total da família, nunca sobrepõe uma decisão já
+      tomada pelos filtros dentro dela.
+    """
+    if not ancoras:
+        return fundidos
+
+    familias_presentes = {_familia(c.sigla) for c in fundidos}
+    por_sigla: dict[str, int] = {c.sigla.upper(): i for i, c in enumerate(fundidos)}
+    resultado = list(fundidos)
+
+    for ancora in ancoras:
+        if not ancora.exata:
+            continue
+        key = ancora.sigla.upper()
+        if key in _FAMILIAS_REDIRECIONAMENTO_INTENCIONAL:
+            continue
+        fam = _familia(ancora.sigla)
+        if not (fam.isdigit() and len(fam) == 2):
+            continue
+        if fam in familias_presentes:
+            continue
+        if key in por_sigla:
+            continue
+        resultado.append(
+            Candidato(sigla=ancora.sigla, score=score_ancora, fonte="ancora_sigla")
+        )
+        por_sigla[key] = len(resultado) - 1
+        familias_presentes.add(fam)
+
+    return resultado
 
 
 def ancorar(

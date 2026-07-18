@@ -292,6 +292,14 @@ def _classificar_sinal(
                     rec, candidatos=tuple(fundidos[:3]), status="revisao",
                     justificativa="estado_sem_candidato",
                 )
+        # C3: resgata âncora exata cuja família numérica os filtros acima
+        # zeraram por completo -- roda depois de todos os filtros semânticos
+        # (vê o que de fato sobreviveu) e antes da whitelist de equipamento
+        # (abaixo), que continua podendo remover o resgate se ele não bater.
+        if config.ancora_sigla_ativa and ancoras:
+            fundidos = ancoragem_sigla.resgatar_familia_ausente(
+                fundidos, ancoras, lista_padrao, config.ancora_sigla_score
+            )
         # SP-E D6: whitelist de siglas por equipamento (só extração explícita).
         wl_equip = config.siglas_por_equipamento.get(rec.eletrico.equipamento_alvo or "")
         if wl_equip and not rec.eletrico.equipamento_inferido:
