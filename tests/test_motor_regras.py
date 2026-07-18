@@ -15,6 +15,7 @@ from tdt.motor_regras import (
     aplicar_rastreado,
     equipamento_da_sigla,
     r7_estado_compativel,
+    r10_fase_lp,
     r_equipamento,
 )
 
@@ -318,3 +319,46 @@ def test_r8_sem_lista_padrao_e_noop():
     cands = [Candidato("AUTA", 0.70, "mesclado"), Candidato("AUTC", 0.69, "mesclado")]
     out = aplicar(rec, cands, _CFG)  # sem lista_padrao
     assert out[0].sigla == "AUTA"
+
+
+# --- R10: fase estruturada da LP (2B) ----------------------------------------
+
+
+def _lp_fases():
+    return ListaPadraoADMS(
+        discretos=(),
+        analogicos=(
+            SinalPadrao("IB", "CORRENTE FASE B", "Valor Medido", None,
+                        None, "Analog", fases="L2"),
+            SinalPadrao("IABC", "CORRENTE TRIFASICA", "Valor Medido", None,
+                        None, "Analog", fases="L1 L2 L3"),
+            SinalPadrao("IX", "CORRENTE SEM FASE", "Valor Medido", None,
+                        None, "Analog"),
+        ),
+    )
+
+
+def test_r10_fase_lp_compativel_pontua():
+    rec = _rec("Corrente Fase B", eletrico=Eletrico(fase="B"))
+    ajuste = r10_fase_lp(rec, Candidato("IB", 0.7, "mesclado"), Contexto.de(rec, _lp_fases()), _CFG)
+    assert ajuste.delta > 0
+
+
+def test_r10_fase_lp_incompativel_penaliza():
+    rec = _rec("Corrente Fase A", eletrico=Eletrico(fase="A"))
+    ajuste = r10_fase_lp(rec, Candidato("IB", 0.7, "mesclado"), Contexto.de(rec, _lp_fases()), _CFG)
+    assert ajuste.delta < 0
+
+
+def test_r10_fase_lp_trifasica_sempre_compativel():
+    rec = _rec("Corrente Fase A", eletrico=Eletrico(fase="A"))
+    ajuste = r10_fase_lp(
+        rec, Candidato("IABC", 0.7, "mesclado"), Contexto.de(rec, _lp_fases()), _CFG
+    )
+    assert ajuste.delta > 0
+
+
+def test_r10_fase_lp_sem_fases_e_zero():
+    rec = _rec("Corrente sem fase", eletrico=Eletrico(fase="A"))
+    ajuste = r10_fase_lp(rec, Candidato("IX", 0.7, "mesclado"), Contexto.de(rec, _lp_fases()), _CFG)
+    assert ajuste.delta == 0.0

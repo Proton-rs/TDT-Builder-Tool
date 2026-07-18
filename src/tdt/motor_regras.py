@@ -407,6 +407,37 @@ def r8_direcao(
     return AjusteRegra(-peso, "direcao: comando mas candidato so-leitura (Read)")
 
 
+# --- R10: fase estruturada da LP (AnalogSignals, 2B) -------------------------
+
+_FASES_LP: dict[str, str] = {"L1": "A", "L2": "B", "L3": "C"}
+
+
+def _fases_da_lp(valor: str) -> str:
+    """Traduz FASES da LP ('L1 L2 L3', 'L2', 'N', ...) p/ letras A/B/C (mantém N)."""
+    letras = sorted({_FASES_LP.get(t, t) for t in valor.upper().split()})
+    return "".join(letras)
+
+
+def r10_fase_lp(
+    rec: SignalRecord, cand: Candidato, ctx: Contexto, cfg: Config
+) -> AjusteRegra:
+    """FASES estruturada da AnalogSignals × fase extraída do texto (2B).
+
+    Requer ctx.lista_padrao (ausente = no-op, contrato da r7/r8); só atua
+    sobre candidatos analógicos cuja LP traz FASES preenchida.
+    """
+    if ctx.lista_padrao is None or ctx.eletrico is None or not ctx.eletrico.fase:
+        return _ZERO
+    sp = ctx.lista_padrao.por_sigla(cand.sigla)
+    if sp is None or sp.categoria != "Analog" or not sp.fases:
+        return _ZERO
+    peso = cfg.pesos_regras["fase"]
+    lp_fases = _fases_da_lp(sp.fases)
+    if ctx.eletrico.fase in lp_fases or lp_fases == "ABC":
+        return AjusteRegra(peso, f"fase LP: {sp.fases} compatível com {ctx.eletrico.fase}")
+    return AjusteRegra(-peso, f"fase LP: {sp.fases} diverge de {ctx.eletrico.fase}")
+
+
 # Registro de regras — adicione funções aqui para crescer (SRP, sem reescrita).
 _REGRAS = (
     r1_numero_protecao,
@@ -418,6 +449,7 @@ _REGRAS = (
     r6_lado_tensao,
     r7_estado_compativel,
     r8_direcao,
+    r10_fase_lp,
 )
 
 

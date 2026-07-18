@@ -35,6 +35,7 @@ class SinalPadrao:
     device_mapping_ref: str | None = None
     aplicabilidade: str | None = None
     severidade: str | None = None  # display-only (LP), nunca em corpus/score
+    fases: str | None = None  # "L1"/"L2"/"L3"/"N"/"L1 L2 L3" (AnalogSignals, 2B)
 
 
 def _val(v) -> str | None:
@@ -92,6 +93,7 @@ def _ler_sheet(ws, categoria: str, mapa: dict[str, str]) -> list[SinalPadrao]:
                 unidade_exibicao=get("unidade_exibicao"),
                 type_severidade=get("type_severidade"),
                 severidade=get("severidade"),
+                fases=get("fases"),
             )
         )
     return sinais
@@ -154,6 +156,7 @@ class ListaPadraoADMS:
                     "unidade_exibicao": None,
                     "type_severidade": "TYPE SEVERIDADE",
                     "severidade": "SEVERIDADE",
+                    "fases": None,
                 },
             )
             ana = _ler_sheet(
@@ -171,6 +174,7 @@ class ListaPadraoADMS:
                     "unidade_exibicao": "UNIDADE DE EXIBIÇÃO",
                     "type_severidade": None,
                     "severidade": None,
+                    "fases": "FASES",
                 },
             )
             da: list[SinalPadrao] = []

@@ -229,3 +229,25 @@ def test_le_severidade_dos_discretos(tmp_path):
     lp = ListaPadraoADMS.carregar(p)
     assert lp.por_sigla("CMDE").severidade == "Severidade 4"
     assert lp.por_sigla("DJF1").severidade is None
+
+
+def test_le_fases_dos_analogicos(lista_padrao_path):
+    lp = ListaPadraoADMS.carregar(lista_padrao_path)
+    assert lp.por_sigla("IN61").fases == "N"
+
+
+def test_analogico_sem_fases_e_none(tmp_path):
+    import openpyxl
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "DiscreteSignals"
+    ws.append(["SINAL"])
+    wsa = wb.create_sheet("AnalogSignals")
+    wsa.append(["SINAL", "FASES"])
+    wsa.append(["IA", "L1"])
+    wsa.append(["IB", None])
+    p = tmp_path / "lp.xlsx"
+    wb.save(p)
+    lp = ListaPadraoADMS.carregar(p)
+    assert lp.por_sigla("IA").fases == "L1"
+    assert lp.por_sigla("IB").fases is None
