@@ -497,6 +497,25 @@ def test_resgatar_familia_ausente_reinjeta_ancora_numerica_zerada():
     assert injetado.fonte == "ancora_sigla"
 
 
+def test_resgatar_familia_ausente_reinjeta_mesmo_com_irmao_distante_fora_do_top3():
+    """Regressão-lock: família 87 tem um sobrevivente ("87BL"), mas fora do
+    top-3 por score -- invisível para C1/C4. Guard deve olhar só top-3, não
+    o pool completo, então "87B" ainda é resgatado."""
+    fundidos = [
+        _cand("PRTF", 0.90),
+        _cand("XYZ1", 0.80),
+        _cand("ABC2", 0.70),
+        _cand("87BL", 0.10),  # família 87 presente no pool, mas fora do top-3
+    ]
+    ancoras = [Ancora("87B", exata=True)]
+    resultado = resgatar_familia_ausente(fundidos, ancoras, lp=None, score_ancora=0.85)
+    siglas = {c.sigla for c in resultado}
+    assert "87B" in siglas
+    injetado = next(c for c in resultado if c.sigla == "87B")
+    assert injetado.score == 0.85
+    assert injetado.fonte == "ancora_sigla"
+
+
 def test_resgatar_familia_ausente_nao_mexe_se_familia_ja_presente():
     fundidos = [_cand("87BT", 0.60)]  # já cobre a família 87
     ancoras = [Ancora("87B", exata=True)]

@@ -288,14 +288,15 @@ def resgatar_familia_ausente(
       já presente (ex.: SF6B), que deve continuar vencendo;
     - a sigla não está em ``_FAMILIAS_REDIRECIONAMENTO_INTENCIONAL`` (ver
       docstring da constante);
-    - nenhum candidato sobrevivente pertence àquela família -- resgate só
-      contra zeragem total da família, nunca sobrepõe uma decisão já
-      tomada pelos filtros dentro dela.
+    - nenhum candidato entre os top-3 por score pertence àquela família --
+      resgate só contra ausência efetiva (o que C1/C4 realmente veem),
+      nunca sobrepõe uma decisão já tomada pelos filtros dentro do top-3.
     """
     if not ancoras:
         return fundidos
 
-    familias_presentes = {_familia(c.sigla) for c in fundidos}
+    top3 = sorted(fundidos, key=lambda c: c.score, reverse=True)[:3]
+    familias_presentes = {_familia(c.sigla) for c in top3}
     por_sigla: dict[str, int] = {c.sigla.upper(): i for i, c in enumerate(fundidos)}
     resultado = list(fundidos)
 
