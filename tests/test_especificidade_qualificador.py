@@ -23,6 +23,7 @@ class _SP:
     sigla: str
     descricao: str
     mm: str | None = None
+    estados_brutos: str | None = None
 
 
 class _LP:

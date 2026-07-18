@@ -144,7 +144,7 @@ def _classe_estado_candidato(sp) -> str | None:
     (``sp.mm``, Task 10) é fallback só quando FUNÇÃO está silenciosa/ausente."""
     if sp is None:
         return None
-    classe_funcao = classe_da_funcao(getattr(sp, "estados_brutos", None))
+    classe_funcao = classe_da_funcao(sp.estados_brutos)
     if classe_funcao is not None:
         return classe_funcao
     return classe_do_mm(sp.mm)
