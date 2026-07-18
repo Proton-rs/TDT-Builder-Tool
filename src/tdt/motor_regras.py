@@ -244,6 +244,21 @@ def r4_estagio(
     return _ZERO
 
 
+def estagio_texto(texto_tokens: set[str]) -> str | None:
+    """Dígito de estágio (E1–E4) presente nos tokens do texto, ou None."""
+    estagios = texto_tokens & _ESTAGIOS
+    if not estagios:
+        return None
+    return next(iter(estagios))[1]
+
+
+def estagio_da_sigla(sigla: str) -> str | None:
+    """Dígito final da sigla, ou None se o último caractere não é dígito."""
+    if sigla and sigla[-1].isdigit():
+        return sigla[-1]
+    return None
+
+
 # --- R5: comando × status ---------------------------------------------------
 
 _TOKENS_COMANDO: frozenset[str] = frozenset(

@@ -26,13 +26,13 @@ from tdt.dados.lista_padrao import ListaPadraoADMS, SinalPadrao
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _sp(sigla, cat="Discrete", descricao="desc") -> SinalPadrao:
+def _sp(sigla, cat="Discrete", descricao="desc", mm=None) -> SinalPadrao:
     return SinalPadrao(
         sigla=sigla,
         descricao=descricao,
         signal_type="DI",
         direction=None,
-        mm=None,
+        mm=mm,
         categoria=cat,
     )
 
@@ -426,3 +426,80 @@ def test_ancora_desativada_nao_injeta(lista_padrao_path):
     resultado = ancorar(fundidos, [], score_ancora=0.85)
     assert len(resultado) == 1
     assert resultado[0].sigla == "PRTF"
+
+
+# ---------------------------------------------------------------------------
+# desambiguar_variante (C4 — seleção positiva por classe de estados do MM)
+# ---------------------------------------------------------------------------
+
+_MM_EVENTO = "N/A@N/A___ATUADO@NORMAL___SingleBit_flags"
+_MM_ATIVACAO = "N/A@N/A___HABILITADO@DESABILITADO___SingleBit_flags"
+
+
+def test_81_habilitada_decide_81u1_por_classe_de_estados():
+    """Família 81: ATIVACAO isola a sub-família 81U*; estágio E1 fecha 81U1
+    (nominal da spec, sem exigir que "81" esteja nos candidatos roteados)."""
+    lp = ListaPadraoADMS(
+        discretos=(
+            _sp("81", mm=_MM_EVENTO),
+            _sp("81E1", mm=_MM_EVENTO),
+            _sp("81IE1", mm=_MM_EVENTO),
+            _sp("81O1", mm=_MM_EVENTO),
+            _sp("81U1", mm=_MM_ATIVACAO),
+            _sp("81U2", mm=_MM_ATIVACAO),
+            _sp("81U3", mm=_MM_ATIVACAO),
+            _sp("81U4", mm=_MM_ATIVACAO),
+        ),
+        analogicos=(),
+    )
+    rec = replace(
+        _rec("81 SUB FREQUENCIA E1 HABILITADA"),
+        status="revisao",
+        justificativa="ambíguo",
+    )
+    ancoras = [Ancora("81", exata=True)]
+    resolvido = desambiguar_variante(rec, ancoras, config=None, lista_padrao=lp)
+    assert resolvido is not None
+    assert resolvido.sigla_sinal == "81U1"
+    assert resolvido.status == "decidido"
+    assert resolvido.justificativa == "variante por classe de estados do MM (C4)"
+
+
+def test_c4_sem_lista_padrao_nao_quebra_c1():
+    """Sem lista_padrao (default None), C4 não roda — C1 (pai-exato) segue intacto."""
+    rec = replace(
+        _rec("RELIGAMENTO 79 BLOQUEADO"),
+        candidatos=(_cand("79", 0.85), _cand("79OK", 0.83), _cand("79LO", 0.40)),
+        status="revisao",
+        justificativa="ambíguo (%=0.85, gap=0.02)",
+    )
+    ancoras = [Ancora("79", exata=True)]
+    resolvido = desambiguar_variante(rec, ancoras, config=None)
+    assert resolvido is not None
+    assert resolvido.sigla_sinal == "79"
+    assert resolvido.justificativa == "variante-pai exata da âncora (C1)"
+
+
+def test_c4_classe_sem_evidencia_cai_no_fallback_c1():
+    """lista_padrao presente e classe detectada (EVENTO, "BLOQUEADO"), mas
+    nenhuma variante da LP tem MM (mm=None) — compat fica vazio, C4 não
+    decide, cai no fallback C1 (pai-exato ainda funciona)."""
+    lp = ListaPadraoADMS(
+        discretos=(
+            _sp("79", mm=None),
+            _sp("79OK", mm=None),
+            _sp("79LO", mm=None),
+        ),
+        analogicos=(),
+    )
+    rec = replace(
+        _rec("RELIGAMENTO 79 BLOQUEADO"),
+        candidatos=(_cand("79", 0.85), _cand("79OK", 0.83), _cand("79LO", 0.40)),
+        status="revisao",
+        justificativa="ambíguo (%=0.85, gap=0.02)",
+    )
+    ancoras = [Ancora("79", exata=True)]
+    resolvido = desambiguar_variante(rec, ancoras, config=None, lista_padrao=lp)
+    assert resolvido is not None
+    assert resolvido.sigla_sinal == "79"
+    assert resolvido.justificativa == "variante-pai exata da âncora (C1)"

@@ -18,7 +18,9 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
 from tdt.contracts import Candidato
-from tdt.motor_regras import _numero_lider
+from tdt.expansao_candidatos import _indice_prefixo
+from tdt.motor_regras import _numero_lider, estagio_da_sigla, estagio_texto
+from tdt.semantica_estados import INDEFINIDO, classe_do_mm, detectar_estado
 
 if TYPE_CHECKING:
     from tdt.contracts import SignalRecord
@@ -141,18 +143,80 @@ def filtrar_subarvore(
     return resultado if resultado else candidatos
 
 
+def _mm_por_sigla(lp: "ListaPadraoADMS") -> dict[str, str | None]:
+    """{SIGLA_UPPER: mm} a partir da LP (discretos + analogicos + discrete_analog).
+
+    Construído fresco a cada chamada — o catálogo MM completo (Task 10) não
+    é dependência aqui (spec §4.2).
+    """
+    fontes = (*lp.discretos, *lp.analogicos, *getattr(lp, "discrete_analog", ()))
+    return {s.sigla.upper(): s.mm for s in fontes}
+
+
+def _desambiguar_por_classe_estado(
+    rec: "SignalRecord",
+    familias_ancoradas: set[str],
+    lp: "ListaPadraoADMS",
+) -> "SignalRecord | None":
+    """C4: seleciona a variante certa pela classe de estados do MM (+ estágio).
+
+    Diferente de C1, não exige que a sigla âncora esteja entre os candidatos
+    roteados: expande TODAS as variantes da família ancorada a partir da LP
+    e usa a classe de estado detectada no texto (``classe_do_mm``) para
+    isolar a sub-família compatível — o estágio (E1-E4) fecha o resto.
+    """
+    est = detectar_estado(rec.descricoes.normalizada)
+    if est is None or est.classe == INDEFINIDO:
+        return None
+
+    idx_familia = _indice_prefixo(lp)
+    mm_por_sigla = _mm_por_sigla(lp)
+    texto_tokens = set(rec.descricoes.normalizada.upper().split())
+
+    for familia in familias_ancoradas:
+        variantes_familia = idx_familia.get(familia)
+        if not variantes_familia:
+            continue
+        compat = [
+            s for s in variantes_familia
+            if classe_do_mm(mm_por_sigla.get(s)) == est.classe
+        ]
+        if len(compat) > 1:
+            estagio_txt = estagio_texto(texto_tokens)
+            if estagio_txt is not None:
+                por_estagio = [s for s in compat if estagio_da_sigla(s) == estagio_txt]
+                compat = por_estagio or compat
+        if len(compat) == 1:
+            return replace(
+                rec,
+                sigla_sinal=compat[0],
+                status="decidido",
+                justificativa="variante por classe de estados do MM (C4)",
+            )
+        if 1 < len(compat) < len(variantes_familia):
+            sugestao = tuple(c for c in rec.candidatos if c.sigla.upper() in set(compat))
+            return replace(rec, candidatos=sugestao or rec.candidatos)
+    return None
+
+
 def desambiguar_variante(
     rec: "SignalRecord",
     ancoras: list[Ancora],
     config,
+    lista_padrao: "ListaPadraoADMS | None" = None,
 ) -> "SignalRecord | None":
-    """Decide entre variantes-irmãs de uma família exatamente ancorada (C1).
+    """Decide entre variantes-irmãs de uma família exatamente ancorada (C1 + C4).
 
-    Quando o roteador manda ``rec`` para revisão (score_baixo) porque os
-    candidatos do topo (top-3) são todos irmãos de uma mesma família ANSI
-    ancorada por sigla exata no texto (ex.: "79") e um deles é a própria
-    sigla âncora, o gap≈0 entre variantes é falso empate: a âncora exata É
-    a evidência textual mais forte, decide por ela (spec §9.3).
+    C4 (primeiro): quando a classe de estados detectada no texto isola uma
+    única variante da família ancorada (via MM da LP + estágio), decide sem
+    depender do roteador já ter incluído a âncora nos candidatos top-3.
+
+    C1 (fallback): quando o roteador manda ``rec`` para revisão (score_baixo)
+    porque os candidatos do topo (top-3) são todos irmãos de uma mesma
+    família ANSI ancorada por sigla exata no texto (ex.: "79") e um deles é
+    a própria sigla âncora, o gap≈0 entre variantes é falso empate: a
+    âncora exata É a evidência textual mais forte, decide por ela (spec
+    §9.3).
 
     Só considera âncoras ``exata=True`` — âncora por junção de tokens é
     inferência mais fraca e não decide sozinha (salvaguarda da spec).
@@ -164,6 +228,12 @@ def desambiguar_variante(
         return None
 
     familias_ancoradas = {_familia(a.sigla) for a in ancoras_exatas}
+
+    if lista_padrao is not None:
+        resolvido = _desambiguar_por_classe_estado(rec, familias_ancoradas, lista_padrao)
+        if resolvido is not None:
+            return resolvido
+
     candidatos_finais = rec.candidatos[:3]
     if not candidatos_finais:
         return None

@@ -451,7 +451,9 @@ def _classificar_roteado(rec, disc: "_Scorers", ana: "_Scorers", diagnostico: bo
                 d, motivo=d.justificativa, candidatos_sugeridos=d.candidatos[:3]
             )
         if d.status == "revisao" and _ancoras and not _multiplas:
-            resolvido = ancoragem_sigla.desambiguar_variante(d, _ancoras, _cfg)
+            resolvido = ancoragem_sigla.desambiguar_variante(
+                d, _ancoras, _cfg, lista_padrao=lista_padrao
+            )
             if resolvido is not None and resolvido.status == "decidido":
                 return resolvido, None
             if resolvido is not None:
