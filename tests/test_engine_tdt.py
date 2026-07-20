@@ -55,11 +55,12 @@ def _rec(rid, sigla, indices, direcao="Input", double=False, fase="ABC"):
     )
 
 
-def _rec_equip(rid, sigla, equipamento, modulo="AL11", indices=(10,), direcao="Input"):
+def _rec_equip(rid, sigla, equipamento, modulo="AL11", indices=(10,), direcao="Input",
+               categoria="Discrete"):
     return SignalRecord(
         id=rid,
         modulo=Modulo(modulo, "sheet_name"),
-        tipo_sinal=TipoSinal("Discrete", "SingleBit", direcao),
+        tipo_sinal=TipoSinal(categoria, "SingleBit", direcao),
         enderecamento=Enderecamento("DNP3", tuple(indices)),
         descricoes=Descricoes(f"{sigla} BRUTO", sigla),
         sigla_sinal=sigla,
@@ -947,14 +948,16 @@ def test_43tc_sozinho_nao_avisa():
 
 # ── Tarefa 6: gate tipo duplicado por dispositivo (spec §B3) ────────────────
 
-def _lp_fake(siglas_tipos: dict[str, str]):
+def _lp_fake(siglas_tipos: dict[str, str], categorias: dict[str, str] | None = None):
+    categorias = categorias or {}
     class _LP:
         def por_sigla(self, sigla):
             st = siglas_tipos.get(sigla)
             if st is None:
                 return None
             return SinalPadrao(sigla=sigla, descricao="X", signal_type=st,
-                               direction=None, mm=None, categoria="Discrete")
+                               direction=None, mm=None,
+                               categoria=categorias.get(sigla, "Discrete"))
     return _LP()
 
 
@@ -996,5 +999,39 @@ def test_tipo_duplicado_dispositivos_distintos_isento():
         _rec_equip("AL11:2", "43TC", "89-4"),   # outro equipamento
     ))
     lp = _lp_fake({"43TC": "Local"})
+    restante, revisao = engine_tdt.particionar_tipo_duplicado(lista, lp)
+    assert len(restante.registros) == 2 and revisao == ()
+
+
+def test_tipo_duplicado_analogico_isento():
+    # Fix da revisao 2026-07-20: "Valor Medido" e generico demais (55/62
+    # siglas analogicas do catalogo real compartilham esse signal_type) --
+    # sinal Analog nunca entra no agrupamento deste gate, mesmo colidindo
+    # em (dm, signal_type) se fosse Discrete. `rec.tipo_sinal.categoria`
+    # fica "Discrete" (default do estruturador -- replica o caso real SAN2,
+    # sheet "Analogicos" sem marcador de secao/coluna TIPO explicita, ver
+    # nota do docstring do gate); e o `sp.categoria` do CATALOGO (fonte
+    # confiavel) que precisa vencer e isentar o par.
+    lista = ListaHomogenea(subestacao="IMA", protocolo="DNP3", registros=(
+        _rec_equip("AL11:1", "IA", "52-1", categoria="Discrete"),
+        _rec_equip("AL11:2", "IB", "52-1", categoria="Discrete"),
+    ))
+    lp = _lp_fake({"IA": "Valor Medido", "IB": "Valor Medido"},
+                  categorias={"IA": "Analog", "IB": "Analog"})
+    restante, revisao = engine_tdt.particionar_tipo_duplicado(lista, lp)
+    assert len(restante.registros) == 2 and revisao == ()
+
+
+def test_tipo_duplicado_43lr_sempre_custom_mesmo_com_catalogo_desatualizado():
+    # Fix da revisao 2026-07-20: fullbase real (424/424 dispositivos com
+    # 43LR+43TC) mostra 43LR=Custom sempre; a lista padrao v2 (fixture/
+    # catalogo desatualizado usado por test_integracao_san2.py) classifica
+    # errado como "Local", o que colidiria com 43TC. O gate precisa tratar
+    # 43LR como Custom (isento) independente do que o catalogo diga.
+    lista = ListaHomogenea(subestacao="IMA", protocolo="DNP3", registros=(
+        _rec_equip("AL11:1", "43LR", "52-1"),
+        _rec_equip("AL11:2", "43TC", "52-1"),
+    ))
+    lp = _lp_fake({"43LR": "Local", "43TC": "Local"})  # catalogo stale/incorreto
     restante, revisao = engine_tdt.particionar_tipo_duplicado(lista, lp)
     assert len(restante.registros) == 2 and revisao == ()

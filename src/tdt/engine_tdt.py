@@ -499,6 +499,14 @@ def particionar_endereco_duplicado(
     return replace(lista, registros=restantes), revisao
 
 
+#  Sinais cuja classificação real (fullbase 2026-07-20: 424/424 dispositivos
+#  com 43LR+43TC no mesmo device tem 43LR=Custom) vale mesmo que o catálogo em
+#  uso esteja desatualizado (ex. Pontos Padrao ADMS_v2.xlsx classifica
+#  43LR=Local, incorreto vs. v8/produção real). Evita falso-positivo do gate
+#  B3 quando o catálogo carregado é stale.
+_FORCA_CUSTOM_TIPO_DUPLICADO = frozenset({"43LR"})
+
+
 def particionar_tipo_duplicado(
     lista: ListaHomogenea,
     lista_padrao,
@@ -507,12 +515,44 @@ def particionar_tipo_duplicado(
     Type caindo DIRETO no mesmo dispositivo (DM final) conflitam no ADMS —
     o grupo inteiro sai do TDT e vai pra revisão (padrão custom_id: nunca
     sai calado no xlsx). Sinais do ramo PROT ficam de fora — dentro de
-    proteção o repetido é válido (decisão do usuário 20/07)."""
+    proteção o repetido é válido (decisão do usuário 20/07).
+
+    Restrito a sinais Discretos (categoria == "Discrete"; exclui também
+    "DiscreteAnalog"): no catálogo real (`Pontos Padrao ADMS_v8.xlsx`, sheet
+    AnalogSignals), 55 das 62 siglas Analógicas compartilham
+    `SIGNAL TYPE == "Valor Medido"` — genérico demais pra servir de chave de
+    colisão; qualquer dispositivo com 2+ medições analógicas (ex. corrente +
+    potência) colidiria por acaso (achado da revisão 2026-07-20 contra dado
+    real SAN2: 100% falso-positivo). A categoria vem preferencialmente do
+    CATÁLOGO (`sp.categoria`), não de `rec.tipo_sinal.categoria`: a
+    classificação estrutural por linha (`estruturador.estruturar`) tem
+    default "Discrete" e só reclassifica pra "Analog" com marcador de seção
+    OU grandeza contínua na descrição — em planilhas não-homogêneas com
+    coluna SIGLA dedicada (ex. SAN2) o sheet "Analogicos" nunca aciona
+    nenhum dos dois gatilhos, então TODO sinal analógico chega aqui com
+    `rec.tipo_sinal.categoria == "Discrete"` (confirmado instrumentando o
+    pipeline com dado real). `sp.categoria` é atribuído pela PRÓPRIA aba do
+    catálogo (AnalogSignals -> "Analog", DiscreteSignals -> "Discrete") e
+    não depende dessa heurística — só cai no fallback de `rec.tipo_sinal`
+    quando a sigla está fora do catálogo (`sp is None`, já isento via
+    "Custom" antes de chegar no agrupamento na prática, mas mantido por
+    completude). `43LR` é forçado para "Custom" via
+    `_FORCA_CUSTOM_TIPO_DUPLICADO` independente do que o catálogo carregado
+    diga (fullbase real: 43LR=Custom em 424/424 dispositivos; a lista padrão
+    v2, usada por alguns testes/fixtures antigos, classifica errado como
+    "Local", o que colidiria com 43TC)."""
     disj = disjuntor_por_modulo(lista.registros)
     grupos: dict[tuple[str, str], list[SignalRecord]] = defaultdict(list)
     for rec in lista.registros:
         sp = lista_padrao.por_sigla(rec.sigla_sinal) if rec.sigla_sinal else None
-        st = (sp.signal_type if sp else "Custom") or "Custom"
+        categoria = sp.categoria if sp is not None else rec.tipo_sinal.categoria
+        if categoria != "Discrete":
+            continue
+        sigla_norm = (rec.sigla_sinal or "").strip().upper()
+        if sigla_norm in _FORCA_CUSTOM_TIPO_DUPLICADO:
+            st = "Custom"
+        else:
+            st = (sp.signal_type if sp else "Custom") or "Custom"
         if st == "Custom" or _dm_prot(rec.sigla_sinal, sp):
             continue
         _, dm = dm_registro(rec, lista.subestacao, sp, disj.get(rec.modulo.nome))

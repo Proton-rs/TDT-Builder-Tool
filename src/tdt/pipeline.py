@@ -798,6 +798,14 @@ def executar(
         if rev_end:
             aud.evento("engine", f"{len(rev_end)} registros com endereço duplicado -> revisão", "AVISO")
             revisao.extend(rev_end)
+        lista, rev_tipo = engine_tdt.particionar_tipo_duplicado(lista, lp)
+        if rev_tipo:
+            aud.evento(
+                "engine",
+                f"{len(rev_tipo)} registros com Signal Type duplicado no dispositivo -> revisão",
+                "AVISO", dados={"ids": tuple(it.registro.id for it in rev_tipo)},
+            )
+            revisao.extend(rev_tipo)
         alias_v1 = descricoes_por_sigla(DEFAULT_LISTA_ALIAS)
         if not alias_v1:
             aud.evento(

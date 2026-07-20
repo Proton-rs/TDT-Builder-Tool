@@ -4,10 +4,11 @@ import numpy as np
 import openpyxl
 import pytest
 
+from tdt import engine_tdt
 from tdt.auditoria import Auditoria
 from tdt.config import Config
 from tdt.contracts import (
-    Candidato, Descricoes, Enderecamento, Modulo, SignalRecord, TipoSinal,
+    Candidato, Descricoes, Enderecamento, ItemRevisao, Modulo, SignalRecord, TipoSinal,
 )
 from tdt.dados.lista_padrao import ListaPadraoADMS
 from tdt.pipeline import executar, _com_fase, _construir_scorers, _classificar_roteado
@@ -62,6 +63,57 @@ def test_pipeline_ponta_a_ponta_gera_tdt(tmp_path, template_dnp3_path, lista_pad
     assert ws.max_column == 43
     nomes = [ws.cell(r, 1).value for r in range(5, 5 + len(resultado.lista.registros))]
     assert any(n and n.startswith("X_") for n in nomes)
+
+
+def test_executar_particiona_tipo_duplicado_dispositivo(
+    tmp_path, template_dnp3_path, lista_padrao_path, monkeypatch,
+):
+    """Fix (revisão Task 6, spec §B3): `particionar_tipo_duplicado` também
+    roda dentro de `executar` (primeira geração), não só em `gerar_tdt`
+    (regeneração) — fecha o gap de cobertura apontado na revisão da task.
+    Não re-testa a lógica do gate (já coberta em test_engine_tdt.py);
+    prova só que `executar` chama o gate, passa `lp`, reatribui `lista` e
+    propaga os itens excluídos para `revisao` (nada sai calado do TDT)."""
+    chamadas = []
+
+    def _fake_particionar_tipo_duplicado(lista, lp_arg):
+        chamadas.append((lista, lp_arg))
+        # simula colisão: TODO registro que chegou até aqui "colide" e vai
+        # inteiro pra revisão -- suficiente pra provar o wiring (a lógica
+        # real de agrupamento já está coberta em test_engine_tdt.py).
+        revisao = tuple(
+            ItemRevisao(_replace(r, status="revisao"), motivo="tipo_duplicado_dispositivo")
+            for r in lista.registros
+        )
+        return _replace(lista, registros=()), revisao
+
+    monkeypatch.setattr(
+        engine_tdt, "particionar_tipo_duplicado", _fake_particionar_tipo_duplicado,
+    )
+
+    cfg = Config(peso_tfidf=1.0, peso_vetorial=0.0, threshold_pct=0.5, threshold_gap=0.05)
+    inp = _input_sintetico(tmp_path)
+    resultado, wb = executar(
+        inp, template_dnp3_path, lista_padrao_path,
+        config=cfg, encoder=_fake_encoder, subestacao="X", modo="nao-homogeneo",
+    )
+
+    assert len(chamadas) == 1  # gate foi chamado dentro de `executar`
+    lista_recebida, lp_recebida = chamadas[0]
+    assert len(lista_recebida.registros) >= 1  # havia decidido(s) p/ o gate avaliar
+    assert lp_recebida is not None and hasattr(lp_recebida, "por_sigla")  # recebeu `lp`
+    ids_removidos = {r.id for r in lista_recebida.registros}
+    # tudo que o gate marcou saiu da lista final -> não vaza p/ o TDT gerado
+    assert not (ids_removidos & {r.id for r in resultado.lista.registros})
+    ids_em_revisao_tipo = {
+        it.registro.id for it in resultado.revisao
+        if it.motivo == "tipo_duplicado_dispositivo"
+    }
+    # e reapareceu inteiro em `revisao` (fluxo de dados: nada é descartado)
+    assert ids_em_revisao_tipo == ids_removidos
+    # o TDT gerado só tem o que sobrou em `resultado.lista` (aqui, nada)
+    ws = wb["DNP3_DiscreteSignals"]
+    assert ws.cell(5, 1).value in (None, "")
 
 
 def test_pipeline_emite_evento_de_progresso_com_atual_e_total(
