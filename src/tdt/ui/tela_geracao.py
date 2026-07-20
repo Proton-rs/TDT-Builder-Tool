@@ -22,18 +22,25 @@ from tdt.relatorio_revisao import gerar_relatorio_revisao
 from tdt.ui.estado import AppState
 
 
-def enderecos_duplicados(registros) -> dict[tuple[str, int], list[str]]:
-    """(direcao, indice) -> ids dos registros que repetem o índice.
+def enderecos_duplicados(
+    registros,
+) -> dict[tuple[str, str, str, int], list[str]]:
+    """(espaco, modulo, categoria, indice) -> ids que repetem o índice.
 
-    "in" cobre enderecamento.indices; "out" cobre indices_saida. Direções
-    não se misturam (input 14 + output 14 não é duplicata).
+    Mesma chave do gate `engine_tdt.particionar_endereco_duplicado` (fix
+    falso-positivo 20/07): módulo na chave (índice local reusado entre
+    módulos distintos é endereçamento normal) e registro Output contribui
+    seus `indices` no espaço "out" (é endereço de ESCRITA, não de leitura).
     """
-    por_chave: dict[tuple[str, int], list[str]] = {}
+    por_chave: dict[tuple[str, str, str, int], list[str]] = {}
     for r in registros:
+        mod = (r.modulo.nome if r.modulo else None) or "?"
+        cat = r.tipo_sinal.categoria
+        espaco = "out" if r.tipo_sinal.direcao == "Output" else "in"
         for i in r.enderecamento.indices:
-            por_chave.setdefault(("in", i), []).append(r.id)
+            por_chave.setdefault((espaco, mod, cat, i), []).append(r.id)
         for i in r.enderecamento.indices_saida:
-            por_chave.setdefault(("out", i), []).append(r.id)
+            por_chave.setdefault(("out", mod, cat, i), []).append(r.id)
     return {k: v for k, v in por_chave.items() if len(v) > 1}
 
 
@@ -177,7 +184,7 @@ class TelaGeracao(QWidget):
                 "candidato atual",
                 "Rever pendentes →", self.rever_pendentes.emit))
         if dups:
-            indices = sorted({i for (_d, i) in dups})
+            indices = sorted({i for (_esp, _mod, _cat, i) in dups})
             resumo = "; ".join(str(i) for i in indices[:5])
             self._avisos_box.addWidget(self._aviso(
                 "erro",

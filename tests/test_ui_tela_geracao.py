@@ -20,7 +20,7 @@ def _rec(id_, indices=(1,), indices_saida=(), status="revisao"):
 
 def test_duplicata_de_input_detectada():
     regs = [_rec("a", indices=(14,)), _rec("b", indices=(14,)), _rec("c", indices=(2,))]
-    assert enderecos_duplicados(regs) == {("in", 14): ["a", "b"]}
+    assert enderecos_duplicados(regs) == {("in", "M", "Discrete", 14): ["a", "b"]}
 
 
 def test_input_e_output_iguais_nao_e_duplicata():
@@ -32,13 +32,38 @@ def test_sem_duplicatas_dict_vazio():
     assert enderecos_duplicados([_rec("a", indices=(1,))]) == {}
 
 
-def _rec_mod(rid, modulo):
+def _rec_mod(rid, modulo, indices=(1,), direcao="Input", indices_saida=()):
     return SignalRecord(
         id=rid, modulo=Modulo(modulo, "sheet_name"),
-        tipo_sinal=TipoSinal("Discrete", "SingleBit", "Input"),
-        enderecamento=Enderecamento("DNP3", (1,)),
+        tipo_sinal=TipoSinal("Discrete", "SingleBit", direcao),
+        enderecamento=Enderecamento("DNP3", tuple(indices), tuple(indices_saida)),
         descricoes=Descricoes("X", "X"), status="decidido",
     )
+
+
+def test_mesmo_indice_em_modulos_distintos_nao_e_duplicata():
+    regs = [
+        _rec_mod("AL11:1", modulo="AL11", indices=(14,)),
+        _rec_mod("AL12:1", modulo="AL12", indices=(14,)),
+    ]
+    assert enderecos_duplicados(regs) == {}
+
+
+def test_indice_de_comando_nao_colide_com_input():
+    regs = [
+        _rec_mod("AL11:1", modulo="AL11", indices=(14,), direcao="Input"),
+        _rec_mod("AL11:2", modulo="AL11", indices=(14,), direcao="Output"),
+    ]
+    assert enderecos_duplicados(regs) == {}
+
+
+def test_mesmo_indice_mesmo_modulo_mesma_direcao_e_duplicata():
+    regs = [
+        _rec_mod("AL11:1", modulo="AL11", indices=(14,)),
+        _rec_mod("AL11:2", modulo="AL11", indices=(14,)),
+    ]
+    dups = enderecos_duplicados(regs)
+    assert list(dups.values()) == [["AL11:1", "AL11:2"]]
 
 
 def test_filtrar_por_modulos():
