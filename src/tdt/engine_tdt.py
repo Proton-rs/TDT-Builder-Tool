@@ -94,27 +94,44 @@ def _remote_unit(subestacao: str | None) -> str | None:
     return f"UTR_{subestacao}_1" if subestacao else None
 
 
+# Sufixo de família do equipamento no Device Mapping (spec 2026-07-20 §A1;
+# fullbase: DJ 16.866, TR 4.610, SEC 2.157 como último segmento). TC/TP da
+# spec saem no ramo analógico (`<MOD>_TC`/`<MOD>_TP`) — familia_do_id não
+# classifica TC/TP por ID; estender aqui se a whitelist ganhar esses IDs.
+_SUFIXO_FAMILIA: dict[str, str] = {
+    "Disjuntor": "DJ",
+    "Seccionadora": "SEC",
+    "Transformador": "TR",
+}
+
+
+def _dm_prot(sigla: str | None, sp) -> bool:
+    """Flag do ramo PROT do device mapping (spec 2026-07-20 §B1)."""
+    return bool(sp and sp.signal_type == "RelayTrip")
+
+
 def _device_mapping(
     nome: str,
     sigla: str,
-    eh_protecao: bool,
+    dm_prot: bool,
     subestacao: str | None = None,
     modulo_nome: str | None = None,
     barra: str | None = None,
+    equipamento: str | None = None,
+    disjuntor: str | None = None,
 ) -> str:
-    """Padrão RGE (spec 2026-07-15, correção 16/07): proteção cai SEMPRE no
-    módulo duplicado — nunca no equipamento específico da linha, mesmo
-    quando um ID é inequívoco (`LVA_AL11_52-11_PROT_CAFL` estava errado; o
-    correto é `LVA_AL11_AL11_PROT_CAFL`). Reconstrói via `nome_hierarquico`
-    com `equipamento=None`, que já produz o padrão módulo-duplicado.
-    Não-proteção cai direto no equipamento — o nome hierárquico SEM a sigla
-    final (sem equipamento o nome já repete o módulo, então o fallback
-    módulo-duplicado emerge sozinho)."""
-    if eh_protecao:
+    """Padrão RGE (spec 2026-07-20): proteção cai no módulo duplicado;
+    não-proteção cai no equipamento com sufixo de família (_DJ/_SEC/_TR).
+    Sem equipamento, o fallback módulo-duplicado emerge sozinho (sem sufixo).
+    Base terminando em sufixo de barra fica sem sufixo de família
+    (conservador — fullbase não tem exemplo com barra + sufixo)."""
+    if dm_prot:
         return nome_hierarquico(subestacao, modulo_nome, None, barra, f"PROT_{sigla}")
-    if nome.endswith(f"_{sigla}"):
-        return nome[: len(nome) - len(sigla) - 1]
-    return nome
+    base = nome[: len(nome) - len(sigla) - 1] if nome.endswith(f"_{sigla}") else nome
+    suf = _SUFIXO_FAMILIA.get(familia_do_id(equipamento) or "")
+    if suf and equipamento and base.endswith(equipamento):
+        return f"{base}_{suf}"
+    return base
 
 
 def _normal_value(sp: "SinalPadrao | None") -> int | None:
@@ -171,15 +188,27 @@ def _fase_saida(fase: str | None) -> str:
     return fase if fase in _PHASECODE else "ABC"
 
 
-def _valores(rec: SignalRecord, subestacao: str | None, padrao: ListaPadraoADMS,
-             alias_v1: "dict[str, str] | None" = None) -> dict:
-    sp = padrao.por_sigla(rec.sigla_sinal) if rec.sigla_sinal else None
+def dm_registro(rec, subestacao, sp, disjuntor: str | None = None) -> tuple[str, str]:
+    """(Signal Name, Device Mapping) do registro — derivação ÚNICA, usada por
+    _valores, particionar_tipo_duplicado e pelas colunas derivadas da UI."""
+    sigla = rec.sigla_sinal or "?"
     nome = nome_hierarquico(
         subestacao, rec.modulo.nome, rec.eletrico.nome_equipamento,
-        rec.eletrico.barra, rec.sigla_sinal or "?",
+        rec.eletrico.barra, sigla,
     )
+    dm = _device_mapping(
+        nome, sigla, _dm_prot(rec.sigla_sinal, sp), subestacao,
+        rec.modulo.nome, rec.eletrico.barra,
+        equipamento=rec.eletrico.nome_equipamento, disjuntor=disjuntor,
+    )
+    return nome, dm
+
+
+def _valores(rec: SignalRecord, subestacao: str | None, padrao: ListaPadraoADMS,
+             alias_v1: "dict[str, str] | None" = None, disjuntor=None) -> dict:
+    sp = padrao.por_sigla(rec.sigla_sinal) if rec.sigla_sinal else None
+    nome, dm = dm_registro(rec, subestacao, sp, disjuntor)
     alimentador = _eh_alimentador(rec.modulo.nome)
-    eh_prot = bool(sp and sp.signal_type == "RelayTrip")
     remote_unit = _remote_unit(subestacao)
     rp_custom = f"{nome}_{remote_unit}" if remote_unit else None
     indices = rec.enderecamento.indices
@@ -208,10 +237,7 @@ def _valores(rec: SignalRecord, subestacao: str | None, padrao: ListaPadraoADMS,
         "Remote Point Name": nome,
         "Phases": _fase_saida(rec.eletrico.fase),
         "Signal AOR Group": _aor_group(subestacao, alimentador),
-        "Device Mapping": _device_mapping(
-            nome, rec.sigla_sinal or "?", eh_prot,
-            subestacao, rec.modulo.nome, rec.eletrico.barra,
-        ),
+        "Device Mapping": dm,
         "Direction": _DIRECAO.get(direcao, "Read"),
         "Message Mapping": sp.mm if sp else None,
         "Input Data Type": rec.tipo_sinal.datatype,

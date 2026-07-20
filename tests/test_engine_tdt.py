@@ -445,6 +445,48 @@ def test_device_mapping_nome_igual_sigla_nao_quebra():
     assert _device_mapping("CAFL", "CAFL", False) == "CAFL"
 
 
+def test_dm_equipamento_disjuntor_ganha_sufixo_dj():
+    # nao-protecao caindo em equipamento 52-1 -> sufixo _DJ (spec 20/07 §A1)
+    dm = engine_tdt._device_mapping(
+        "IMA_AL11_52-1_DJF1", "DJF1", False,
+        subestacao="IMA", modulo_nome="AL11", equipamento="52-1",
+    )
+    assert dm == "IMA_AL11_52-1_DJ"
+
+
+def test_dm_equipamento_seccionadora_ganha_sufixo_sec():
+    dm = engine_tdt._device_mapping(
+        "IMA_AL11_89-4_SECF", "SECF", False,
+        subestacao="IMA", modulo_nome="AL11", equipamento="89-4",
+    )
+    assert dm == "IMA_AL11_89-4_SEC"
+
+
+def test_dm_equipamento_transformador_ganha_sufixo_tr():
+    dm = engine_tdt._device_mapping(
+        "IMA_TR1_TR1_86", "86", False,
+        subestacao="IMA", modulo_nome="TR1", equipamento="TR1",
+    )
+    assert dm == "IMA_TR1_TR1_TR"
+
+
+def test_dm_equipamento_fora_da_whitelist_sem_sufixo():
+    # familia_do_id devolve None p/ "RT1" -> comportamento atual preservado
+    dm = engine_tdt._device_mapping(
+        "IMA_SE_RT1_CAFL", "CAFL", False,
+        subestacao="IMA", modulo_nome="SE", equipamento="RT1",
+    )
+    assert dm == "IMA_SE_RT1"
+
+
+def test_dm_sem_equipamento_fallback_modulo_duplicado_sem_sufixo():
+    dm = engine_tdt._device_mapping(
+        "IMA_AL11_AL11_DJF1", "DJF1", False,
+        subestacao="IMA", modulo_nome="AL11", equipamento=None,
+    )
+    assert dm == "IMA_AL11_AL11"
+
+
 def test_normal_value():
     sp = SinalPadrao("20T", "", "RelayTrip", None, None, "Discrete",
                      estados_brutos="Transit;NORMAL;ATUADO;Error",
