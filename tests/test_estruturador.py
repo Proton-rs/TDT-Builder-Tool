@@ -502,6 +502,23 @@ def test_coluna_equipamento_x_varredura_linha_gera_equipamento_conflitante():
     assert recs[0].justificativa == "equipamento_conflitante"
 
 
+def test_coluna_equipamento_decorada_nao_conflita_consigo_mesma():
+    """Revisão Task 19 (17/07) — a própria célula da coluna EQUIPAMENTO,
+    quando fora da forma canônica NN-N (ex.: "52-1 (novo)"), não pode ser
+    re-varrida como se fosse OUTRA célula: c_equip fica de fora da
+    varredura de linha inteira, igual a c_modulo. Só uma fonte de
+    identidade nessa linha -- não é conflito."""
+    rows = [
+        ("DESCRICAO", "TIPO", "EQUIPAMENTO", "IDX"),
+        ("Disj. aberto", "D", "52-1 (novo)", "10"),
+    ]
+    mapa = MapaColunas(header_row=1, colunas={
+        "descricao": 0, "tipo": 1, "equipamento": 2, "indice": 3})
+    recs = estruturar(rows, mapa, sheet_name="S1", config=Config())
+    assert recs[0].eletrico.nome_equipamento == "52-1 (novo)"
+    assert recs[0].justificativa != "equipamento_conflitante"
+
+
 # --- marcador tolerante a numeracao (SP-CVA2 E3.1) --------------------------
 
 

@@ -232,7 +232,7 @@ def estruturar(
         if eletrico.nome_equipamento:
             ids_linha[eletrico.nome_equipamento] = eletrico.equipamento_alvo
         for c, cel in enumerate(row):
-            if c == c_desc or c == c_modulo or cel is None:
+            if c == c_desc or c == c_modulo or c == c_equip or cel is None:
                 continue
             for alvo, nome_eq in equipamentos_no_texto(str(cel)):
                 ids_linha.setdefault(nome_eq, alvo)
