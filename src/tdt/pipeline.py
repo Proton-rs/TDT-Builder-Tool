@@ -564,6 +564,13 @@ def gerar_tdt(registros, template_path, lp, subestacao=None, aliases=None, confi
     if rev_end:
         aud.evento("engine", f"{len(rev_end)} registros com endereço duplicado -> revisão", "AVISO",
                    dados={"ids": tuple(it.registro.id for it in rev_end)})
+    lista, rev_tipo = engine_tdt.particionar_tipo_duplicado(lista, lp)
+    if rev_tipo:
+        aud.evento(
+            "engine",
+            f"{len(rev_tipo)} registros com Signal Type duplicado no dispositivo -> revisão",
+            "AVISO", dados={"ids": tuple(it.registro.id for it in rev_tipo)},
+        )
     sem_local = engine_tdt.dispositivos_43lr_sem_43tc(lista.registros)
     if sem_local:
         aud.evento(

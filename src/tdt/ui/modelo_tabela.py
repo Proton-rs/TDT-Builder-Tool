@@ -26,6 +26,7 @@ _MOTIVO_LABEL = {
     "categoria_ambigua": "Categoria ambígua",
     "categoria_incompativel": "Categoria incompatível",
     "endereco_duplicado": "Endereço duplicado",
+    "tipo_duplicado_dispositivo": "Signal Type duplicado no dispositivo",
     "sem_fix": "Sem correção automática",
     "modulo_indefinido": "Módulo indefinido",
     "equipamento_ambiguo": "Equipamento ambíguo",
@@ -52,6 +53,9 @@ _MOTIVO_TOOLTIP = {
     "categoria_ambigua": "Sinal decidiu tanto como Discrete quanto Analog. Escolha a categoria correta.",
     "categoria_incompativel": "Só decidiu fora da categoria admitida pra esse tipo de sinal. Revise o tipo ou a sigla.",
     "endereco_duplicado": "Mesmo endereço usado por mais de um sinal. Corrija o endereçamento.",
+    "tipo_duplicado_dispositivo": "Dois sinais não-Custom com o mesmo Signal Type "
+        "caindo direto no mesmo dispositivo — o ADMS conflita. Troque a sigla de "
+        "um deles (ou o Signal Type no catálogo) e regenere.",
     "sem_fix": "Não há correção automática aplicável. Ajuste manualmente.",
     "modulo_indefinido": "Sinal sem módulo identificado. Informe o módulo.",
     "equipamento_ambiguo": "Mais de um equipamento candidato pro sinal. Escolha o equipamento correto.",

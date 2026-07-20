@@ -943,3 +943,58 @@ def test_43lr_com_43tc_nao_avisa():
 def test_43tc_sozinho_nao_avisa():
     regs = (_rec_equip("AL11:1", "43TC", "52-1"),)
     assert engine_tdt.dispositivos_43lr_sem_43tc(regs) == ()
+
+
+# ── Tarefa 6: gate tipo duplicado por dispositivo (spec §B3) ────────────────
+
+def _lp_fake(siglas_tipos: dict[str, str]):
+    class _LP:
+        def por_sigla(self, sigla):
+            st = siglas_tipos.get(sigla)
+            if st is None:
+                return None
+            return SinalPadrao(sigla=sigla, descricao="X", signal_type=st,
+                               direction=None, mm=None, categoria="Discrete")
+    return _LP()
+
+
+def test_tipo_duplicado_mesmo_dispositivo_vai_para_revisao():
+    lista = ListaHomogenea(subestacao="IMA", protocolo="DNP3", registros=(
+        _rec_equip("AL11:1", "43TC", "52-1"),   # Local
+        _rec_equip("AL11:2", "43XY", "52-1"),   # Local tambem -> conflito
+    ))
+    lp = _lp_fake({"43TC": "Local", "43XY": "Local"})
+    restante, revisao = engine_tdt.particionar_tipo_duplicado(lista, lp)
+    assert len(restante.registros) == 0
+    assert {it.motivo for it in revisao} == {"tipo_duplicado_dispositivo"}
+
+
+def test_tipo_duplicado_custom_isento():
+    lista = ListaHomogenea(subestacao="IMA", protocolo="DNP3", registros=(
+        _rec_equip("AL11:1", "CAB1", "52-1"),
+        _rec_equip("AL11:2", "CAB2", "52-1"),
+    ))
+    lp = _lp_fake({"CAB1": "Custom", "CAB2": "Custom"})
+    restante, revisao = engine_tdt.particionar_tipo_duplicado(lista, lp)
+    assert len(restante.registros) == 2 and revisao == ()
+
+
+def test_tipo_duplicado_prot_isento():
+    # dois RelayTrip no mesmo modulo: caem no PROT -> repetido e valido
+    lista = ListaHomogenea(subestacao="IMA", protocolo="DNP3", registros=(
+        _rec_equip("AL11:1", "51F", "52-1"),
+        _rec_equip("AL11:2", "50F1", "52-1"),
+    ))
+    lp = _lp_fake({"51F": "RelayTrip", "50F1": "RelayTrip"})
+    restante, revisao = engine_tdt.particionar_tipo_duplicado(lista, lp)
+    assert len(restante.registros) == 2 and revisao == ()
+
+
+def test_tipo_duplicado_dispositivos_distintos_isento():
+    lista = ListaHomogenea(subestacao="IMA", protocolo="DNP3", registros=(
+        _rec_equip("AL11:1", "43TC", "52-1"),
+        _rec_equip("AL11:2", "43TC", "89-4"),   # outro equipamento
+    ))
+    lp = _lp_fake({"43TC": "Local"})
+    restante, revisao = engine_tdt.particionar_tipo_duplicado(lista, lp)
+    assert len(restante.registros) == 2 and revisao == ()

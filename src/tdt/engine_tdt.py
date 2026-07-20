@@ -499,6 +499,35 @@ def particionar_endereco_duplicado(
     return replace(lista, registros=restantes), revisao
 
 
+def particionar_tipo_duplicado(
+    lista: ListaHomogenea,
+    lista_padrao,
+) -> tuple[ListaHomogenea, tuple[ItemRevisao, ...]]:
+    """Gate (spec 2026-07-20 §B3): dois sinais não-Custom com o MESMO Signal
+    Type caindo DIRETO no mesmo dispositivo (DM final) conflitam no ADMS —
+    o grupo inteiro sai do TDT e vai pra revisão (padrão custom_id: nunca
+    sai calado no xlsx). Sinais do ramo PROT ficam de fora — dentro de
+    proteção o repetido é válido (decisão do usuário 20/07)."""
+    disj = disjuntor_por_modulo(lista.registros)
+    grupos: dict[tuple[str, str], list[SignalRecord]] = defaultdict(list)
+    for rec in lista.registros:
+        sp = lista_padrao.por_sigla(rec.sigla_sinal) if rec.sigla_sinal else None
+        st = (sp.signal_type if sp else "Custom") or "Custom"
+        if st == "Custom" or _dm_prot(rec.sigla_sinal, sp):
+            continue
+        _, dm = dm_registro(rec, lista.subestacao, sp, disj.get(rec.modulo.nome))
+        grupos[(dm, st)].append(rec)
+    colididos = {r.id for regs in grupos.values() if len(regs) > 1 for r in regs}
+    if not colididos:
+        return lista, ()
+    revisao = tuple(
+        ItemRevisao(replace(r, status="revisao"), motivo="tipo_duplicado_dispositivo")
+        for r in lista.registros if r.id in colididos
+    )
+    restantes = tuple(r for r in lista.registros if r.id not in colididos)
+    return replace(lista, registros=restantes), revisao
+
+
 def dispositivos_43lr_sem_43tc(registros) -> tuple[str, ...]:
     """Dispositivos (módulo, equipamento) com 43LR e sem 43TC — precisa haver
     um sinal Local (43TC) no dispositivo (spec 2026-07-20 §B2; catálogo v8:
