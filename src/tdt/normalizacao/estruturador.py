@@ -139,8 +139,11 @@ def estruturar(
         comando_duplo = not (direcao == "Output" and tipo_norm == "COMANDO S")
 
         indices = _parse_indices(row[c_idx]) if c_idx is not None and c_idx < len(row) else ()
+        # spec 2026-07-20 §C: dois índices = dois pontos = MultiCoord.
+        # "DoubleBit" (ponto nativo de 1 endereço) fica reservado — nenhuma
+        # lista de origem o marca hoje.
         datatype = (
-            "DoubleBit"
+            "MultiCoord"
             if len(indices) == 2 and indices[0] != indices[1]
             else "SingleBit"
         )

@@ -299,11 +299,13 @@ def _estruturar_rows(rows):
     return estruturar(rows, mapa, sheet_name="S1", config=Config())
 
 
-def test_input_com_endereco_duplo_nativo_vira_doublebit():
+def test_input_com_endereco_duplo_nativo_vira_multicoord():
     rows = [("desc", "idx", "tipo"),
             ("Secc. 89-16 Aberta/Fechada", "1100;1101", "D")]
     regs = _estruturar_rows(rows)
-    assert regs[0].tipo_sinal.datatype == "DoubleBit"
+    # spec 20/07 §C: par de indices e MultiCoord (fullbase: DoubleBit nunca
+    # tem ';' nas coordenadas; DoubleBit = ponto nativo de 1 endereco)
+    assert regs[0].tipo_sinal.datatype == "MultiCoord"
 
 
 def test_comando_nn_continua_singlebit():

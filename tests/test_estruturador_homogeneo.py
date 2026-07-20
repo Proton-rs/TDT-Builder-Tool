@@ -98,12 +98,14 @@ def test_equipamento_disjuntor_mapeado_por_modulo_dj():
     assert decididos[0].enderecamento.indices == (100, 101)
 
 
-def test_indice_duplo_nativo_vira_doublebit():
+def test_indice_duplo_nativo_vira_multicoord():
     rows = [_HEADER, ("SIM", "IMA", "DJ1", "DJ", "D", "DISJUNTOR 52-1 ABERTO", "DJF1",
                        "IMA_DJ1_DJF1", "-", "-", "-", "-", "-", "1100;1101")]
     lp = _ListaPadraoFake({"DJF1": _sinal_padrao("DJF1")})
     decididos, _, _, _ = estruturar_homogeneo(rows, 0, "DJ1", lp, Config())
-    assert decididos[0].tipo_sinal.datatype == "DoubleBit"
+    # spec 20/07 §C: par de indices e MultiCoord (fullbase: DoubleBit nunca
+    # tem ';' nas coordenadas; DoubleBit = ponto nativo de 1 endereco)
+    assert decididos[0].tipo_sinal.datatype == "MultiCoord"
 
 
 def _rows_com_bloco(modulo_col="AL", numero="23"):

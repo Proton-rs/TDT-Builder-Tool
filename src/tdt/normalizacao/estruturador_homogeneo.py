@@ -111,8 +111,11 @@ def estruturar_homogeneo(
                 f"{sheet_name}:{i}: sigla '{sigla_bruta}' normalizada p/ '{sigla}' (DE->PARA)"
             )
         indices = _parse_indices(row[idx["index"]]) if idx["index"] is not None and idx["index"] < len(row) else ()
+        # spec 2026-07-20 §C: dois índices = dois pontos = MultiCoord.
+        # "DoubleBit" (ponto nativo de 1 endereço) fica reservado — nenhuma
+        # lista de origem o marca hoje.
         datatype = (
-            "DoubleBit"
+            "MultiCoord"
             if len(indices) == 2 and indices[0] != indices[1]
             else "SingleBit"
         )
