@@ -513,6 +513,25 @@ def test_dm_prot_nao_alimentador_ignora_disjuntor():
     assert dm == "CVA_TR1BT_TR1BT_PROT_CAFL"
 
 
+def test_dm_prot_complemento_2649():
+    # 2649 e Enabled na lista padrao mas mapeia PROT (decisao 20/07)
+    sp = SinalPadrao(sigla="2649", descricao="X", signal_type="Enabled",
+                     direction=None, mm=None, categoria="Discrete")
+    assert engine_tdt._dm_prot("2649", sp) is True
+
+
+def test_dm_prot_79_fica_fora():
+    sp = SinalPadrao(sigla="79", descricao="X", signal_type="ReclosingEnabled",
+                     direction=None, mm=None, categoria="Discrete")
+    assert engine_tdt._dm_prot("79", sp) is False
+
+
+def test_dm_prot_relaytrip_preservado():
+    sp = SinalPadrao(sigla="TRIP", descricao="X", signal_type="RelayTrip",
+                     direction=None, mm=None, categoria="Discrete")
+    assert engine_tdt._dm_prot("TRIP", sp) is True
+
+
 def test_normal_value():
     sp = SinalPadrao("20T", "", "RelayTrip", None, None, "Discrete",
                      estados_brutos="Transit;NORMAL;ATUADO;Error",

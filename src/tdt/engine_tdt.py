@@ -24,6 +24,7 @@ from openpyxl.utils import get_column_letter
 
 from tdt.contracts import ItemRevisao, ListaHomogenea, SignalRecord
 from tdt.dados.lista_padrao import ListaPadraoADMS
+from tdt.defaults import COMPLEMENTO_DM_PROT
 from tdt.normalizacao.normalizador import familia_do_id
 
 SHEET_DISCRETOS = "DNP3_DiscreteSignals"
@@ -106,8 +107,13 @@ _SUFIXO_FAMILIA: dict[str, str] = {
 
 
 def _dm_prot(sigla: str | None, sp) -> bool:
-    """Flag do ramo PROT do device mapping (spec 2026-07-20 §B1)."""
-    return bool(sp and sp.signal_type == "RelayTrip")
+    """Flag do ramo PROT do device mapping (spec 2026-07-20 §B1): RelayTrip
+    da lista padrão manda; o complemento cobre siglas não-RelayTrip que a
+    fullbase mapeia consistentemente em PROT (ex. 2649). NÃO é o conceito
+    ANSI de função de proteção (79 é função e mesmo assim cai no DJ)."""
+    if sp is not None and sp.signal_type == "RelayTrip":
+        return True
+    return (sigla or "").strip().upper() in COMPLEMENTO_DM_PROT
 
 
 def _device_mapping(
