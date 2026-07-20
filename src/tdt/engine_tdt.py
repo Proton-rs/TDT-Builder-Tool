@@ -124,8 +124,15 @@ def _device_mapping(
     não-proteção cai no equipamento com sufixo de família (_DJ/_SEC/_TR).
     Sem equipamento, o fallback módulo-duplicado emerge sozinho (sem sufixo).
     Base terminando em sufixo de barra fica sem sufixo de família
-    (conservador — fullbase não tem exemplo com barra + sufixo)."""
+    (conservador — fullbase não tem exemplo com barra + sufixo).
+    Exceção §A2: proteção de alimentador com disjuntor único conhecido usa o
+    disjuntor (não o módulo repetido) como 2º nível — supersede a correção
+    16/07 só para esse caso; demais módulos mantêm o módulo duplicado."""
     if dm_prot:
+        if _eh_alimentador(modulo_nome) and disjuntor:
+            # decisão 20/07 (supersede 16/07): alimentador usa o DISJUNTOR do
+            # módulo (não o equipamento da linha) como 2º nível do PROT
+            return nome_hierarquico(subestacao, modulo_nome, disjuntor, barra, f"PROT_{sigla}")
         return nome_hierarquico(subestacao, modulo_nome, None, barra, f"PROT_{sigla}")
     base = nome[: len(nome) - len(sigla) - 1] if nome.endswith(f"_{sigla}") else nome
     suf = _SUFIXO_FAMILIA.get(familia_do_id(equipamento) or "")
@@ -300,8 +307,9 @@ _MEDIDAS_TC = frozenset({"CORRENTE", "POTÊNCIA ATIVA", "POTÊNCIA REATIVA", "PO
 _MEDIDAS_TP = frozenset({"TENSÃO"})
 
 
-def _disjuntor_por_modulo(registros) -> "dict[str | None, str | None]":
-    """Disjuntor único de cada módulo, p/ o DM analógico. 0 ou 2+ disjuntores
+def disjuntor_por_modulo(registros) -> "dict[str | None, str | None]":
+    """Disjuntor único de cada módulo, usado pelo DM analógico e pelo ramo
+    PROT de alimentador (spec 2026-07-20 §A2/§A3). 0 ou 2+ disjuntores
     -> None (fallback módulo-duplicado; o aviso de ambiguidade já foi emitido
     por atribuir_id_por_registro no pipeline)."""
     por_mod: dict[str | None, set[str]] = defaultdict(set)
@@ -498,11 +506,12 @@ def gerar(
                  if r.tipo_sinal.categoria == "Discrete" and id(r) not in ids_da]
     regs_ana = [r for r in lista.registros
                 if r.tipo_sinal.categoria == "Analog" and id(r) not in ids_da]
-    disj = _disjuntor_por_modulo(lista.registros)
+    disj = disjuntor_por_modulo(lista.registros)
     _escrever_sheet(
         wb[SHEET_DISCRETOS], SHEET_DISCRETOS, COLUNAS_ESPERADAS,
         regs_disc,
-        lambda rec, sub, padrao: _valores(rec, sub, padrao, alias_v1),
+        lambda rec, sub, padrao: _valores(
+            rec, sub, padrao, alias_v1, disj.get(rec.modulo.nome)),
         lista.subestacao, lista_padrao,
     )
     _escrever_sheet(

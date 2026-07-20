@@ -25,7 +25,7 @@ from tdt.engine_tdt import (
     _remote_unit,
     _device_mapping,
     _device_mapping_analog,
-    _disjuntor_por_modulo,
+    disjuntor_por_modulo,
     _normal_value,
     _alias_hoje,
     _coords_comando,
@@ -487,6 +487,32 @@ def test_dm_sem_equipamento_fallback_modulo_duplicado_sem_sufixo():
     assert dm == "IMA_AL11_AL11"
 
 
+def test_dm_prot_alimentador_usa_disjuntor():
+    # decisao 20/07 (supersede correcao 16/07): AL com disjuntor unico ->
+    # 2o modulo vira o disjuntor, SEM sufixo (fullbase CNC_AL11_52-22_PROT_51F)
+    dm = engine_tdt._device_mapping(
+        "CVA_AL11_52-1_CAFL", "CAFL", True,
+        subestacao="CVA", modulo_nome="AL11", disjuntor="52-1",
+    )
+    assert dm == "CVA_AL11_52-1_PROT_CAFL"
+
+
+def test_dm_prot_alimentador_sem_disjuntor_fallback_modulo():
+    dm = engine_tdt._device_mapping(
+        "CVA_AL11_AL11_CAFL", "CAFL", True,
+        subestacao="CVA", modulo_nome="AL11", disjuntor=None,
+    )
+    assert dm == "CVA_AL11_AL11_PROT_CAFL"
+
+
+def test_dm_prot_nao_alimentador_ignora_disjuntor():
+    dm = engine_tdt._device_mapping(
+        "CVA_TR1BT_TR1BT_CAFL", "CAFL", True,
+        subestacao="CVA", modulo_nome="TR1BT", disjuntor="52-7",
+    )
+    assert dm == "CVA_TR1BT_TR1BT_PROT_CAFL"
+
+
 def test_normal_value():
     sp = SinalPadrao("20T", "", "RelayTrip", None, None, "Discrete",
                      estados_brutos="Transit;NORMAL;ATUADO;Error",
@@ -842,7 +868,7 @@ def test_disjuntor_por_modulo():
         _rec_eq("a:4", "AL12", "24-1"),   # 2 disjuntores -> ambíguo
         _rec_eq("a:5", "AL13", None),
     ]
-    disj = _disjuntor_por_modulo(regs)
+    disj = disjuntor_por_modulo(regs)
     assert disj["AL11"] == "52-11"
     assert disj["AL12"] is None
     assert disj.get("AL13") is None
