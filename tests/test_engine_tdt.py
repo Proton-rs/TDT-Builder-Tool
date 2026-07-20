@@ -843,13 +843,29 @@ def test_dm_analog_tensao_cai_no_tp():
 
 def test_dm_analog_resto_cai_no_disjuntor():
     # KMDF (Comprimento), frequência, FP, temperatura... -> disjuntor do módulo
-    assert _device_mapping_analog("LVA", "AL11", "Comprimento", "52-11") == "LVA_AL11_52-11"
-    assert _device_mapping_analog("LVA", "AL11", "Frequência", "52-11") == "LVA_AL11_52-11"
-    assert _device_mapping_analog("LVA", "AL11", None, "52-11") == "LVA_AL11_52-11"
+    assert _device_mapping_analog("LVA", "AL11", "Comprimento", "52-11") == "LVA_AL11_52-11_DJ"  # sufixo _DJ (spec 20/07 §A3)
+    assert _device_mapping_analog("LVA", "AL11", "Frequência", "52-11") == "LVA_AL11_52-11_DJ"  # sufixo _DJ (spec 20/07 §A3)
+    assert _device_mapping_analog("LVA", "AL11", None, "52-11") == "LVA_AL11_52-11_DJ"  # sufixo _DJ (spec 20/07 §A3)
 
 
 def test_dm_analog_sem_disjuntor_cai_no_modulo_duplicado():
     assert _device_mapping_analog("LVA", "AL11", "Comprimento", None) == "LVA_AL11_AL11"
+
+
+def test_dm_analog_disjuntor_ganha_sufixo_dj():
+    # fullbase analog: ultimo segmento DJ 4.570x (spec 20/07 §A3)
+    dm = engine_tdt._device_mapping_analog("CVA", "AL11", "FREQUÊNCIA", "52-1")
+    assert dm == "CVA_AL11_52-1_DJ"
+
+
+def test_dm_analog_corrente_continua_mod_tc():
+    dm = engine_tdt._device_mapping_analog("CVA", "AL11", "CORRENTE", "52-1")
+    assert dm == "CVA_AL11_AL11_TC"
+
+
+def test_dm_analog_sem_disjuntor_fallback_modulo():
+    dm = engine_tdt._device_mapping_analog("CVA", "AL11", "FREQUÊNCIA", None)
+    assert dm == "CVA_AL11_AL11"
 
 
 def _rec_eq(rid, modulo, nome_eq):

@@ -337,7 +337,7 @@ def _device_mapping_analog(
     elif t in _MEDIDAS_TP:
         alvo = f"{modulo_fmt}_TP" if modulo_fmt else "TP"
     else:
-        alvo = disjuntor or modulo_fmt
+        alvo = f"{disjuntor}_DJ" if disjuntor else modulo_fmt
     if alvo:
         partes.append(alvo)
     return "_".join(partes)
