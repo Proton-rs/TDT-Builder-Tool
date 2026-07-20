@@ -205,7 +205,8 @@ def dm_registro(rec, subestacao, sp, disjuntor: str | None = None) -> tuple[str,
 
 
 def _valores(rec: SignalRecord, subestacao: str | None, padrao: ListaPadraoADMS,
-             alias_v1: "dict[str, str] | None" = None, disjuntor=None) -> dict:
+             alias_v1: "dict[str, str] | None" = None,
+             disjuntor: "str | None" = None) -> dict:
     sp = padrao.por_sigla(rec.sigla_sinal) if rec.sigla_sinal else None
     nome, dm = dm_registro(rec, subestacao, sp, disjuntor)
     alimentador = _eh_alimentador(rec.modulo.nome)
