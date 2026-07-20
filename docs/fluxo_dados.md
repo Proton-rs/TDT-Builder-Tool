@@ -22,7 +22,11 @@ Identidade = `sigla_sinal`, `modulo.nome`, `eletrico.nome_equipamento`,
 
 ## Lacunas conhecidas (follow-ups, fora deste plano)
 
-- Coluna EQUIPAMENTO dedicada (LVA) não é detectada por `analise_colunas` —
-  hoje só a varredura de linha inteira pega IDs da whitelist nela.
+- ~~Coluna EQUIPAMENTO dedicada (LVA) não é detectada por `analise_colunas`~~
+  — fechada (Task 19, SP-OBS-17JUL 2F): `_col_equipamento` detecta por
+  rótulo, `estruturador` preenche `nome_equipamento` em ramo independente
+  (I2) sem sobrescrever N0, e a varredura de linha inteira continua ativa
+  (coexistência — conflito coluna×varredura já roteia por
+  `equipamento_conflitante`).
 - Id do comando é perdido na fusão D+C (rastreável só por endereço) —
   upgrade path documentado em `dc_pairer.separar`.

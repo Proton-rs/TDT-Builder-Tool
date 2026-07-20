@@ -1,0 +1,5 @@
+2F: coluna EQUIPAMENTO dedicada (Task 19) — gate OK, sem regressao.
+[GTD] comum=952 iguais=688 pct=72.3%
+FAILs (6, identicos ao baseline 17/07): addr=5,7,16,51,62,67
+baseline: bench/resultados/spOBS_baseline.txt (pct=72.3, commit=46cd915)
+LVA (relatorio_fluxo_real.py): input fora do worktree, nao disponivel — nao executado.

@@ -458,6 +458,50 @@ def test_modulo_sigla_e_equipamento_simultaneos_resolvem_os_tres():
     assert [r.status for r in recs] == ["decidido", "decidido"]
 
 
+def test_coluna_equipamento_dedicada_preenche_sem_afetar_sigla_e_modulo():
+    """Task 19 (2F) — coluna EQUIPAMENTO dedicada é identidade INDEPENDENTE
+    de sigla/módulo (I2): as três resolvem juntas na mesma linha."""
+    rows = [
+        ("MODULO", "DESCRIÇÃO", "TIPO", "EQUIPAMENTO", "SIGLA", "IDX"),
+        ("AL21", "MOLA", "D", "52-1", "MOLA", "10"),
+    ]
+    mapa = MapaColunas(header_row=1, colunas={
+        "modulo": 0, "descricao": 1, "tipo": 2, "equipamento": 3, "sigla": 4, "indice": 5})
+    recs = estruturar(rows, mapa, sheet_name="AL21", config=Config(),
+                      siglas_set=frozenset({"MOLA"}))
+    assert recs[0].eletrico.nome_equipamento == "52-1"  # coluna EQUIPAMENTO
+    assert recs[0].sigla_sinal == "MOLA"                # coluna SIGLA (não afetada)
+    assert recs[0].modulo.nome == "AL21"                # coluna MODULO (não afetada)
+    assert recs[0].status == "decidido"
+
+
+def test_coluna_equipamento_nao_sobrescreve_equipamento_ja_resolvido_pelo_n0():
+    # descrição já traz o ID (N0 extrai "52-11"); coluna EQUIPAMENTO com valor
+    # diferente NÃO sobrescreve (política de nunca sobrescrever)
+    rows = [
+        ("DESCRIÇÃO", "TIPO", "EQUIPAMENTO", "IDX"),
+        ("Disj. 52-11 aberto", "D", "89-2", "10"),
+    ]
+    mapa = MapaColunas(header_row=1, colunas={
+        "descricao": 0, "tipo": 1, "equipamento": 2, "indice": 3})
+    recs = estruturar(rows, mapa, sheet_name="S1", config=Config())
+    assert recs[0].eletrico.nome_equipamento == "52-11"  # N0 (descrição) ganha
+
+
+def test_coluna_equipamento_x_varredura_linha_gera_equipamento_conflitante():
+    # coluna EQUIPAMENTO diz "52-1"; outra célula da linha menciona um ID
+    # divergente ("89-2") -- conflito roteado pelo motivo já existente
+    rows = [
+        ("DESCRIÇÃO", "TIPO", "EQUIPAMENTO", "OBS", "IDX"),
+        ("Disj. aberto", "D", "52-1", "Ref. secc. 89-2", "10"),
+    ]
+    mapa = MapaColunas(header_row=1, colunas={
+        "descricao": 0, "tipo": 1, "equipamento": 2, "indice": 4})
+    recs = estruturar(rows, mapa, sheet_name="S1", config=Config())
+    assert recs[0].status == "revisao"
+    assert recs[0].justificativa == "equipamento_conflitante"
+
+
 # --- marcador tolerante a numeracao (SP-CVA2 E3.1) --------------------------
 
 

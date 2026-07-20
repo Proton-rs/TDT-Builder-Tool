@@ -97,6 +97,7 @@ def estruturar(
     c_tipo = cols.get("tipo")
     c_sigla = cols.get("sigla")
     c_modulo = cols.get("modulo")
+    c_equip = cols.get("equipamento")
     nome_mod = modulo if modulo is not None else sheet_name
     col0 = 0  # marcadores de seção ficam na 1ª coluna
 
@@ -210,6 +211,18 @@ def estruturar(
                             eletrico = replace(eletrico, nome_equipamento=equip_extraido)
             # sv não-vazia mas fora da LP -> status fica "pendente": recai no scoring
         # -------------------------------------------------------------------
+
+        # Equipamento por coluna dedicada (Task 19): identidade INDEPENDENTE
+        # de módulo/sigla (I2) -- nunca sobrescreve nome_equipamento já
+        # resolvido pelo N0 (mesma política de nunca sobrescrever de
+        # atribuir_id_por_registro). A varredura da linha inteira abaixo
+        # continua rodando sobre a MESMA célula; se ela achar um ID
+        # DIVERGENTE em outra célula, o conflito é pego pelo
+        # `len(ids_linha) > 1` já existente (motivo equipamento_conflitante).
+        if c_equip is not None and c_equip < len(row) and row[c_equip] is not None:
+            val_equip = str(row[c_equip]).strip()
+            if val_equip and eletrico.nome_equipamento is None:
+                eletrico = replace(eletrico, nome_equipamento=val_equip)
 
         # --- varredura da linha inteira por ID de equipamento (spec 15/07):
         # a descrição já foi parseada pelo N0; as demais células só

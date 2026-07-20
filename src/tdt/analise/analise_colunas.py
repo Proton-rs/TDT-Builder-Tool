@@ -327,6 +327,38 @@ def _col_modulo(rows, inicio, ncols, config: Config, reservadas: set[int]) -> in
     return melhor
 
 
+_EQUIPAMENTO_ROTULO = ("EQUIPAMENTO",)
+_EQUIPAMENTO_ID = re.compile(r"^\d+-\d+$")
+
+
+def _col_equipamento(rows, inicio, ncols, reservadas: set[int]) -> int | None:
+    """Coluna rotulada EQUIPAMENTO, com valores em forma de ID (52-1, 89-2).
+
+    Ao contrário de descrição/sigla/módulo, não há sinal de CONTEÚDO
+    genérico o bastante para inferir sem o rótulo (um ID de equipamento é
+    indistinguível de um endereço ou índice por forma isolada) -- por isso
+    a detecção é por RÓTULO (mesmo mecanismo do bônus de endereço/módulo,
+    ver ``_ROTULO_ENDERECO``/``_MODULO_ROTULO`` acima), com a forma da
+    célula como filtro de segurança contra uma coluna que por acaso se
+    chame "Equipamento" mas não carregue IDs.
+    """
+    header_row = inicio - 1
+    header = rows[header_row] if 0 <= header_row < len(rows) else ()
+    for c in range(ncols):
+        if c in reservadas:
+            continue
+        rotulo = _norm(header[c]) if c < len(header) else ""
+        if not _rotulo_bate(rotulo, _EQUIPAMENTO_ROTULO):
+            continue
+        vals = _valores_coluna(rows, c, inicio)
+        if len(vals) < 2:
+            continue
+        casam = sum(1 for v in vals if _EQUIPAMENTO_ID.match(v.strip()))
+        if casam / len(vals) >= 0.5:
+            return c
+    return None
+
+
 def analisar(
     rows: list[tuple], encoder, ref_emb: np.ndarray,
     siglas_set: frozenset[str] | None = None,
@@ -344,6 +376,8 @@ def analisar(
     if config is not None:
         reservadas = {c for c in (c_desc, c_idx, c_tipo, c_sig) if c is not None}
         c_mod = _col_modulo(rows, inicio, ncols, config, reservadas)
+    reservadas_equip = {c for c in (c_desc, c_idx, c_tipo, c_sig, c_mod) if c is not None}
+    c_equip = _col_equipamento(rows, inicio, ncols, reservadas_equip)
 
     colunas = {
         k: v
@@ -353,6 +387,7 @@ def analisar(
             ("tipo", c_tipo),
             ("sigla", c_sig),
             ("modulo", c_mod),
+            ("equipamento", c_equip),
         )
         if v is not None
     }

@@ -413,6 +413,43 @@ def test_col_modulo_ausente_quando_sem_config():
     assert "modulo" not in mapa.colunas
 
 
+# --- _col_equipamento() (Task 19: coluna EQUIPAMENTO dedicada) -------------
+
+
+def test_col_equipamento_detectada_por_rotulo():
+    rows = [
+        ("DESCRICAO", "TIPO", "EQUIPAMENTO", "IDX"),
+        ("Disj. aberto", "Digital", "52-1", "1"),
+        ("Disj. fechado", "Digital", "52-1", "2"),
+        ("Secc. aberta", "Digital", "89-2", "3"),
+    ]
+    mapa = analisar(rows, encoder=_fake_encoder, ref_emb=_REF)
+    assert mapa.colunas["equipamento"] == 2
+    assert mapa.colunas["descricao"] == 0  # não confunde com descrição
+
+
+def test_col_equipamento_nao_confunde_coluna_de_descricao():
+    rows = [
+        ("EQUIPAMENTO", "DESCRICAO", "TIPO", "IDX"),
+        ("52-1", "FALHA COMUNICACAO", "Digital", "1"),
+        ("52-1", "DISJUNTOR ABERTO", "Digital", "2"),
+        ("89-2", "CORRENTE FASE", "Analogico", "3"),
+    ]
+    mapa = analisar(rows, encoder=_fake_encoder, ref_emb=_REF)
+    assert mapa.colunas["equipamento"] == 0
+    assert mapa.colunas["descricao"] == 1
+
+
+def test_col_equipamento_ausente_sem_rotulo():
+    rows = [
+        ("DESCRICAO", "TIPO", "IDX"),
+        ("Disj. 52-1 aberto", "Digital", "1"),
+        ("Secc. 89-2 aberta", "Digital", "2"),
+    ]
+    mapa = analisar(rows, encoder=_fake_encoder, ref_emb=_REF)
+    assert "equipamento" not in mapa.colunas
+
+
 def test_col_modulo_none_sem_coluna_de_modulo():
     # nenhuma coluna canoniza em bloco -> None (não inventa módulo)
     rows = [
