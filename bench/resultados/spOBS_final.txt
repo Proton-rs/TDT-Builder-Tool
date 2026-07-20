@@ -1,0 +1,5 @@
+final spOBS - 2026-07-18
+pct=72.3
+commit=995dc93
+gate: mesmos 6 FAILs conhecidos do baseline (addrs 5,7,16,51,62,67) - sem regressao
+suite completa: 1096 passed, 5 skipped, 2 xfailed, 0 failed
