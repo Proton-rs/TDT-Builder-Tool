@@ -27,6 +27,7 @@ from rapidfuzz import fuzz
 
 from tdt.config import Config
 from tdt.dados.encoder import criar_encoder
+from tdt.dados.lista_padrao import ListaPadraoADMS
 from tdt.pipeline import executar
 
 _TEMPLATE = "docs/dnp3_template.xlsx"
@@ -102,7 +103,15 @@ def _bate_manut(texto_normalizado: str, descricao_bruta: str, manut: list[tuple[
 
 def main() -> None:
     manut = carregar_manut(_LISTA_PADRAO)
-    print(f"MANUT: {len(manut)} sinais carregados de {_LISTA_PADRAO}\n")
+    catalogo_primario = ListaPadraoADMS.carregar(_LISTA_PADRAO).siglas
+    antes = len(manut)
+    manut = [(s, d) for s, d in manut if s.upper() not in catalogo_primario]
+    excluidas = antes - len(manut)
+    print(
+        f"MANUT: {antes} sinais carregados de {_LISTA_PADRAO}; "
+        f"{excluidas} ja presentes no catalogo primario (excluidas); "
+        f"{len(manut)} exclusivas restantes\n"
+    )
 
     cfg = Config()
     enc = criar_encoder(cfg.modelo_embedding)
