@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 
 from tdt.auditoria import Auditoria
 from tdt.contracts import ItemRevisao
+from tdt.engine_tdt import dispositivos_43lr_sem_43tc
 from tdt.nomes_saida import nome_saida
 from tdt.relatorio_revisao import gerar_relatorio_revisao
 from tdt.ui.estado import AppState
@@ -183,7 +184,15 @@ class TelaGeracao(QWidget):
                 f"{len(dups)} endereços duplicados (índices {resumo})",
                 "Rever duplicados →",
                 lambda: self.rever_duplicados.emit(indices)))
-        if not pendentes and not dups:
+        sem_local = dispositivos_43lr_sem_43tc(regs)
+        if sem_local:
+            resumo = "; ".join(sem_local[:3])
+            self._avisos_box.addWidget(self._aviso(
+                "aviso",
+                f"{len(sem_local)} dispositivos com 43LR sem 43TC "
+                f"(falta sinal Local): {resumo}",
+                None, None))
+        if not pendentes and not dups and not sem_local:
             self._avisos_box.addWidget(self._aviso(
                 "ok", "Tudo pronto — sem pendências nem endereços duplicados",
                 None, None))

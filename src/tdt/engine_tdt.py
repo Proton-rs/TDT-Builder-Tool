@@ -499,6 +499,21 @@ def particionar_endereco_duplicado(
     return replace(lista, registros=restantes), revisao
 
 
+def dispositivos_43lr_sem_43tc(registros) -> tuple[str, ...]:
+    """Dispositivos (módulo, equipamento) com 43LR e sem 43TC — precisa haver
+    um sinal Local (43TC) no dispositivo (spec 2026-07-20 §B2; catálogo v8:
+    43LR=Custom, 43TC=Local)."""
+    lr: set[tuple[str, str]] = set()
+    tc: set[tuple[str, str]] = set()
+    for rec in registros:
+        sigla = (rec.sigla_sinal or "").strip().upper()
+        if sigla not in ("43LR", "43TC"):
+            continue
+        chave = (rec.modulo.nome or "?", rec.eletrico.nome_equipamento or "?")
+        (lr if sigla == "43LR" else tc).add(chave)
+    return tuple(f"{m}/{e}" for m, e in sorted(lr - tc))
+
+
 def gerar(
     lista: ListaHomogenea,
     template_path: str | Path,

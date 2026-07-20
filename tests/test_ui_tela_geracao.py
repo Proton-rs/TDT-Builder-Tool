@@ -1,6 +1,8 @@
 import pytest
 
-from tdt.contracts import Descricoes, Enderecamento, Modulo, SignalRecord, TipoSinal
+from tdt.contracts import (
+    Descricoes, Eletrico, Enderecamento, Modulo, SignalRecord, TipoSinal,
+)
 from tdt.ui.estado import AppState
 from tdt.ui.tela_geracao import TelaGeracao, enderecos_duplicados, filtrar_por_modulos
 
@@ -125,3 +127,23 @@ def test_custom_id_duplicado_vai_para_relatorio_de_revisao(qtbot, monkeypatch, t
 
     motivos = {it.registro.id: it.motivo for it in capturado["revisao"]}
     assert motivos.get("a") == "custom_id_duplicado"
+
+
+def _rec_sigla(rid, sigla, equipamento, modulo="AL11"):
+    return SignalRecord(
+        id=rid, modulo=Modulo(modulo, "sheet_name"),
+        tipo_sinal=TipoSinal("Discrete", "SingleBit", "Input"),
+        enderecamento=Enderecamento("DNP3", (1,)),
+        descricoes=Descricoes(f"{sigla} BRUTO", sigla),
+        sigla_sinal=sigla, status="decidido",
+        eletrico=Eletrico(nome_equipamento=equipamento),
+    )
+
+
+def test_aviso_43lr_sem_43tc(qtbot):
+    tela = _tela(qtbot, [_rec_sigla("a:1", "43LR", "52-1")])
+    textos = [
+        tela._avisos_box.itemAt(i).widget().layout().itemAt(0).widget().text()
+        for i in range(tela._avisos_box.count())
+    ]
+    assert any("43LR sem 43TC" in t for t in textos)

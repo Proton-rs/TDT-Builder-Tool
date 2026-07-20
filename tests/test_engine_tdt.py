@@ -55,6 +55,20 @@ def _rec(rid, sigla, indices, direcao="Input", double=False, fase="ABC"):
     )
 
 
+def _rec_equip(rid, sigla, equipamento, modulo="AL11", indices=(10,), direcao="Input"):
+    return SignalRecord(
+        id=rid,
+        modulo=Modulo(modulo, "sheet_name"),
+        tipo_sinal=TipoSinal("Discrete", "SingleBit", direcao),
+        enderecamento=Enderecamento("DNP3", tuple(indices)),
+        descricoes=Descricoes(f"{sigla} BRUTO", sigla),
+        sigla_sinal=sigla,
+        status="decidido",
+        eletrico=Eletrico(fase=None, equipamento_alvo=None,
+                          nome_equipamento=equipamento, barra=None),
+    )
+
+
 def _lista():
     return ListaHomogenea(
         subestacao="IMA",
@@ -907,3 +921,25 @@ def test_disjuntor_por_modulo():
     assert disj["AL11"] == "52-11"
     assert disj["AL12"] is None
     assert disj.get("AL13") is None
+
+
+# ── Tarefa 5: aviso 43LR sem 43TC (spec §B2) ────────────────────────────────
+
+def test_43lr_sem_43tc_avisa():
+    regs = (
+        _rec_equip("AL11:1", "43LR", "52-1"),
+    )
+    assert engine_tdt.dispositivos_43lr_sem_43tc(regs) == ("AL11/52-1",)
+
+
+def test_43lr_com_43tc_nao_avisa():
+    regs = (
+        _rec_equip("AL11:1", "43LR", "52-1"),
+        _rec_equip("AL11:2", "43TC", "52-1"),
+    )
+    assert engine_tdt.dispositivos_43lr_sem_43tc(regs) == ()
+
+
+def test_43tc_sozinho_nao_avisa():
+    regs = (_rec_equip("AL11:1", "43TC", "52-1"),)
+    assert engine_tdt.dispositivos_43lr_sem_43tc(regs) == ()
