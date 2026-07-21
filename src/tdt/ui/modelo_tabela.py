@@ -9,12 +9,14 @@ from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt
 from PySide6.QtGui import QColor, QFont
 
 from tdt.contracts import SignalRecord
+from tdt.engine_tdt import dm_registro, disjuntor_por_modulo
 from tdt.ui.estado import AppState
 
 COLUNAS = [
-    "Sinal", "Confiança", "Status", "Motivo", "Descr. ADMS", "Descr. bruta",
-    "Descr. normalizada", "Tokens", "Tipo", "Escala", "Fase", "Endereço Input",
-    "Endereço Output",
+    "Sigla", "Confiança", "Status", "Motivo",
+    "Signal Name", "Device Mapping", "Signal Type",
+    "Descr. lista padrão", "Descr. bruta",
+    "Tipo", "Escala", "Fase", "Endereço Input", "Endereço Output",
     "Score embedding", "Score tf-idf", "Score fuzzy", "Justificativa",
     "Módulo", "Equipamento", "Tipo Equip.", "Barra", "Nível Tensão",
     "Pareado", "Sheet origem", "Severidade",
@@ -91,14 +93,14 @@ COR_MEDIO_TEXTO = QColor("#2c2005")
 COR_BAIXO_TEXTO = QColor("#e8ebf2")
 
 _EDITAVEIS = frozenset({
-    "Sinal", "Tipo", "Fase", "Nível Tensão", "Barra", "Tipo Equip.",
+    "Sigla", "Tipo", "Fase", "Nível Tensão", "Barra", "Tipo Equip.",
     "Módulo", "Escala", "Endereço Input", "Endereço Output",
     "Equipamento", "Descr. bruta",
 })
 
 _COLUNAS_MONO = frozenset({
-    "Sinal", "Endereço Input", "Endereço Output", "Tokens",
-    "Score embedding", "Score tf-idf", "Score fuzzy",
+    "Sigla", "Signal Name", "Device Mapping", "Endereço Input",
+    "Endereço Output", "Score embedding", "Score tf-idf", "Score fuzzy",
 })
 
 
@@ -190,18 +192,30 @@ class ModeloSinais(QAbstractTableModel):
             return base | Qt.ItemIsEditable
         return base
 
-    def _adms(self, rec):
+    def _sp(self, rec):
         lp = self._estado.lista_padrao
         if lp is None or not rec.sigla_sinal:
-            return ""
-        sp = lp.por_sigla(rec.sigla_sinal)
+            return None
+        return lp.por_sigla(rec.sigla_sinal)
+
+    def _adms(self, rec):
+        sp = self._sp(rec)
         return sp.descricao if sp else ""
+
+    def _nome_dm(self, rec):
+        # ponytail: disjuntor_por_modulo é O(n) por célula — mesmo teto do
+        # motivo_por_id() acima; cachear no AppState se a tabela ficar lenta.
+        disj = disjuntor_por_modulo(self._estado.registros)
+        return dm_registro(
+            rec, self._estado.subestacao, self._sp(rec),
+            disj.get(rec.modulo.nome if rec.modulo else None),
+        )
 
     def _texto(self, rec, col):
         sigla = rec.sigla_sinal
         topo = rec.candidatos[0].score if rec.candidatos else None
         nome = COLUNAS[col]
-        if nome == "Sinal":
+        if nome == "Sigla":
             return sigla or "—"
         if nome == "Confiança":
             if topo is not None:
@@ -217,14 +231,17 @@ class ModeloSinais(QAbstractTableModel):
         # ponytail: motivo_por_id() reconstroi o dict a cada chamada de _texto
         # -- ok pro tamanho de lista atual (centenas de linhas); cachear no
         # AppState se a tabela ficar lenta com listas grandes.
-        if nome == "Descr. ADMS":
+        if nome == "Signal Name":
+            return self._nome_dm(rec)[0]
+        if nome == "Device Mapping":
+            return self._nome_dm(rec)[1]
+        if nome == "Signal Type":
+            sp = self._sp(rec)
+            return sp.signal_type if sp else "Custom"
+        if nome == "Descr. lista padrão":
             return self._adms(rec) or "—"
         if nome == "Descr. bruta":
             return rec.descricoes.bruta
-        if nome == "Descr. normalizada":
-            return rec.descricoes.normalizada
-        if nome == "Tokens":
-            return "·".join(rec.descricoes.normalizada.split())
         if nome == "Tipo":
             t = rec.tipo_sinal
             return f"{t.categoria}/{t.direcao}"
@@ -300,7 +317,7 @@ class ModeloSinais(QAbstractTableModel):
             if rec.tipo_sinal.direcao == "Output":
                 return ";".join(str(i) for i in rec.enderecamento.indices)
             return ";".join(str(i) for i in rec.enderecamento.indices_saida)
-        if nome == "Sinal":
+        if nome == "Sigla":
             return rec.sigla_sinal or ""
         return self._texto(rec, col)
 
@@ -330,7 +347,7 @@ class ModeloSinais(QAbstractTableModel):
                 if rec.status == "decidido":
                     return cor_faixa(1.0)
                 return cor_faixa(None)
-        if role == Qt.ToolTipRole and nome in ("Sinal", "Descr. ADMS"):
+        if role == Qt.ToolTipRole and nome in ("Sigla", "Descr. lista padrão"):
             return self._adms(rec) or None
         if role == Qt.ToolTipRole and nome == "Motivo":
             motivo = self._estado.motivo_por_id().get(rec.id) or rec.justificativa

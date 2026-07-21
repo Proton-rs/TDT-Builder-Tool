@@ -8,7 +8,7 @@ from tdt.contracts import (
 )
 from tdt.dados.lista_padrao import ListaPadraoADMS, SinalPadrao
 from tdt.ui.estado import AppState
-from tdt.ui.modelo_tabela import ModeloSinais, _EDITAVEIS, _MOTIVO_LABEL
+from tdt.ui.modelo_tabela import COLUNAS, ModeloSinais, _EDITAVEIS, _MOTIVO_LABEL
 from tdt.ui.modelo_tabela import _ranges_contiguos, LIMIAR_RESET_REMOCAO
 
 
@@ -38,11 +38,33 @@ def _col(nome):
     return ModeloSinais.COLUNAS.index(nome)
 
 
+def _rec_equip(rid, sigla, equipamento, modulo="AL11", indices=(10,), direcao="Input",
+               categoria="Discrete"):
+    return SignalRecord(
+        id=rid,
+        modulo=Modulo(modulo, "sheet_name"),
+        tipo_sinal=TipoSinal(categoria, "SingleBit", direcao),
+        enderecamento=Enderecamento("DNP3", tuple(indices)),
+        descricoes=Descricoes(f"{sigla} BRUTO", sigla),
+        sigla_sinal=sigla,
+        status="decidido",
+        eletrico=Eletrico(fase=None, equipamento_alvo=None,
+                          nome_equipamento=equipamento, barra=None),
+    )
+
+
+def _modelo_com(rec, subestacao=None):
+    estado = AppState()
+    estado.registros = [rec]
+    estado.subestacao = subestacao
+    return ModeloSinais(estado)
+
+
 def test_dimensoes_e_header(qtbot):
     m = ModeloSinais(_state(_rec()))
     assert m.rowCount() == 1
     assert m.columnCount() == len(ModeloSinais.COLUNAS)
-    assert m.headerData(0, Qt.Horizontal, Qt.DisplayRole) == "Sinal ✎"
+    assert m.headerData(0, Qt.Horizontal, Qt.DisplayRole) == "Sigla ✎"
 
 
 def test_sheets_distintas_deriva_do_id_e_ordena(qtbot):
@@ -65,9 +87,7 @@ def test_sheets_distintas_ignora_id_sem_sheet(qtbot):
 
 def test_colunas_novas_e_sem_duplicata():
     cols = ModeloSinais.COLUNAS
-    assert "Descr. ADMS" in cols
-    assert "Descr. normalizada" in cols
-    assert "Tokens" in cols
+    assert "Descr. lista padrão" in cols
     assert "Motivo" in cols
     assert "TKN bruto" not in cols
 
@@ -90,14 +110,8 @@ def test_coluna_motivo_traco_para_decidido_sem_entrada_em_revisao():
 
 def test_descr_adms_vem_da_lista_padrao():
     m = ModeloSinais(_state(_rec()))
-    v = m.data(m.index(0, _col("Descr. ADMS")), Qt.DisplayRole)
+    v = m.data(m.index(0, _col("Descr. lista padrão")), Qt.DisplayRole)
     assert v == "Disjuntor falha função 1"
-
-
-def test_tokens_exibe_normalizada_tokenizada():
-    m = ModeloSinais(_state(_rec()))
-    v = m.data(m.index(0, _col("Tokens")), Qt.DisplayRole)
-    assert v == "FALHA·DJ"
 
 
 def test_score_embedding():
@@ -114,7 +128,7 @@ def test_status_tem_cor_foreground():
 
 def test_tooltip_sinal_usa_descricao_adms():
     m = ModeloSinais(_state(_rec()))
-    tip = m.data(m.index(0, _col("Sinal")), Qt.ToolTipRole)
+    tip = m.data(m.index(0, _col("Sigla")), Qt.ToolTipRole)
     assert "Disjuntor falha" in tip
 
 
@@ -123,7 +137,7 @@ def test_definir_sigla_atualiza():
     m = ModeloSinais(st)
     m.definir_sigla(0, "DJF2")
     assert st.registros[0].sigla_sinal == "DJF2"
-    assert m.data(m.index(0, _col("Sinal")), Qt.DisplayRole) == "DJF2"
+    assert m.data(m.index(0, _col("Sigla")), Qt.DisplayRole) == "DJF2"
 
 
 def test_colunas_equipamento_eletrico_existem_sem_duplicar_fase():
@@ -284,7 +298,7 @@ def test_valor_edicao_endereco_input_de_registro_input_inalterado(qtbot):
 
 def test_flags_colunas_dominio_sao_editaveis():
     m = ModeloSinais(_state(_rec()))
-    for nome in ("Sinal", "Tipo", "Fase", "Nível Tensão", "Barra",
+    for nome in ("Sigla", "Tipo", "Fase", "Nível Tensão", "Barra",
                  "Tipo Equip.", "Módulo", "Escala", "Endereço Input", "Endereço Output",
                  "Equipamento", "Descr. bruta"):
         flags = m.flags(m.index(0, _col(nome)))
@@ -293,9 +307,9 @@ def test_flags_colunas_dominio_sao_editaveis():
 
 def test_flags_colunas_derivadas_nao_sao_editaveis():
     m = ModeloSinais(_state(_rec()))
-    for nome in ("Status", "Motivo", "Descr. ADMS", "Score tf-idf",
-                 "Justificativa", "Descr. normalizada", "Tokens", "Confiança",
-                 "Pareado", "Sheet origem"):
+    for nome in ("Status", "Motivo", "Descr. lista padrão", "Score tf-idf",
+                 "Justificativa", "Signal Name", "Device Mapping", "Signal Type",
+                 "Confiança", "Pareado", "Sheet origem"):
         flags = m.flags(m.index(0, _col(nome)))
         assert not (flags & Qt.ItemIsEditable), nome
 
@@ -432,7 +446,7 @@ def test_font_role_monospace_so_em_colunas_de_dados(qtbot):
     from PySide6.QtGui import QFont
     st = _state(_rec())
     m = ModeloSinais(st)
-    col_sinal = ModeloSinais.COLUNAS.index("Sinal")
+    col_sinal = ModeloSinais.COLUNAS.index("Sigla")
     fonte = m.data(m.index(0, col_sinal), Qt.FontRole)
     assert fonte is not None and "Consolas" in fonte.family()
     col_status = ModeloSinais.COLUNAS.index("Status")
@@ -537,7 +551,7 @@ def test_roundtrip_edicao_nao_altera_valor():
     exibido (reprodução headless do bug "double-click quebra formatação")."""
     st = _state(_rec())
     m = ModeloSinais(st)
-    for nome in sorted(_EDITAVEIS - {"Sinal"}):
+    for nome in sorted(_EDITAVEIS - {"Sigla"}):
         idx = m.index(0, _col(nome))
         antes_display = m.data(idx, Qt.DisplayRole)
         antes_edit = m.data(idx, Qt.EditRole)
@@ -676,3 +690,24 @@ def test_lote_emite_um_datachanged_agregado(qtbot):
     m.aplicar_valor_em_lote(ids, "Fase", "A")
     assert all(r.eletrico.fase == "A" for r in st.registros)
     assert len(emitidos) == 1  # agregado, não 1 por linha
+
+
+def test_colunas_renomeadas_e_derivadas():
+    assert "Sigla" in COLUNAS and "Sinal" not in COLUNAS
+    assert "Descr. lista padrão" in COLUNAS and "Descr. ADMS" not in COLUNAS
+    assert "Tokens" not in COLUNAS and "Descr. normalizada" not in COLUNAS
+    for nova in ("Signal Name", "Device Mapping", "Signal Type"):
+        assert nova in COLUNAS
+
+
+def test_coluna_device_mapping_deriva_do_engine():
+    # registro com equipamento disjuntor: DM termina _DJ (Task 1)
+    modelo = _modelo_com(_rec_equip("AL11:1", "DJF1", "52-1"), subestacao="IMA")
+    col = COLUNAS.index("Device Mapping")
+    assert modelo._texto(modelo._estado.registros[0], col) == "IMA_AL11_52-1_DJ"
+
+
+def test_coluna_signal_type_custom_sem_catalogo():
+    modelo = _modelo_com(_rec_equip("AL11:1", "ZZZZ", "52-1"), subestacao="IMA")
+    col = COLUNAS.index("Signal Type")
+    assert modelo._texto(modelo._estado.registros[0], col) == "Custom"

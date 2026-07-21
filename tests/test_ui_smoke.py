@@ -226,7 +226,7 @@ def test_delegate_cria_editor_com_candidatos(qtbot):
     tela = TelaRevisao(st)
     qtbot.addWidget(tela)
     tela.carregar()
-    col = ModeloSinais.COLUNAS.index("Sinal")
+    col = ModeloSinais.COLUNAS.index("Sigla")
     delegate = tela.tabela.itemDelegateForColumn(col)
     assert isinstance(delegate, DelegateSinal)
     editor = delegate.createEditor(tela, None, tela._proxy.index(0, col))

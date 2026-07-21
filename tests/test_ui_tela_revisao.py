@@ -552,8 +552,8 @@ def _isolar_qsettings(monkeypatch, tmp_path):
 def test_preset_esconde_colunas_extras(qtbot, monkeypatch, tmp_path):
     _isolar_qsettings(monkeypatch, tmp_path)
     tela = _tela_carregada(qtbot, [_rec("1", "SE1", "A")])
-    assert tela.tabela.isColumnHidden(ModeloSinais.COLUNAS.index("Tokens"))
-    assert not tela.tabela.isColumnHidden(ModeloSinais.COLUNAS.index("Sinal"))
+    assert tela.tabela.isColumnHidden(ModeloSinais.COLUNAS.index("Score tf-idf"))
+    assert not tela.tabela.isColumnHidden(ModeloSinais.COLUNAS.index("Sigla"))
     assert not tela.tabela.isColumnHidden(ModeloSinais.COLUNAS.index("Motivo"))
 
 
@@ -561,7 +561,7 @@ def test_header_marca_colunas_editaveis(qtbot):
     st = AppState()
     st.registros = [_rec("1", "SE1", "A")]
     modelo = ModeloSinais(st)
-    col_sinal = ModeloSinais.COLUNAS.index("Sinal")
+    col_sinal = ModeloSinais.COLUNAS.index("Sigla")
     assert "✎" in modelo.headerData(col_sinal, Qt.Horizontal, Qt.DisplayRole)
     col_status = ModeloSinais.COLUNAS.index("Status")
     assert "✎" not in modelo.headerData(col_status, Qt.Horizontal, Qt.DisplayRole)

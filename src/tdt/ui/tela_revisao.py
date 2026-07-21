@@ -32,8 +32,9 @@ from tdt.ui.proxy_revisao import ProxyRevisao
 _METODOS = (("emb", "vetorial"), ("tfidf", "tfidf"), ("fuzzy", "fuzzy"))
 
 _COLUNAS_PADRAO = frozenset({
-    "Sinal", "Confiança", "Status", "Motivo", "Descr. bruta",
-    "Descr. ADMS", "Módulo", "Endereço Input", "Pareado", "Sheet origem",
+    "Sigla", "Confiança", "Status", "Motivo", "Descr. bruta",
+    "Descr. lista padrão", "Signal Name", "Device Mapping", "Signal Type",
+    "Módulo", "Endereço Input", "Pareado", "Sheet origem",
 })
 
 _OPCOES_COMBO = {
@@ -347,7 +348,7 @@ class TelaRevisao(QWidget):
         self.tabela.customContextMenuRequested.connect(self._menu_contexto_tabela)
         self.tabela.setEditTriggers(QTableView.DoubleClicked)
         self.tabela.horizontalHeader().setSectionsMovable(True)  # arrastar colunas
-        col_sinal = ModeloSinais.COLUNAS.index("Sinal")
+        col_sinal = ModeloSinais.COLUNAS.index("Sigla")
         self.tabela.setItemDelegateForColumn(
             col_sinal, DelegateSinal(self._estado, self._modelo, self._proxy, self.tabela))
         for nome, opcoes in _OPCOES_COMBO.items():
