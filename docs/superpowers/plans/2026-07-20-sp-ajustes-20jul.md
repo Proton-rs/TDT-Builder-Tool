@@ -1064,6 +1064,61 @@ git commit -m "fix(engine): signal name usa disjuntor no PROT alimentador"
 
 ---
 
+### Task 12: fix gap real de Task 11 — equipamento-placeholder + Signal Name analógico (reportado pelo usuário durante o merge)
+
+**Origem:** durante o fluxo de finalização de branch, o usuário reportou (com exemplo real LVA_AL21) que a Task 11 continuava não funcionando: Device Mapping correto (`LVA_AL21_52-21_51N`), Signal Name ainda módulo-duplicado (`LVA_AL21_AL21_51N`). Reportou também um segundo gap: sinais ANALÓGICOS de alimentador têm o mesmo problema (Device Mapping cai no disjuntor, Signal Name fica módulo-duplicado) — a Task 11 só tocou o caminho discreto (`dm_registro`/`_valores`), nunca `_valores_analog`.
+
+**Causa raiz 1 (confirmada empiricamente, `PYTHONPATH=src python3` REPL):** a guarda `if not equipamento` da Task 11 só cobre `nome_equipamento is None`. Na prática, sinais PROT de alimentador costumam vir do classificador com `eletrico.nome_equipamento` já preenchido com o PRÓPRIO NOME DO MÓDULO (ex. `"AL21"`) como placeholder — não `None`. `"AL21"` é truthy, então `not equipamento` é `False` e o fallback do disjuntor nunca dispara, mesmo com `dm_prot`/`_eh_alimentador`/`disjuntor` todos verdadeiros. `_device_mapping`'s ramo PROT não tem esse problema porque ignora `equipamento` completamente (só usa `disjuntor` direto) — por isso o DM sempre saía certo e mascarava o bug do Signal Name.
+
+**Causa raiz 2 (leitura de código, `_valores_analog`, engine_tdt.py:361-390):** essa função nunca foi tocada por nenhuma task — computa `nome` via `nome_hierarquico(sub, modulo, rec.eletrico.nome_equipamento, barra, sigla)` puro, sem NENHUM fallback de disjuntor, enquanto `_device_mapping_analog` (Task 3) já usa `disjuntor` no ramo `else` (grandezas fora de TC/TP) desde a Task 3. Mesmo bug do Signal Name módulo-duplicado, nunca corrigido porque a Task 11 só mexeu no `dm_registro`/caminho discreto.
+
+**Confirmação do usuário sobre o escopo correto:** módulos NÃO-alimentador (ex. transformador) devem continuar com Signal Name módulo-duplicado sempre (`LVA_TR1_TR1_TP_VAB`) — só o Device Mapping difere (TC/TP/sufixo). Isso já é o comportamento correto hoje (nenhuma mudança necessária lá) — confirma que o fix deve ficar restrito à mesma condição da Task 2/11 (PROT-ou-medida-fora-de-TC/TP + alimentador + disjuntor conhecido), generalizando a checagem de "sem equipamento mais específico que o módulo".
+
+**Files:**
+- Modify: `src/tdt/engine_tdt.py` (`dm_registro`, `_valores_analog`; novo helper `_sem_equipamento_especifico`)
+- Test: `tests/test_engine_tdt.py`
+
+**Fix:**
+
+1. Novo helper, próximo a `_dm_prot`:
+```python
+def _sem_equipamento_especifico(equipamento: str | None, modulo_nome: str | None) -> bool:
+    """True quando o registro não tem equipamento mais específico que o
+    próprio módulo — cobre tanto `None`/vazio quanto o padrão real onde o
+    classificador preenche `nome_equipamento` com o nome do módulo como
+    placeholder (spec 2026-07-20, fix Task 12: gap real da Task 11 —
+    `eletrico.nome_equipamento == modulo_nome` formatado, não só `None`)."""
+    if not equipamento:
+        return True
+    modulo_fmt = modulo_nome.replace(" ", "") if modulo_nome else None
+    return equipamento == modulo_fmt
+```
+
+2. Em `dm_registro`, trocar `if not equipamento and dm_prot and ...` por `if _sem_equipamento_especifico(equipamento, rec.modulo.nome) and dm_prot and ...`.
+
+3. Em `_valores_analog`, aplicar o mesmo fallback ANTES de montar `nome`, usando a mesma condição de "usa disjuntor" que `_device_mapping_analog` já usa internamente (grandeza fora de `_MEDIDAS_TC`/`_MEDIDAS_TP`) — extrair um helper `_medida_usa_disjuntor(tipo_medicao_pt) -> bool` reusado pelas duas funções, para não duplicar a lógica de branching:
+```python
+def _medida_usa_disjuntor(tipo_medicao_pt: str | None) -> bool:
+    t = (tipo_medicao_pt or "").strip().upper()
+    return t not in _MEDIDAS_TC and t not in _MEDIDAS_TP
+```
+E usar em `_device_mapping_analog`'s `else` branch (trocar a condição implícita pelo helper, mesmo resultado) e em `_valores_analog`:
+```python
+    equipamento = rec.eletrico.nome_equipamento
+    if (_sem_equipamento_especifico(equipamento, rec.modulo.nome)
+            and _medida_usa_disjuntor(sp.tipo_medicao if sp else None)
+            and _eh_alimentador(rec.modulo.nome) and disjuntor):
+        equipamento = disjuntor
+    nome = nome_hierarquico(
+        subestacao, rec.modulo.nome, equipamento,
+        rec.eletrico.barra, rec.sigla_sinal or "?",
+    )
+```
+
+**Testes (TDD):** cobrir os 2 casos reais que motivaram o fix (equipamento==módulo em vez de None, discreto E analógico), mais um teste de não-regressão confirmando que módulo não-alimentador (ex. transformador) OU medida TC/TP continuam módulo-duplicado mesmo com disjuntor conhecido. Rodar suíte completa + `python -m bench.regressao` (A/B contra o estado pré-fix) antes de fechar — este é o SEGUNDO bug real do mesmo tipo (Signal Name/disjuntor) que só apareceu com dado real do usuário, tratar com o mesmo rigor da Task 6.
+
+---
+
 ### Task 10: Verificação de closeout (gate da spec)
 
 **Files:**
