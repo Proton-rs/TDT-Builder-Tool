@@ -106,6 +106,22 @@ _SUFIXO_FAMILIA: dict[str, str] = {
 }
 
 
+def _sem_equipamento_especifico(equipamento: str | None, modulo_nome: str | None) -> bool:
+    """True quando o registro não tem equipamento mais específico que o
+    próprio módulo — cobre tanto `None`/vazio quanto o padrão real onde o
+    classificador preenche `nome_equipamento` com o nome do módulo como
+    placeholder (spec 2026-07-20, fix Task 12: gap real da Task 11 —
+    `eletrico.nome_equipamento == modulo_nome` formatado, não só `None`).
+    Normaliza espaço dos dois lados (não só do módulo) — o texto bruto do
+    equipamento pode chegar com o mesmo espaçamento cru do módulo; só
+    normalizar um lado reabriria o mesmo gap por diferença de forma."""
+    if not equipamento:
+        return True
+    modulo_fmt = modulo_nome.replace(" ", "") if modulo_nome else None
+    equipamento_fmt = equipamento.replace(" ", "")
+    return equipamento_fmt == modulo_fmt
+
+
 def _dm_prot(sigla: str | None, sp) -> bool:
     """Flag do ramo PROT do device mapping (spec 2026-07-20 §B1): RelayTrip
     da lista padrão manda; o complemento cobre siglas não-RelayTrip que a
@@ -213,7 +229,8 @@ def dm_registro(rec, subestacao, sp, disjuntor: str | None = None) -> tuple[str,
     sigla = rec.sigla_sinal or "?"
     dm_prot = _dm_prot(rec.sigla_sinal, sp)
     equipamento = rec.eletrico.nome_equipamento
-    if not equipamento and dm_prot and _eh_alimentador(rec.modulo.nome) and disjuntor:
+    if (_sem_equipamento_especifico(equipamento, rec.modulo.nome)
+            and dm_prot and _eh_alimentador(rec.modulo.nome) and disjuntor):
         equipamento = disjuntor
     nome = nome_hierarquico(
         subestacao, rec.modulo.nome, equipamento,
@@ -336,6 +353,16 @@ def disjuntor_por_modulo(registros) -> "dict[str | None, str | None]":
     return {m: next(iter(ids)) if len(ids) == 1 else None for m, ids in por_mod.items()}
 
 
+def _medida_usa_disjuntor(tipo_medicao_pt: str | None) -> bool:
+    """True quando a grandeza analógica NÃO é corrente/potência (_MEDIDAS_TC)
+    nem tensão (_MEDIDAS_TP) — ramo que cai no disjuntor do módulo, tanto em
+    `_device_mapping_analog` quanto em `_valores_analog` (spec 2026-07-20
+    §A3/§C12; single source of truth desde Task 12, evita os dois lugares
+    divergirem)."""
+    t = (tipo_medicao_pt or "").strip().upper()
+    return t not in _MEDIDAS_TC and t not in _MEDIDAS_TP
+
+
 def _device_mapping_analog(
     subestacao: str | None,
     modulo_nome: str | None,
@@ -348,12 +375,12 @@ def _device_mapping_analog(
     modulo_fmt = modulo_nome.replace(" ", "") if modulo_nome else None
     partes = [p for p in (subestacao, modulo_fmt) if p]
     t = (tipo_medicao_pt or "").strip().upper()
-    if t in _MEDIDAS_TC:
-        alvo = f"{modulo_fmt}_TC" if modulo_fmt else "TC"
-    elif t in _MEDIDAS_TP:
-        alvo = f"{modulo_fmt}_TP" if modulo_fmt else "TP"
-    else:
+    if _medida_usa_disjuntor(t):
         alvo = f"{disjuntor}_DJ" if disjuntor else modulo_fmt
+    elif t in _MEDIDAS_TC:
+        alvo = f"{modulo_fmt}_TC" if modulo_fmt else "TC"
+    else:
+        alvo = f"{modulo_fmt}_TP" if modulo_fmt else "TP"
     if alvo:
         partes.append(alvo)
     return "_".join(partes)
@@ -363,8 +390,13 @@ def _valores_analog(rec: SignalRecord, subestacao: str | None, padrao: ListaPadr
                      alias_v1: "dict[str, str] | None" = None,
                      disjuntor: "str | None" = None) -> dict:
     sp = padrao.por_sigla(rec.sigla_sinal) if rec.sigla_sinal else None
+    equipamento = rec.eletrico.nome_equipamento
+    if (_sem_equipamento_especifico(equipamento, rec.modulo.nome)
+            and _medida_usa_disjuntor(sp.tipo_medicao if sp else None)
+            and _eh_alimentador(rec.modulo.nome) and disjuntor):
+        equipamento = disjuntor
     nome = nome_hierarquico(
-        subestacao, rec.modulo.nome, rec.eletrico.nome_equipamento,
+        subestacao, rec.modulo.nome, equipamento,
         rec.eletrico.barra, rec.sigla_sinal or "?",
     )
     indices = rec.enderecamento.indices

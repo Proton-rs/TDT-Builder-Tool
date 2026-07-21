@@ -577,6 +577,141 @@ def test_signal_name_nao_prot_ignora_disjuntor():
     assert nome == "CNC_AL11_52-1_DJF1"  # ja usava equipamento antes, sem mudanca
 
 
+# ── Tarefa 12: fix gap real da Task 11 — equipamento-placeholder + analog ───
+# usuario reportou ao vivo (LVA_AL21, sigla 51N): Device Mapping certo, Signal
+# Name ainda modulo-duplicado -- a guarda `not equipamento` da Task 11 so
+# cobre None; classificador enche eletrico.nome_equipamento com o proprio
+# nome do modulo como placeholder na pratica. Segundo gap: _valores_analog
+# nunca teve nenhuma versao do fix (so o caminho discreto foi tocado).
+
+def test_signal_name_prot_alimentador_equipamento_igual_modulo_usa_disjuntor():
+    # reproducao exata do bug real (LVA_AL21 / 51N)
+    sp = SinalPadrao(sigla="51N", descricao="X", signal_type="Enabled",
+                      direction=None, mm=None, categoria="Discrete")
+    rec = _rec_equip("AL21:1", "51N", "AL21", modulo="AL21")  # equipamento == modulo
+    nome, dm = engine_tdt.dm_registro(rec, "LVA", sp, disjuntor="52-21")
+    assert nome == "LVA_AL21_52-21_51N"
+    assert dm == "LVA_AL21_52-21_PROT_51N"
+
+
+def test_signal_name_analog_alimentador_usa_disjuntor():
+    # segundo gap real: _valores_analog nunca teve o fallback (Task 11 so
+    # tocou o caminho discreto)
+    lp = _lp_fake({"FREQ": "MeasuredValue"}, categorias={"FREQ": "Analog"},
+                   tipos_medicao={"FREQ": "Frequência"})
+    rec = _rec_equip("AL21:1", "FREQ", "AL21", modulo="AL21", categoria="Analog")
+    valores = engine_tdt._valores_analog(rec, "LVA", lp, disjuntor="52-21")
+    assert valores["Signal Name"] == "LVA_AL21_52-21_FREQ"
+    assert valores["Device Mapping"] == "LVA_AL21_52-21_DJ"
+
+
+def test_signal_name_nao_alimentador_mantem_modulo_duplicado():
+    # nao-regressao: modulo nao-alimentador (ex. TR1) continua modulo-duplicado
+    # mesmo com equipamento-placeholder e disjuntor conhecido
+    sp = SinalPadrao(sigla="51N", descricao="X", signal_type="Enabled",
+                      direction=None, mm=None, categoria="Discrete")
+    rec = _rec_equip("TR1:1", "51N", "TR1", modulo="TR1")
+    nome, dm = engine_tdt.dm_registro(rec, "LVA", sp, disjuntor="52-7")
+    assert nome == "LVA_TR1_TR1_51N"  # inalterado -- _eh_alimentador(TR1) e False
+
+
+def test_signal_name_analog_tc_tp_mantem_modulo_mesmo_alimentador():
+    # nao-regressao: medida de corrente/tensao (_MEDIDAS_TC/_MEDIDAS_TP) NUNCA
+    # usa disjuntor, mesmo em alimentador com equipamento-placeholder
+    lp = _lp_fake({"VAB": "MeasuredValue"}, categorias={"VAB": "Analog"},
+                   tipos_medicao={"VAB": "Tensão"})
+    rec = _rec_equip("AL21:1", "VAB", "AL21", modulo="AL21", categoria="Analog")
+    valores = engine_tdt._valores_analog(rec, "LVA", lp, disjuntor="52-21")
+    assert valores["Signal Name"] == "LVA_AL21_AL21_VAB"  # modulo-duplicado, TP e excecao
+
+
+def test_dm_registro_equipamento_especifico_diferente_do_modulo_intocado():
+    # nao-regressao: equipamento JA especifico (ex. "52-1", diferente do
+    # modulo) nao deve ser sobrescrito pelo disjuntor
+    sp = SinalPadrao(sigla="DJF1", descricao="X", signal_type="Enabled",
+                      direction=None, mm=None, categoria="Discrete")
+    rec = _rec_equip("AL11:1", "DJF1", "52-1", modulo="AL11")
+    nome, dm = engine_tdt.dm_registro(rec, "CNC", sp, disjuntor="52-1")
+    assert nome == "CNC_AL11_52-1_DJF1"  # inalterado (ja testado na Task 11, reconfirma)
+
+
+# -- edge cases extras (escrutinio adicional: 2o bug real da mesma forma) --
+
+def test_signal_name_analog_nao_alimentador_mantem_modulo_duplicado():
+    # equivalente analogico do teste nao-alimentador acima
+    lp = _lp_fake({"FREQ": "MeasuredValue"}, categorias={"FREQ": "Analog"},
+                   tipos_medicao={"FREQ": "Frequência"})
+    rec = _rec_equip("TR1:1", "FREQ", "TR1", modulo="TR1", categoria="Analog")
+    valores = engine_tdt._valores_analog(rec, "LVA", lp, disjuntor="52-7")
+    assert valores["Signal Name"] == "LVA_TR1_TR1_FREQ"
+
+
+def test_signal_name_analog_alimentador_sem_disjuntor_mantem_fallback_modulo():
+    # sem disjuntor conhecido (0 ou 2+ no modulo): fallback modulo-duplicado,
+    # sem crash
+    lp = _lp_fake({"FREQ": "MeasuredValue"}, categorias={"FREQ": "Analog"},
+                   tipos_medicao={"FREQ": "Frequência"})
+    rec = _rec_equip("AL21:1", "FREQ", "AL21", modulo="AL21", categoria="Analog")
+    valores = engine_tdt._valores_analog(rec, "LVA", lp, disjuntor=None)
+    assert valores["Signal Name"] == "LVA_AL21_AL21_FREQ"
+
+
+def test_signal_name_analog_equipamento_especifico_intocado():
+    # equipamento ja especifico (diferente do modulo) nao e sobrescrito
+    lp = _lp_fake({"FREQ": "MeasuredValue"}, categorias={"FREQ": "Analog"},
+                   tipos_medicao={"FREQ": "Frequência"})
+    rec = _rec_equip("AL21:1", "FREQ", "89-1", modulo="AL21", categoria="Analog")
+    valores = engine_tdt._valores_analog(rec, "LVA", lp, disjuntor="52-21")
+    assert valores["Signal Name"] == "LVA_AL21_89-1_FREQ"
+
+
+def test_sem_equipamento_especifico_none_e_vazio():
+    assert engine_tdt._sem_equipamento_especifico(None, "AL21") is True
+    assert engine_tdt._sem_equipamento_especifico("", "AL21") is True
+
+
+def test_sem_equipamento_especifico_placeholder_igual_modulo():
+    assert engine_tdt._sem_equipamento_especifico("AL21", "AL21") is True
+    assert engine_tdt._sem_equipamento_especifico("AL21", "AL 21") is True  # modulo com espaco
+
+
+def test_sem_equipamento_especifico_equipamento_com_espaco_tambem_normaliza():
+    # hardening extra (Task 12, alem do exemplo do brief): o texto bruto do
+    # equipamento tambem pode vir com o mesmo espaco cru do modulo -- se so
+    # normalizarmos modulo_nome, reabrimos o mesmo gap de forma (mesma classe
+    # de bug, catch preventivo, sem evidencia de ocorrencia real ainda)
+    assert engine_tdt._sem_equipamento_especifico("AL 21", "AL21") is True
+    assert engine_tdt._sem_equipamento_especifico("AL 21", "AL 21") is True
+
+
+def test_sem_equipamento_especifico_case_sensitive_nao_normaliza():
+    # limitacao conhecida e deliberada (nenhuma evidencia de dado real com
+    # essa diferenca ate agora) -- diferenca de maiusculas/minusculas NAO e
+    # tratada como placeholder; documenta o contrato atual explicitamente
+    assert engine_tdt._sem_equipamento_especifico("al21", "AL21") is False
+
+
+def test_sem_equipamento_especifico_equipamento_realmente_especifico():
+    assert engine_tdt._sem_equipamento_especifico("52-21", "AL21") is False
+
+
+def test_sem_equipamento_especifico_modulo_none():
+    assert engine_tdt._sem_equipamento_especifico(None, None) is True
+    assert engine_tdt._sem_equipamento_especifico("X", None) is False
+
+
+def test_medida_usa_disjuntor_tc_tp_false():
+    assert engine_tdt._medida_usa_disjuntor("Corrente") is False
+    assert engine_tdt._medida_usa_disjuntor("CORRENTE") is False
+    assert engine_tdt._medida_usa_disjuntor("Tensão") is False
+
+
+def test_medida_usa_disjuntor_resto_true():
+    assert engine_tdt._medida_usa_disjuntor("Frequência") is True
+    assert engine_tdt._medida_usa_disjuntor(None) is True
+    assert engine_tdt._medida_usa_disjuntor("") is True
+
+
 def test_custom_id_duplicado_sem_lista_padrao_comportamento_antigo():
     # compat retroativa: lista_padrao=None -> comportamento antigo, sem disjuntor
     lista = ListaHomogenea(subestacao="CNC", protocolo="DNP3", registros=(
@@ -996,8 +1131,10 @@ def test_43tc_sozinho_nao_avisa():
 
 # ── Tarefa 6: gate tipo duplicado por dispositivo (spec §B3) ────────────────
 
-def _lp_fake(siglas_tipos: dict[str, str], categorias: dict[str, str] | None = None):
+def _lp_fake(siglas_tipos: dict[str, str], categorias: dict[str, str] | None = None,
+             tipos_medicao: dict[str, str] | None = None):
     categorias = categorias or {}
+    tipos_medicao = tipos_medicao or {}
     class _LP:
         def por_sigla(self, sigla):
             st = siglas_tipos.get(sigla)
@@ -1005,7 +1142,8 @@ def _lp_fake(siglas_tipos: dict[str, str], categorias: dict[str, str] | None = N
                 return None
             return SinalPadrao(sigla=sigla, descricao="X", signal_type=st,
                                direction=None, mm=None,
-                               categoria=categorias.get(sigla, "Discrete"))
+                               categoria=categorias.get(sigla, "Discrete"),
+                               tipo_medicao=tipos_medicao.get(sigla))
     return _LP()
 
 
