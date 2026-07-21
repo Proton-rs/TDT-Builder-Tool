@@ -547,6 +547,54 @@ def test_dm_prot_relaytrip_preservado():
     assert engine_tdt._dm_prot("TRIP", sp) is True
 
 
+# ── Tarefa 11: Signal Name usa disjuntor no PROT de alimentador (fix pós-Task 2) ──
+
+def test_signal_name_prot_alimentador_usa_disjuntor():
+    # decisao 20/07 tarde: fullbase confirma Signal Name real usa disjuntor
+    # (CNC_AL11_52-22_51F), nao modulo-duplicado
+    sp = SinalPadrao(sigla="51F", descricao="X", signal_type="RelayTrip",
+                      direction=None, mm=None, categoria="Discrete")
+    rec = _rec_equip("AL11:1", "51F", None, modulo="AL11")  # sem equipamento explicito
+    nome, dm = engine_tdt.dm_registro(rec, "CNC", sp, disjuntor="52-22")
+    assert nome == "CNC_AL11_52-22_51F"
+    assert dm == "CNC_AL11_52-22_PROT_51F"
+
+
+def test_signal_name_prot_alimentador_sem_disjuntor_mantem_fallback_modulo():
+    sp = SinalPadrao(sigla="51F", descricao="X", signal_type="RelayTrip",
+                      direction=None, mm=None, categoria="Discrete")
+    rec = _rec_equip("AL11:1", "51F", None, modulo="AL11")
+    nome, dm = engine_tdt.dm_registro(rec, "CNC", sp, disjuntor=None)
+    assert nome == "CNC_AL11_AL11_51F"
+
+
+def test_signal_name_nao_prot_ignora_disjuntor():
+    # sinal nao-PROT com equipamento explicito: fallback nao deve mexer
+    sp = SinalPadrao(sigla="DJF1", descricao="X", signal_type="Enabled",
+                      direction=None, mm=None, categoria="Discrete")
+    rec = _rec_equip("AL11:1", "DJF1", "52-1", modulo="AL11")
+    nome, dm = engine_tdt.dm_registro(rec, "CNC", sp, disjuntor="52-1")
+    assert nome == "CNC_AL11_52-1_DJF1"  # ja usava equipamento antes, sem mudanca
+
+
+def test_custom_id_duplicado_sem_lista_padrao_comportamento_antigo():
+    # compat retroativa: lista_padrao=None -> comportamento antigo, sem disjuntor
+    lista = ListaHomogenea(subestacao="CNC", protocolo="DNP3", registros=(
+        _rec_equip("AL11:1", "51F", None, modulo="AL11"),
+    ))
+    restante, revisao = engine_tdt.particionar_custom_id_duplicado(lista)
+    assert len(restante.registros) == 1 and revisao == ()
+
+
+def test_custom_id_duplicado_com_lista_padrao_usa_disjuntor():
+    lp = _lp_fake({"51F": "RelayTrip"})
+    lista = ListaHomogenea(subestacao="CNC", protocolo="DNP3", registros=(
+        _rec_equip("AL11:1", "51F", None, modulo="AL11"),
+    ))
+    restante, revisao = engine_tdt.particionar_custom_id_duplicado(lista, lp)
+    assert len(restante.registros) == 1 and revisao == ()
+
+
 def test_normal_value():
     sp = SinalPadrao("20T", "", "RelayTrip", None, None, "Discrete",
                      estados_brutos="Transit;NORMAL;ATUADO;Error",

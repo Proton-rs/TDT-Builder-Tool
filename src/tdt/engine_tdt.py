@@ -203,14 +203,24 @@ def _fase_saida(fase: str | None) -> str:
 
 def dm_registro(rec, subestacao, sp, disjuntor: str | None = None) -> tuple[str, str]:
     """(Signal Name, Device Mapping) do registro — derivação ÚNICA, usada por
-    _valores, particionar_tipo_duplicado e pelas colunas derivadas da UI."""
+    _valores, particionar_tipo_duplicado, particionar_custom_id_duplicado
+    (quando lista_padrao é informado) e pelas colunas derivadas da UI.
+    Signal Name (spec 2026-07-20, fix pós-Task 2): sinal PROT de alimentador
+    com disjuntor conhecido e sem equipamento explícito usa o disjuntor como
+    equipamento no Signal Name (não repete o módulo) — fullbase confirma que
+    o Remote Point Custom ID real deriva desse Signal Name corrigido (ex.
+    CNC_AL11_52-22_51F -> RPC CNCAL11522251F_UTR_..., não o módulo-duplicado)."""
     sigla = rec.sigla_sinal or "?"
+    dm_prot = _dm_prot(rec.sigla_sinal, sp)
+    equipamento = rec.eletrico.nome_equipamento
+    if not equipamento and dm_prot and _eh_alimentador(rec.modulo.nome) and disjuntor:
+        equipamento = disjuntor
     nome = nome_hierarquico(
-        subestacao, rec.modulo.nome, rec.eletrico.nome_equipamento,
+        subestacao, rec.modulo.nome, equipamento,
         rec.eletrico.barra, sigla,
     )
     dm = _device_mapping(
-        nome, sigla, _dm_prot(rec.sigla_sinal, sp), subestacao,
+        nome, sigla, dm_prot, subestacao,
         rec.modulo.nome, rec.eletrico.barra,
         equipamento=rec.eletrico.nome_equipamento, disjuntor=disjuntor,
     )
@@ -429,17 +439,28 @@ def _valores_discrete_analog(rec: SignalRecord, subestacao: str | None,
 
 def particionar_custom_id_duplicado(
     lista: ListaHomogenea,
+    lista_padrao=None,
 ) -> tuple[ListaHomogenea, tuple[ItemRevisao, ...]]:
     """Gate de unicidade (spec 2026-07-10): o ADMS descarta remote points com
     Custom ID repetido no mesmo import. Grupos que colidem saem TODOS do TDT
-    e vão para revisão — nunca saem calados no xlsx."""
+    e vão para revisão — nunca saem calados no xlsx.
+    `lista_padrao` (spec 2026-07-20, fix pós-Task 2/11): quando informado, usa
+    a MESMA derivação de Signal Name de `dm_registro` (inclui disjuntor no
+    PROT de alimentador) — evita o gate validar unicidade contra um nome que
+    não é o que realmente sai no xlsx. Quando None (compat retroativa dos
+    testes existentes), mantém o comportamento antigo (nome_hierarquico puro)."""
     remote_unit = _remote_unit(lista.subestacao)
+    disj = disjuntor_por_modulo(lista.registros) if lista_padrao is not None else {}
     por_cid: dict[str, list[SignalRecord]] = defaultdict(list)
     for rec in lista.registros:
-        nome = nome_hierarquico(
-            lista.subestacao, rec.modulo.nome, rec.eletrico.nome_equipamento,
-            rec.eletrico.barra, rec.sigla_sinal or "?",
-        )
+        if lista_padrao is not None:
+            sp = lista_padrao.por_sigla(rec.sigla_sinal) if rec.sigla_sinal else None
+            nome, _ = dm_registro(rec, lista.subestacao, sp, disj.get(rec.modulo.nome))
+        else:
+            nome = nome_hierarquico(
+                lista.subestacao, rec.modulo.nome, rec.eletrico.nome_equipamento,
+                rec.eletrico.barra, rec.sigla_sinal or "?",
+            )
         cid = f"{nome}_{remote_unit}" if remote_unit else nome
         por_cid[cid].append(rec)
     duplicados = {id(r) for grupo in por_cid.values() if len(grupo) > 1 for r in grupo}

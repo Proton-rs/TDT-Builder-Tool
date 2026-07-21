@@ -555,7 +555,7 @@ def gerar_tdt(registros, template_path, lp, subestacao=None, aliases=None, confi
     aud.sobrescritas("corrigir", pareados, corrigidos)
     lista = criador_lista_homogenea.montar(list(corrigidos), subestacao=subestacao)
     aud.sobrescritas("montar", corrigidos, lista.registros)
-    lista, rev_dup = engine_tdt.particionar_custom_id_duplicado(lista)
+    lista, rev_dup = engine_tdt.particionar_custom_id_duplicado(lista, lp)
     if rev_dup:
         ids = tuple(it.registro.id for it in rev_dup)
         aud.evento("engine", f"{len(rev_dup)} registros com Custom ID duplicado -> revisão", "AVISO",
@@ -790,7 +790,7 @@ def executar(
         revisao = [_limitar_confianca_item(it) for it in revisao]
         lista = criador_lista_homogenea.montar(list(corrigidos), subestacao=subestacao)
         aud.sobrescritas("montar", corrigidos, lista.registros)
-        lista, rev_dup = engine_tdt.particionar_custom_id_duplicado(lista)
+        lista, rev_dup = engine_tdt.particionar_custom_id_duplicado(lista, lp)
         if rev_dup:
             aud.evento("engine", f"{len(rev_dup)} registros com Custom ID duplicado -> revisão", "AVISO")
             revisao.extend(rev_dup)
