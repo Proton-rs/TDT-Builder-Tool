@@ -1035,6 +1035,35 @@ git commit -m "feat(ui): colunas Signal Name/DM/Signal Type na revisao (D1)"
 
 ---
 
+### Task 11: Signal Name usa disjuntor no PROT de alimentador (fix pós-Task 2, decisão 20/07 tarde)
+
+**Origem:** usuário reportou, após Task 8, que apesar do Device Mapping de alimentador PROT já usar o disjuntor (Task 2), o Signal Name continuava `MODULO_MODULO` (fallback antigo, sem disjuntor).
+
+**Conflito com Global Constraints (linha 16 deste plano):** "`Remote Point Custom ID` deriva do `Signal Name` — nenhuma task pode alterá-lo". Corrigir o Signal Name necessariamente muda o Custom ID desses registros.
+
+**Investigação (fullbase real, `docs/Export_base_Full__27_fev_2026.xlsx`):** confirmado que a produção real usa o disjuntor tanto no Signal Name quanto no Device Mapping quanto no Remote Point Custom ID:
+- Signal Name: `CNC_AL11_52-22_51F` (não `CNC_AL11_AL11_51F`)
+- Device Mapping: `CNC_AL11_52-22_PROT_51F` (Task 2)
+- Remote Point Custom ID: `CNCAL11522251F_UTR_CNC_DNP3_1` — deriva do Signal Name corrigido, não do antigo.
+
+**Decisão do usuário (20/07, tarde):** corrigir Signal Name E Custom ID juntos (não desacoplar). `particionar_custom_id_duplicado` também precisa da mesma derivação disjuntor-aware para não validar unicidade contra um nome que diverge do que realmente sai no xlsx.
+
+**Files:**
+- Modify: `src/tdt/engine_tdt.py` (`dm_registro`, `particionar_custom_id_duplicado`), `src/tdt/pipeline.py` (2 call sites: `gerar_tdt`, `executar`)
+- Test: `tests/test_engine_tdt.py`
+
+**Escopo do fallback:** só quando `_dm_prot(sigla, sp)` é True E `_eh_alimentador(modulo_nome)` E disjuntor é conhecido E o registro não já tem `eletrico.nome_equipamento` explícito — mesma condição da Task 2, aplicada também ao Signal Name. PROT não-alimentador, alimentador sem disjuntor, e não-PROT ficam inalterados (mesmo comportamento de antes).
+
+`particionar_custom_id_duplicado` ganha parâmetro opcional `lista_padrao=None` — quando `None` (compat retroativa, testes existentes), mantém o comportamento antigo (nome_hierarquico puro, sem disjuntor); quando informado (os 2 call sites de produção em `pipeline.py`), usa `dm_registro` para casar exatamente com o nome que `_valores`/`gerar` vão escrever.
+
+- [ ] **Step 1: Commit**
+
+```bash
+git commit -m "fix(engine): signal name usa disjuntor no PROT alimentador"
+```
+
+---
+
 ### Task 10: Verificação de closeout (gate da spec)
 
 **Files:**
