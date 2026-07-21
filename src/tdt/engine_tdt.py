@@ -112,13 +112,18 @@ def _sem_equipamento_especifico(equipamento: str | None, modulo_nome: str | None
     classificador preenche `nome_equipamento` com o nome do módulo como
     placeholder (spec 2026-07-20, fix Task 12: gap real da Task 11 —
     `eletrico.nome_equipamento == modulo_nome` formatado, não só `None`).
-    Normaliza espaço dos dois lados (não só do módulo) — o texto bruto do
-    equipamento pode chegar com o mesmo espaçamento cru do módulo; só
-    normalizar um lado reabriria o mesmo gap por diferença de forma."""
+    Normaliza espaço E caixa dos dois lados (não só do módulo/minúsculas) —
+    a ingestão não-homogênea (`estruturador.py`, caso real LVA AL21) preserva
+    a caixa bruta da planilha de origem tanto na coluna de módulo quanto na
+    de equipamento (ao contrário de `estruturador_homogeneo.py`, que
+    normaliza via `_normaliza_celula`), então uma diferença de caixa entre as
+    duas colunas reabriria o mesmo gap por diferença de forma; só normalizar
+    um lado (ou nenhum) teria o mesmo efeito. Segue a convenção de
+    normalização já usada em `_dm_prot` (`.strip().upper()`)."""
     if not equipamento:
         return True
-    modulo_fmt = modulo_nome.replace(" ", "") if modulo_nome else None
-    equipamento_fmt = equipamento.replace(" ", "")
+    modulo_fmt = modulo_nome.replace(" ", "").upper() if modulo_nome else None
+    equipamento_fmt = equipamento.replace(" ", "").upper()
     return equipamento_fmt == modulo_fmt
 
 

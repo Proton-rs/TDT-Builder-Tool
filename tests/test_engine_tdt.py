@@ -594,6 +594,18 @@ def test_signal_name_prot_alimentador_equipamento_igual_modulo_usa_disjuntor():
     assert dm == "LVA_AL21_52-21_PROT_51N"
 
 
+def test_signal_name_prot_alimentador_equipamento_igual_modulo_case_insensitive():
+    # review finding pos-Task 12: equipamento vem com caixa diferente do
+    # modulo (ingestao nao-homogenea nao normaliza caixa, estruturador.py) --
+    # ainda assim deve ser tratado como placeholder e usar o disjuntor
+    sp = SinalPadrao(sigla="51N", descricao="X", signal_type="Enabled",
+                      direction=None, mm=None, categoria="Discrete")
+    rec = _rec_equip("AL21:1", "51N", "al21", modulo="AL21")  # caixa diferente do modulo
+    nome, dm = engine_tdt.dm_registro(rec, "LVA", sp, disjuntor="52-21")
+    assert nome == "LVA_AL21_52-21_51N"
+    assert dm == "LVA_AL21_52-21_PROT_51N"
+
+
 def test_signal_name_analog_alimentador_usa_disjuntor():
     # segundo gap real: _valores_analog nunca teve o fallback (Task 11 so
     # tocou o caminho discreto)
@@ -684,11 +696,14 @@ def test_sem_equipamento_especifico_equipamento_com_espaco_tambem_normaliza():
     assert engine_tdt._sem_equipamento_especifico("AL 21", "AL 21") is True
 
 
-def test_sem_equipamento_especifico_case_sensitive_nao_normaliza():
-    # limitacao conhecida e deliberada (nenhuma evidencia de dado real com
-    # essa diferenca ate agora) -- diferenca de maiusculas/minusculas NAO e
-    # tratada como placeholder; documenta o contrato atual explicitamente
-    assert engine_tdt._sem_equipamento_especifico("al21", "AL21") is False
+def test_sem_equipamento_especifico_case_insensitive():
+    # fix pos-Task 12 (review finding): a ingestao nao-homogenea
+    # (estruturador.py, caso real LVA AL21) preserva a caixa bruta da
+    # planilha tanto no modulo quanto no equipamento (nao normaliza como
+    # estruturador_homogeneo.py) -- diferenca de caixa entre as duas colunas
+    # precisa ser tratada como o mesmo placeholder, senao reabre o gap por
+    # diferenca de forma (mesma familia do bug corrigido nesta task)
+    assert engine_tdt._sem_equipamento_especifico("al21", "AL21") is True
 
 
 def test_sem_equipamento_especifico_equipamento_realmente_especifico():
