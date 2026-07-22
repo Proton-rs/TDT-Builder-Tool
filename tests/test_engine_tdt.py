@@ -547,16 +547,18 @@ def test_dm_prot_relaytrip_preservado():
     assert engine_tdt._dm_prot("TRIP", sp) is True
 
 
-# ── Tarefa 11: Signal Name usa disjuntor no PROT de alimentador (fix pós-Task 2) ──
+# ── Tarefa 11: revertida 21/07 (decisao do usuario) — Signal Name sempre ──
+# modulo-duplicado, mesmo no PROT de alimentador com disjuntor; so o Device
+# Mapping usa o disjuntor (Task 2, mantido).
 
-def test_signal_name_prot_alimentador_usa_disjuntor():
-    # decisao 20/07 tarde: fullbase confirma Signal Name real usa disjuntor
-    # (CNC_AL11_52-22_51F), nao modulo-duplicado
+def test_signal_name_prot_alimentador_ignora_disjuntor():
+    # decisao 21/07: Signal Name sempre modulo-duplicado; Device Mapping
+    # continua usando o disjuntor (Task 2)
     sp = SinalPadrao(sigla="51F", descricao="X", signal_type="RelayTrip",
                       direction=None, mm=None, categoria="Discrete")
     rec = _rec_equip("AL11:1", "51F", None, modulo="AL11")  # sem equipamento explicito
     nome, dm = engine_tdt.dm_registro(rec, "CNC", sp, disjuntor="52-22")
-    assert nome == "CNC_AL11_52-22_51F"
+    assert nome == "CNC_AL11_AL11_51F"
     assert dm == "CNC_AL11_52-22_PROT_51F"
 
 
@@ -577,43 +579,27 @@ def test_signal_name_nao_prot_ignora_disjuntor():
     assert nome == "CNC_AL11_52-1_DJF1"  # ja usava equipamento antes, sem mudanca
 
 
-# ── Tarefa 12: fix gap real da Task 11 — equipamento-placeholder + analog ───
-# usuario reportou ao vivo (LVA_AL21, sigla 51N): Device Mapping certo, Signal
-# Name ainda modulo-duplicado -- a guarda `not equipamento` da Task 11 so
-# cobre None; classificador enche eletrico.nome_equipamento com o proprio
-# nome do modulo como placeholder na pratica. Segundo gap: _valores_analog
-# nunca teve nenhuma versao do fix (so o caminho discreto foi tocado).
+# ── Tarefa 12 (contexto historico, ver reversao 21/07 acima) ──
 
-def test_signal_name_prot_alimentador_equipamento_igual_modulo_usa_disjuntor():
-    # reproducao exata do bug real (LVA_AL21 / 51N)
+def test_signal_name_prot_alimentador_equipamento_igual_modulo_ignora_disjuntor():
+    # decisao 21/07: equipamento-placeholder (== modulo) nao muda o Signal
+    # Name; Device Mapping continua usando o disjuntor (Task 2)
     sp = SinalPadrao(sigla="51N", descricao="X", signal_type="Enabled",
                       direction=None, mm=None, categoria="Discrete")
     rec = _rec_equip("AL21:1", "51N", "AL21", modulo="AL21")  # equipamento == modulo
     nome, dm = engine_tdt.dm_registro(rec, "LVA", sp, disjuntor="52-21")
-    assert nome == "LVA_AL21_52-21_51N"
+    assert nome == "LVA_AL21_AL21_51N"
     assert dm == "LVA_AL21_52-21_PROT_51N"
 
 
-def test_signal_name_prot_alimentador_equipamento_igual_modulo_case_insensitive():
-    # review finding pos-Task 12: equipamento vem com caixa diferente do
-    # modulo (ingestao nao-homogenea nao normaliza caixa, estruturador.py) --
-    # ainda assim deve ser tratado como placeholder e usar o disjuntor
-    sp = SinalPadrao(sigla="51N", descricao="X", signal_type="Enabled",
-                      direction=None, mm=None, categoria="Discrete")
-    rec = _rec_equip("AL21:1", "51N", "al21", modulo="AL21")  # caixa diferente do modulo
-    nome, dm = engine_tdt.dm_registro(rec, "LVA", sp, disjuntor="52-21")
-    assert nome == "LVA_AL21_52-21_51N"
-    assert dm == "LVA_AL21_52-21_PROT_51N"
-
-
-def test_signal_name_analog_alimentador_usa_disjuntor():
-    # segundo gap real: _valores_analog nunca teve o fallback (Task 11 so
-    # tocou o caminho discreto)
+def test_signal_name_analog_alimentador_ignora_disjuntor():
+    # decisao 21/07: Signal Name analogico tambem sempre modulo-duplicado;
+    # Device Mapping analogico continua usando o disjuntor
     lp = _lp_fake({"FREQ": "MeasuredValue"}, categorias={"FREQ": "Analog"},
                    tipos_medicao={"FREQ": "Frequência"})
     rec = _rec_equip("AL21:1", "FREQ", "AL21", modulo="AL21", categoria="Analog")
     valores = engine_tdt._valores_analog(rec, "LVA", lp, disjuntor="52-21")
-    assert valores["Signal Name"] == "LVA_AL21_52-21_FREQ"
+    assert valores["Signal Name"] == "LVA_AL21_AL21_FREQ"
     assert valores["Device Mapping"] == "LVA_AL21_52-21_DJ"
 
 
@@ -675,44 +661,6 @@ def test_signal_name_analog_equipamento_especifico_intocado():
     rec = _rec_equip("AL21:1", "FREQ", "89-1", modulo="AL21", categoria="Analog")
     valores = engine_tdt._valores_analog(rec, "LVA", lp, disjuntor="52-21")
     assert valores["Signal Name"] == "LVA_AL21_89-1_FREQ"
-
-
-def test_sem_equipamento_especifico_none_e_vazio():
-    assert engine_tdt._sem_equipamento_especifico(None, "AL21") is True
-    assert engine_tdt._sem_equipamento_especifico("", "AL21") is True
-
-
-def test_sem_equipamento_especifico_placeholder_igual_modulo():
-    assert engine_tdt._sem_equipamento_especifico("AL21", "AL21") is True
-    assert engine_tdt._sem_equipamento_especifico("AL21", "AL 21") is True  # modulo com espaco
-
-
-def test_sem_equipamento_especifico_equipamento_com_espaco_tambem_normaliza():
-    # hardening extra (Task 12, alem do exemplo do brief): o texto bruto do
-    # equipamento tambem pode vir com o mesmo espaco cru do modulo -- se so
-    # normalizarmos modulo_nome, reabrimos o mesmo gap de forma (mesma classe
-    # de bug, catch preventivo, sem evidencia de ocorrencia real ainda)
-    assert engine_tdt._sem_equipamento_especifico("AL 21", "AL21") is True
-    assert engine_tdt._sem_equipamento_especifico("AL 21", "AL 21") is True
-
-
-def test_sem_equipamento_especifico_case_insensitive():
-    # fix pos-Task 12 (review finding): a ingestao nao-homogenea
-    # (estruturador.py, caso real LVA AL21) preserva a caixa bruta da
-    # planilha tanto no modulo quanto no equipamento (nao normaliza como
-    # estruturador_homogeneo.py) -- diferenca de caixa entre as duas colunas
-    # precisa ser tratada como o mesmo placeholder, senao reabre o gap por
-    # diferenca de forma (mesma familia do bug corrigido nesta task)
-    assert engine_tdt._sem_equipamento_especifico("al21", "AL21") is True
-
-
-def test_sem_equipamento_especifico_equipamento_realmente_especifico():
-    assert engine_tdt._sem_equipamento_especifico("52-21", "AL21") is False
-
-
-def test_sem_equipamento_especifico_modulo_none():
-    assert engine_tdt._sem_equipamento_especifico(None, None) is True
-    assert engine_tdt._sem_equipamento_especifico("X", None) is False
 
 
 def test_medida_usa_disjuntor_tc_tp_false():

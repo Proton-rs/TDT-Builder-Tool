@@ -1037,6 +1037,8 @@ git commit -m "feat(ui): colunas Signal Name/DM/Signal Type na revisao (D1)"
 
 ### Task 11: Signal Name usa disjuntor no PROT de alimentador (fix pós-Task 2, decisão 20/07 tarde)
 
+**REVERTIDA 21/07 (decisão do usuário):** Signal Name volta a ser sempre módulo-duplicado (`MODULO_MODULO`) em todos os casos, inclusive PROT de alimentador com disjuntor conhecido. Device Mapping continua usando o disjuntor (Task 2, não afetada — `_device_mapping` já computava esse ramo de forma independente do `nome`). Custom ID deriva do Signal Name revertido, diverge portanto do exemplo real de fullbase citado abaixo (`CNCAL11522251F`); decisão aceita essa divergência. Código: `dm_registro`/`_valores_analog` em `engine_tdt.py` (helper `_sem_equipamento_especifico` removido, sem mais uso). Testes atualizados em `test_engine_tdt.py`.
+
 **Origem:** usuário reportou, após Task 8, que apesar do Device Mapping de alimentador PROT já usar o disjuntor (Task 2), o Signal Name continuava `MODULO_MODULO` (fallback antigo, sem disjuntor).
 
 **Conflito com Global Constraints (linha 16 deste plano):** "`Remote Point Custom ID` deriva do `Signal Name` — nenhuma task pode alterá-lo". Corrigir o Signal Name necessariamente muda o Custom ID desses registros.

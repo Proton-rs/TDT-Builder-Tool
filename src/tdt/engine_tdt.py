@@ -106,27 +106,6 @@ _SUFIXO_FAMILIA: dict[str, str] = {
 }
 
 
-def _sem_equipamento_especifico(equipamento: str | None, modulo_nome: str | None) -> bool:
-    """True quando o registro não tem equipamento mais específico que o
-    próprio módulo — cobre tanto `None`/vazio quanto o padrão real onde o
-    classificador preenche `nome_equipamento` com o nome do módulo como
-    placeholder (spec 2026-07-20, fix Task 12: gap real da Task 11 —
-    `eletrico.nome_equipamento == modulo_nome` formatado, não só `None`).
-    Normaliza espaço E caixa dos dois lados (não só do módulo/minúsculas) —
-    a ingestão não-homogênea (`estruturador.py`, caso real LVA AL21) preserva
-    a caixa bruta da planilha de origem tanto na coluna de módulo quanto na
-    de equipamento (ao contrário de `estruturador_homogeneo.py`, que
-    normaliza via `_normaliza_celula`), então uma diferença de caixa entre as
-    duas colunas reabriria o mesmo gap por diferença de forma; só normalizar
-    um lado (ou nenhum) teria o mesmo efeito. Segue a convenção de
-    normalização já usada em `_dm_prot` (`.strip().upper()`)."""
-    if not equipamento:
-        return True
-    modulo_fmt = modulo_nome.replace(" ", "").upper() if modulo_nome else None
-    equipamento_fmt = equipamento.replace(" ", "").upper()
-    return equipamento_fmt == modulo_fmt
-
-
 def _dm_prot(sigla: str | None, sp) -> bool:
     """Flag do ramo PROT do device mapping (spec 2026-07-20 §B1): RelayTrip
     da lista padrão manda; o complemento cobre siglas não-RelayTrip que a
@@ -226,17 +205,13 @@ def dm_registro(rec, subestacao, sp, disjuntor: str | None = None) -> tuple[str,
     """(Signal Name, Device Mapping) do registro — derivação ÚNICA, usada por
     _valores, particionar_tipo_duplicado, particionar_custom_id_duplicado
     (quando lista_padrao é informado) e pelas colunas derivadas da UI.
-    Signal Name (spec 2026-07-20, fix pós-Task 2): sinal PROT de alimentador
-    com disjuntor conhecido e sem equipamento explícito usa o disjuntor como
-    equipamento no Signal Name (não repete o módulo) — fullbase confirma que
-    o Remote Point Custom ID real deriva desse Signal Name corrigido (ex.
-    CNC_AL11_52-22_51F -> RPC CNCAL11522251F_UTR_..., não o módulo-duplicado)."""
+    Signal Name (decisão do usuário 21/07 — reverte a exceção da Task 11):
+    sempre módulo-duplicado quando não há equipamento explícito, mesmo no
+    PROT de alimentador com disjuntor conhecido; só o Device Mapping usa o
+    disjuntor nesse caso (mantido, Task 2)."""
     sigla = rec.sigla_sinal or "?"
     dm_prot = _dm_prot(rec.sigla_sinal, sp)
     equipamento = rec.eletrico.nome_equipamento
-    if (_sem_equipamento_especifico(equipamento, rec.modulo.nome)
-            and dm_prot and _eh_alimentador(rec.modulo.nome) and disjuntor):
-        equipamento = disjuntor
     nome = nome_hierarquico(
         subestacao, rec.modulo.nome, equipamento,
         rec.eletrico.barra, sigla,
@@ -396,10 +371,6 @@ def _valores_analog(rec: SignalRecord, subestacao: str | None, padrao: ListaPadr
                      disjuntor: "str | None" = None) -> dict:
     sp = padrao.por_sigla(rec.sigla_sinal) if rec.sigla_sinal else None
     equipamento = rec.eletrico.nome_equipamento
-    if (_sem_equipamento_especifico(equipamento, rec.modulo.nome)
-            and _medida_usa_disjuntor(sp.tipo_medicao if sp else None)
-            and _eh_alimentador(rec.modulo.nome) and disjuntor):
-        equipamento = disjuntor
     nome = nome_hierarquico(
         subestacao, rec.modulo.nome, equipamento,
         rec.eletrico.barra, rec.sigla_sinal or "?",
@@ -482,10 +453,10 @@ def particionar_custom_id_duplicado(
     Custom ID repetido no mesmo import. Grupos que colidem saem TODOS do TDT
     e vão para revisão — nunca saem calados no xlsx.
     `lista_padrao` (spec 2026-07-20, fix pós-Task 2/11): quando informado, usa
-    a MESMA derivação de Signal Name de `dm_registro` (inclui disjuntor no
-    PROT de alimentador) — evita o gate validar unicidade contra um nome que
-    não é o que realmente sai no xlsx. Quando None (compat retroativa dos
-    testes existentes), mantém o comportamento antigo (nome_hierarquico puro)."""
+    a MESMA derivação de Signal Name de `dm_registro` — evita o gate validar
+    unicidade contra um nome que não é o que realmente sai no xlsx. Quando
+    None (compat retroativa dos testes existentes), mantém o comportamento
+    antigo (nome_hierarquico puro)."""
     remote_unit = _remote_unit(lista.subestacao)
     disj = disjuntor_por_modulo(lista.registros) if lista_padrao is not None else {}
     por_cid: dict[str, list[SignalRecord]] = defaultdict(list)
